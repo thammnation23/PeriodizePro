@@ -1373,6 +1373,84 @@
   .attached-chip-remove { cursor:pointer; color:var(--text3); font-size:14px; line-height:1; }
   .attached-chip-remove:hover { color: var(--game); }
 
+  /* ─── EXERCISES ─── */
+  .exercise-list { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
+  .exercise-row {
+    display: grid;
+    grid-template-columns: 24px 1.6fr 0.6fr 0.9fr auto auto;
+    gap: 8px;
+    align-items: center;
+    padding: 8px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--surface2);
+  }
+  .exercise-row input { padding: 6px 8px; font-size: 12px; }
+  .exercise-num {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: var(--text3);
+    text-align: center;
+  }
+  .exercise-link-btn {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--text2);
+    padding: 6px 8px;
+    border-radius: var(--radius);
+    cursor: pointer;
+    font-size: 11px;
+    font-family: 'Barlow Condensed', sans-serif;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+  .exercise-link-btn.has-link { color: var(--accent); border-color: var(--accent); }
+  .exercise-link-btn:hover { background: var(--surface); }
+  .exercise-remove {
+    cursor: pointer;
+    color: var(--text3);
+    font-size: 16px;
+    line-height: 1;
+    padding: 4px 6px;
+    border-radius: 4px;
+  }
+  .exercise-remove:hover { color: var(--game); background: rgba(255,80,80,0.1); }
+  .exercise-empty {
+    padding: 14px;
+    text-align: center;
+    color: var(--text3);
+    font-size: 12px;
+    border: 1px dashed var(--border);
+    border-radius: var(--radius);
+  }
+
+  /* Compact display on session card */
+  .ex-summary {
+    margin-top: 6px;
+    padding-top: 6px;
+    border-top: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+  }
+  .ex-summary-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    color: var(--text2);
+  }
+  .ex-summary-num {
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--text3);
+    min-width: 14px;
+  }
+  .ex-summary-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .ex-summary-meta { color: var(--text3); font-family: 'JetBrains Mono', monospace; font-size: 10px; }
+  .ex-summary-link { color: var(--accent); text-decoration: none; font-size: 11px; }
+  .ex-summary-link:hover { text-decoration: underline; }
+
   /* ─── RESPONSIVE ─── */
   @media (max-width: 900px) {
     .week-days { grid-template-columns: repeat(4, 1fr); }
@@ -1920,6 +1998,31 @@
         <div class="settings-preview" id="settingsPreview"></div>
       </div>
 
+      <!-- Match Difficulty / ELO -->
+      <div class="settings-section">
+        <div class="settings-section-header">
+          <div>
+            <div class="settings-section-title">Match Difficulty Index</div>
+            <div class="settings-section-sub">Your team's ELO + opponent ratings power the Match Difficulty Index (MDI). Auto-seeds from MLS history; updates from match results.</div>
+          </div>
+        </div>
+        <div class="form-grid" style="margin-bottom:14px">
+          <div class="form-group">
+            <label>Your Team Name</label>
+            <input type="text" id="settingsTeamName" placeholder="e.g. Inter Miami CF">
+          </div>
+          <div class="form-group">
+            <label>Your Team ELO</label>
+            <input type="number" id="settingsTeamElo" placeholder="1500" min="800" max="2400">
+          </div>
+        </div>
+        <div style="display:flex;gap:10px;align-items:center;margin-bottom:10px">
+          <button class="btn btn-primary btn-sm" onclick="seedMlsOpponents()">⬇ Seed MLS Opponents from TheSportsDB</button>
+          <span id="seedStatus" style="font-size:11px;color:var(--text3);font-family:'Barlow Condensed',sans-serif;letter-spacing:1px"></span>
+        </div>
+        <div id="opponentList" style="margin-top:10px"></div>
+      </div>
+
       <!-- Actions -->
       <div style="display:flex;gap:10px;margin-top:8px">
         <button class="btn btn-ghost" onclick="resetSettings()">Reset to Defaults</button>
@@ -2056,6 +2159,11 @@
       <div class="attached-media-strip" id="sessionAttached"></div>
 
       <hr class="section-divider">
+      <div class="subsection-label">Exercises <span style="color:var(--text3);font-size:10px;font-weight:400;letter-spacing:0;text-transform:none">— breakdown of what's in the session</span></div>
+      <div class="exercise-list" id="exerciseList"></div>
+      <button class="btn btn-ghost btn-sm" style="margin-top:8px" onclick="addExerciseRow()">＋ Add Exercise</button>
+
+      <hr class="section-divider">
       <div class="form-group" style="margin-bottom:16px">
         <label>GD Code <span style="color:var(--text3);font-size:10px;font-weight:400;letter-spacing:0">— Goal Difference context</span></label>
         <div style="display:flex;align-items:center;gap:10px">
@@ -2117,6 +2225,31 @@
           <div class="chip active" onclick="selectChip(this,'venue','Home')">Home</div>
           <div class="chip" onclick="selectChip(this,'venue','Away')">Away</div>
           <div class="chip" onclick="selectChip(this,'venue','Neutral')">Neutral</div>
+        </div>
+      </div>
+      <div class="form-group" style="margin-bottom:16px">
+        <label style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:1px">Projected Match Load</label>
+        <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-top:6px">
+          <div>
+            <label style="font-size:10px">TD (m)</label>
+            <input type="number" id="gameTD" placeholder="11000">
+          </div>
+          <div>
+            <label style="font-size:10px">HSR (m)</label>
+            <input type="number" id="gameHSR" placeholder="900">
+          </div>
+          <div>
+            <label style="font-size:10px">Sprint (m)</label>
+            <input type="number" id="gameSprint" placeholder="300">
+          </div>
+          <div>
+            <label style="font-size:10px">Acc (n)</label>
+            <input type="number" id="gameAcc" placeholder="35">
+          </div>
+          <div>
+            <label style="font-size:10px">Dec (n)</label>
+            <input type="number" id="gameDec" placeholder="35">
+          </div>
         </div>
       </div>
       <div class="form-group">
@@ -2490,7 +2623,7 @@ const MONTHS = ['January','February','March','April','May','June','July','August
 const MONTHS_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
 function emptyState() {
-  return { sessions: [], games: [], weekSettings: {}, media: [], settings: null };
+  return { sessions: [], games: [], weekSettings: {}, media: [], settings: null, opponents: [] };
 }
 let state = emptyState();
 let currentWeek = getCurrentWeekNum();
@@ -2541,7 +2674,10 @@ async function loadAllData() {
       };
     });
 
-    console.log(`Loaded: ${state.sessions.length} sessions, ${state.games.length} games, ${state.media.length} drills`);
+    // Opponents (best-effort — table may not exist yet pre-migration)
+    await loadOpponents();
+
+    console.log(`Loaded: ${state.sessions.length} sessions, ${state.games.length} games, ${state.media.length} drills, ${state.opponents.length} opponents`);
     setSyncStatus('ok');
   } catch(e) {
     console.error('loadAllData failed:', e.message);
@@ -2560,6 +2696,7 @@ function dbToSession(r) {
     td: r.td, hsr: r.hsr, sd: r.sd, acc: r.acc, dec: r.dec_count,
     warmupMedia:  r.warmup_drills  || [],
     sessionMedia: r.session_drills || [],
+    exercises:    r.exercises      || [],
     gdMinus: r.gd_minus || '',
     gdPlus:  r.gd_plus  || '',
     activation: r.activation || '',
@@ -2580,6 +2717,7 @@ function sessionToDB(s) {
     dec_count: s.dec ? parseInt(s.dec) : null,
     warmup_drills:  s.warmupMedia  || [],
     session_drills: s.sessionMedia || [],
+    exercises:      s.exercises    || [],
     gd_minus: s.gdMinus ? parseInt(s.gdMinus) : null,
     gd_plus:  s.gdPlus  ? parseInt(s.gdPlus)  : null,
     activation: s.activation || null,
@@ -2587,10 +2725,20 @@ function sessionToDB(s) {
   };
 }
 function dbToGame(r) {
-  return { id: r.id, date: r.date, opponent: r.opponent, competition: r.competition, venue: r.venue, notes: r.notes };
+  return {
+    id: r.id, date: r.date, opponent: r.opponent, competition: r.competition, venue: r.venue, notes: r.notes,
+    td: r.td || '', hsr: r.hsr || '', sprint: r.sprint || '', acc: r.acc || '', dec: r.dec || ''
+  };
 }
 function gameToDB(g) {
-  return { id: g.id, user_id: currentUser.id, date: g.date, opponent: g.opponent, competition: g.competition, venue: g.venue, notes: g.notes };
+  return {
+    id: g.id, user_id: currentUser.id, date: g.date, opponent: g.opponent, competition: g.competition, venue: g.venue, notes: g.notes,
+    td:     g.td     ? parseInt(g.td)     : null,
+    hsr:    g.hsr    ? parseInt(g.hsr)    : null,
+    sprint: g.sprint ? parseInt(g.sprint) : null,
+    acc:    g.acc    ? parseInt(g.acc)    : null,
+    dec:    g.dec    ? parseInt(g.dec)    : null
+  };
 }
 function dbToDrill(r) {
   const load = {};
@@ -3295,6 +3443,23 @@ function renderWeek() {
             ${s.dec ? `<div class="metric-chip"><div class="metric-label">DEC</div><div class="metric-value">${s.dec}</div></div>` : ''}
           </div>
           ${gdHtml}
+          ${(s.exercises && s.exercises.length) ? `
+          <div class="ex-summary" onclick="event.stopPropagation()">
+            ${s.exercises.map((ex, i) => {
+              const drill = ex.mediaId ? state.media.find(m => m.id === ex.mediaId) : null;
+              const linkUrl = drill ? (drill.url || drill.dataUrl) : ex.url;
+              const linkLabel = drill?.title || ex.urlTitle || (linkUrl ? '🔗' : '');
+              const meta = [ex.duration ? ex.duration + 'm' : '', ex.setsReps].filter(Boolean).join(' · ');
+              return `
+                <div class="ex-summary-row">
+                  <span class="ex-summary-num">${i + 1}.</span>
+                  <span class="ex-summary-name">${ex.name || drill?.title || 'Exercise'}</span>
+                  ${meta ? `<span class="ex-summary-meta">${meta}</span>` : ''}
+                  ${linkUrl ? `<a class="ex-summary-link" href="${linkUrl}" target="_blank" title="${linkLabel}">▶</a>` : ''}
+                </div>
+              `;
+            }).join('')}
+          </div>` : ''}
           ${(s.warmupMedia?.length || s.sessionMedia?.length) ? `
           <div class="link-row">
             ${(s.warmupMedia||[]).map(mid => { const m = state.media.find(x=>x.id===mid); if(!m) return ''; return `<a class="link-chip link-warmup" href="${m.url||m.dataUrl||'#'}" target="_blank">${m.mediaType==='youtube'?'▶':m.mediaType==='upload'?'🖼':'🔗'} ${m.title||'W/U'}</a>`; }).join('')}
@@ -3306,6 +3471,7 @@ function renderWeek() {
 
     if (isGame) {
       const g = state.games.find(gg => gg.date === dateStr);
+      const hasLoad = g && (g.td || g.hsr || g.sprint || g.acc || g.dec);
       sessionsHTML = `
         <div class="session-card game-card">
           <div class="session-card-header">
@@ -3313,7 +3479,15 @@ function renderWeek() {
             <span class="session-duration">${g?.venue || ''}</span>
           </div>
           <div style="font-size:12px;color:var(--text2);margin-bottom:4px;">${g?.opponent || 'Opponent TBC'}</div>
-          ${g?.competition ? `<div style="font-size:11px;color:var(--text3)">${g.competition}</div>` : ''}
+          ${g?.competition ? `<div style="font-size:11px;color:var(--text3);margin-bottom:6px">${g.competition}</div>` : ''}
+          ${hasLoad ? `
+          <div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:6px;padding-top:6px;border-top:1px solid var(--border)">
+            ${g.td     ? `<div class="metric-chip"><div class="metric-label">TD</div><div class="metric-value">${fmtNum(g.td)}</div></div>` : ''}
+            ${g.hsr    ? `<div class="metric-chip"><div class="metric-label">HSR</div><div class="metric-value">${fmtNum(g.hsr)}</div></div>` : ''}
+            ${g.sprint ? `<div class="metric-chip"><div class="metric-label">SPR</div><div class="metric-value">${fmtNum(g.sprint)}</div></div>` : ''}
+            ${g.acc    ? `<div class="metric-chip"><div class="metric-label">ACC</div><div class="metric-value">${fmtNum(g.acc)}</div></div>` : ''}
+            ${g.dec    ? `<div class="metric-chip"><div class="metric-label">DEC</div><div class="metric-value">${fmtNum(g.dec)}</div></div>` : ''}
+          </div>` : ''}
         </div>
       ` + sessionsHTML;
     }
@@ -3410,6 +3584,9 @@ function editSession(id) {
   sessionAttachments.session = (s.sessionMedia || []).map(id => state.media.find(m => m.id === id)).filter(Boolean);
   renderAttachedMedia('warmup');
   renderAttachedMedia('session');
+  // Load exercises (deep copy so edits don't mutate state directly)
+  currentExercises = (s.exercises || []).map(ex => ({ ...ex }));
+  renderExercises();
   document.getElementById('sessionNotes').value = s.notes || '';
 
   chipSelections['type'] = s.type || 'Intensive';
@@ -3432,6 +3609,8 @@ function clearSessionForm() {
   sessionAttachments.session = [];
   renderAttachedMedia('warmup');
   renderAttachedMedia('session');
+  currentExercises = [];
+  renderExercises();
 }
 
 async function saveSession() {
@@ -3454,6 +3633,9 @@ async function saveSession() {
     dec: document.getElementById('metricDec').value,
     warmupMedia: sessionAttachments.warmup.map(m => m.id),
     sessionMedia: sessionAttachments.session.map(m => m.id),
+    exercises: currentExercises
+      .filter(ex => ex.name || ex.duration || ex.setsReps || ex.mediaId || ex.url)
+      .map(ex => ({ ...ex })),
     gdMinus: document.getElementById('gdMinus').value,
     gdPlus:  document.getElementById('gdPlus').value,
     activation: document.getElementById('sessionActivation').value,
@@ -3489,6 +3671,11 @@ function openAddGame() {
   document.getElementById('gameOpponent').value = '';
   document.getElementById('gameCompetition').value = '';
   document.getElementById('gameNotes').value = '';
+  document.getElementById('gameTD').value = '';
+  document.getElementById('gameHSR').value = '';
+  document.getElementById('gameSprint').value = '';
+  document.getElementById('gameAcc').value = '';
+  document.getElementById('gameDec').value = '';
   document.getElementById('gameModal').querySelectorAll('.chip').forEach(c => {
     c.classList.toggle('active', c.textContent === 'Home');
   });
@@ -3505,6 +3692,11 @@ async function saveGame() {
     competition: document.getElementById('gameCompetition').value,
     venue: chipSelections['venue'] || 'Home',
     notes: document.getElementById('gameNotes').value,
+    td:     document.getElementById('gameTD').value,
+    hsr:    document.getElementById('gameHSR').value,
+    sprint: document.getElementById('gameSprint').value,
+    acc:    document.getElementById('gameAcc').value,
+    dec:    document.getElementById('gameDec').value,
   };
   state.games.push(game);
   closeModal('gameModal');
@@ -3694,6 +3886,24 @@ function openDayPanel(dateStr) {
           ${s.dec ? `<div class="metric-chip"><div class="metric-label">DEC</div><div class="metric-value">${s.dec}</div></div>` : ''}
         </div>
         ${gdHtml}
+        ${(s.exercises && s.exercises.length) ? `
+          <div class="panel-section-label">Exercises</div>
+          <div class="ex-summary" style="border-top:none;margin-top:0;padding-top:0">
+            ${s.exercises.map((ex, i) => {
+              const drill = ex.mediaId ? state.media.find(m => m.id === ex.mediaId) : null;
+              const linkUrl = drill ? (drill.url || drill.dataUrl) : ex.url;
+              const linkLabel = drill?.title || ex.urlTitle || 'Open';
+              const meta = [ex.duration ? ex.duration + 'm' : '', ex.setsReps].filter(Boolean).join(' · ');
+              return `
+                <div class="ex-summary-row">
+                  <span class="ex-summary-num">${i + 1}.</span>
+                  <span class="ex-summary-name">${ex.name || drill?.title || 'Exercise'}</span>
+                  ${meta ? `<span class="ex-summary-meta">${meta}</span>` : ''}
+                  ${linkUrl ? `<a class="ex-summary-link" href="${linkUrl}" target="_blank" title="${linkLabel}">▶ Watch</a>` : ''}
+                </div>
+              `;
+            }).join('')}
+          </div>` : ''}
         ${drillRowHtml(warmupDrills, 'Warm Up', 'link-warmup')}
         ${drillRowHtml(sessionDrills, 'Session', 'link-session')}
         ${s.notes ? `<div class="panel-section-label">Notes</div><div style="font-size:11px;color:var(--text2);line-height:1.5;background:var(--surface3);padding:6px 8px;border-radius:4px">${s.notes}</div>` : ''}
@@ -4183,8 +4393,92 @@ function openMediaDetail(id) {
 // ══════════════════════════════════════════════════════
 
 let sessionAttachments = { warmup: [], session: [] };
-let pickerSlot = null; // 'warmup' or 'session'
+let pickerSlot = null; // 'warmup' or 'session' or 'exercise:<idx>'
 let pickerSelections = new Set();
+
+// ── EXERCISES ──
+let currentExercises = []; // [{name, duration, setsReps, mediaId, url, urlTitle}]
+
+function renderExercises() {
+  const list = document.getElementById('exerciseList');
+  if (!list) return;
+  if (currentExercises.length === 0) {
+    list.innerHTML = '<div class="exercise-empty">No exercises yet. Click ＋ Add Exercise to start.</div>';
+    return;
+  }
+  list.innerHTML = currentExercises.map((ex, i) => {
+    const linked = ex.mediaId || ex.url;
+    const linkLabel = linked ? '🔗 Linked' : '＋ Link';
+    const linkClass = linked ? 'has-link' : '';
+    return `
+      <div class="exercise-row">
+        <div class="exercise-num">${i + 1}</div>
+        <input type="text" placeholder="Exercise name" value="${escapeAttr(ex.name || '')}" oninput="updateExerciseField(${i},'name',this.value)">
+        <input type="text" placeholder="Min" value="${escapeAttr(ex.duration || '')}" oninput="updateExerciseField(${i},'duration',this.value)">
+        <input type="text" placeholder="Sets/reps" value="${escapeAttr(ex.setsReps || '')}" oninput="updateExerciseField(${i},'setsReps',this.value)">
+        <button class="exercise-link-btn ${linkClass}" onclick="openExerciseLinkMenu(${i})">${linkLabel}</button>
+        <span class="exercise-remove" onclick="removeExerciseRow(${i})">✕</span>
+      </div>
+    `;
+  }).join('');
+}
+
+function escapeAttr(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function addExerciseRow() {
+  currentExercises.push({ name:'', duration:'', setsReps:'', mediaId:'', url:'', urlTitle:'' });
+  renderExercises();
+}
+
+function removeExerciseRow(idx) {
+  currentExercises.splice(idx, 1);
+  renderExercises();
+}
+
+function updateExerciseField(idx, field, value) {
+  if (currentExercises[idx]) currentExercises[idx][field] = value;
+}
+
+function openExerciseLinkMenu(idx) {
+  const ex = currentExercises[idx];
+  // If already linked, give option to unlink
+  if (ex.mediaId || ex.url) {
+    if (confirm('Remove the link from this exercise?')) {
+      ex.mediaId = '';
+      ex.url = '';
+      ex.urlTitle = '';
+      renderExercises();
+    }
+    return;
+  }
+  // Otherwise: pick from library or paste URL
+  const choice = prompt('Link this exercise:\n\n1 = Pick from Drill Library\n2 = Paste a URL\n\nEnter 1 or 2:');
+  if (choice === '1') {
+    openPicker('exercise:' + idx);
+  } else if (choice === '2') {
+    const url = prompt('Paste URL (YouTube, Drive, etc.):');
+    if (!url) return;
+    const title = prompt('Optional title for this link:') || '';
+    ex.url = url.trim();
+    ex.urlTitle = title.trim();
+    ex.mediaId = '';
+    renderExercises();
+  }
+}
+
+// Called by picker when user confirms a single drill for an exercise slot
+function attachDrillToExercise(idx, drillId) {
+  const ex = currentExercises[idx];
+  if (!ex) return;
+  const drill = state.media.find(m => m.id === drillId);
+  ex.mediaId = drillId;
+  ex.url = '';
+  ex.urlTitle = '';
+  if (!ex.name && drill?.title) ex.name = drill.title;
+  renderExercises();
+}
 
 function renderAttachedMedia(slot) {
   const strip = document.getElementById(slot + 'Attached');
@@ -4216,10 +4510,18 @@ function removeAttachment(slot, id) {
 // ── PICKER ──
 function openPicker(slot) {
   pickerSlot = slot;
-  pickerSelections = new Set(sessionAttachments[slot].map(m => m.id));
-  document.getElementById('pickerModalTitle').textContent = slot === 'warmup' ? 'Pick Warm Up Media' : 'Pick Session Media';
+  if (slot.startsWith('exercise:')) {
+    const idx = parseInt(slot.split(':')[1]);
+    const ex = currentExercises[idx];
+    pickerSelections = ex?.mediaId ? new Set([ex.mediaId]) : new Set();
+    document.getElementById('pickerModalTitle').textContent = `Pick Drill for Exercise ${idx + 1}`;
+    document.getElementById('pickerCatFilter').value = 'all';
+  } else {
+    pickerSelections = new Set(sessionAttachments[slot].map(m => m.id));
+    document.getElementById('pickerModalTitle').textContent = slot === 'warmup' ? 'Pick Warm Up Media' : 'Pick Session Media';
+    document.getElementById('pickerCatFilter').value = slot === 'warmup' ? 'warmup' : 'all';
+  }
   document.getElementById('pickerSearch').value = '';
-  document.getElementById('pickerCatFilter').value = slot === 'warmup' ? 'warmup' : 'all';
   renderPicker();
   openModal('pickerModal');
 }
@@ -4258,17 +4560,28 @@ function renderPicker() {
 }
 
 function togglePickerSel(id) {
-  if (pickerSelections.has(id)) pickerSelections.delete(id);
-  else pickerSelections.add(id);
+  // Exercise slot = single-select: replace selection
+  if (pickerSlot && pickerSlot.startsWith('exercise:')) {
+    pickerSelections = new Set([id]);
+  } else {
+    if (pickerSelections.has(id)) pickerSelections.delete(id);
+    else pickerSelections.add(id);
+  }
   document.getElementById('pickerSelCount').textContent = `${pickerSelections.size} selected`;
   renderPicker();
 }
 
 function confirmPicker() {
-  sessionAttachments[pickerSlot] = Array.from(pickerSelections)
-    .map(id => state.media.find(m => m.id === id))
-    .filter(Boolean);
-  renderAttachedMedia(pickerSlot);
+  if (pickerSlot && pickerSlot.startsWith('exercise:')) {
+    const idx = parseInt(pickerSlot.split(':')[1]);
+    const drillId = Array.from(pickerSelections)[0];
+    if (drillId) attachDrillToExercise(idx, drillId);
+  } else {
+    sessionAttachments[pickerSlot] = Array.from(pickerSelections)
+      .map(id => state.media.find(m => m.id === id))
+      .filter(Boolean);
+    renderAttachedMedia(pickerSlot);
+  }
   closeModal('pickerModal');
 }
 
@@ -4374,10 +4687,17 @@ function renderSettings() {
   document.getElementById('settingsSeasonStart').value = s?.season_start || '2025-07-01';
   document.getElementById('settingsWeek1Day').value    = s?.week1_day    || 'monday';
 
+  // Team / ELO settings
+  const teamNameEl = document.getElementById('settingsTeamName');
+  const teamEloEl  = document.getElementById('settingsTeamElo');
+  if (teamNameEl) teamNameEl.value = s?.team_name || 'My Team';
+  if (teamEloEl)  teamEloEl.value  = s?.team_elo  || 1500;
+
   renderSettingsRows('sessionTypes', getSessionTypes());
   renderSettingsRows('gymPhases', getGymPhases());
   renderSettingsPreview();
   rebuildSessionTypeChips();
+  renderOpponentList();
 }
 
 function renderSettingsRows(key, items) {
@@ -4487,12 +4807,16 @@ async function saveSettings() {
   const gymPhases    = readSettingsRows('gymPhases');
   const seasonStart  = document.getElementById('settingsSeasonStart').value || '2025-07-01';
   const week1Day     = document.getElementById('settingsWeek1Day').value    || 'monday';
+  const teamName     = document.getElementById('settingsTeamName')?.value || 'My Team';
+  const teamElo      = parseInt(document.getElementById('settingsTeamElo')?.value) || 1500;
 
   const payload = {
     session_types: sessionTypes,
     gym_phases:    gymPhases,
     season_start:  seasonStart,
     week1_day:     week1Day,
+    team_name:     teamName,
+    team_elo:      teamElo,
     updated_at:    new Date().toISOString(),
   };
   if (state.settings?.id) payload.id = state.settings.id;
@@ -4679,6 +5003,174 @@ function jumpToMonthFromPopover() {
   currentMonth = d.getMonth();
   currentMonthYear = d.getFullYear();
   switchTab('month');
+}
+
+// ── MATCH DIFFICULTY INDEX (ELO + MDI) ──
+
+const ELO_K        = 20;     // standard rating volatility for soccer
+const ELO_DEFAULT  = 1500;   // starting rating for unseeded teams
+const HOME_ADV_ELO = 100;    // FIFA-style home advantage
+const INTL_AWAY_PENALTY = 75; // Robertson & Joyce found international away ~hardest
+
+// Expected score (probability of winning) given two ratings
+function eloExpected(yourRating, oppRating, locationAdj = 0) {
+  const diff = oppRating - yourRating + locationAdj;
+  return 1 / (1 + Math.pow(10, diff / 400));
+}
+
+// Update ratings after a match. result: 1 = home win, 0.5 = draw, 0 = away win
+function eloUpdate(homeRating, awayRating, result, k = ELO_K) {
+  const expectedHome = eloExpected(homeRating, awayRating, -HOME_ADV_ELO);
+  const newHome = homeRating + k * (result - expectedHome);
+  const newAway = awayRating + k * ((1 - result) - (1 - expectedHome));
+  return { home: Math.round(newHome), away: Math.round(newAway) };
+}
+
+// Compute MDI (0–10) for an upcoming match
+function calculateMDI(yourRating, oppRating, venue) {
+  let locationAdj = 0;
+  if (venue === 'Home') locationAdj = -HOME_ADV_ELO;
+  else if (venue === 'Away') locationAdj = 0;
+  else if (venue === 'Neutral') locationAdj = 0;
+  // Future: international away tag → +INTL_AWAY_PENALTY
+  const pWin = eloExpected(yourRating, oppRating, locationAdj);
+  return Math.round((1 - pWin) * 100) / 10; // 0.0 – 10.0
+}
+
+// MDI colour for badges (green easy → red hard)
+function mdiColor(mdi) {
+  if (mdi <= 3) return '#2eb86b';
+  if (mdi <= 5) return '#c5d12b';
+  if (mdi <= 6.5) return '#f5a623';
+  if (mdi <= 8) return '#ff6b6b';
+  return '#d63b3b';
+}
+
+// ── SEED MLS OPPONENTS FROM THESPORTSDB ──
+const MLS_LEAGUE_ID  = 4346;
+const MLS_SEASONS    = ['2020', '2021', '2022', '2023', '2024', '2025'];
+const SPORTSDB_BASE  = 'https://www.thesportsdb.com/api/v1/json/3';
+
+async function seedMlsOpponents() {
+  const statusEl = document.getElementById('seedStatus');
+  const setStatus = (txt) => { if (statusEl) statusEl.textContent = txt; };
+
+  if (!confirm(
+    'This will fetch all MLS teams + match results from TheSportsDB ' +
+    `(${MLS_SEASONS[0]}–${MLS_SEASONS[MLS_SEASONS.length - 1]}), replay every match through ` +
+    'the ELO formula, and write the final ratings to the opponents table. ' +
+    'Existing opponent ratings will be overwritten. Continue?'
+  )) return;
+
+  try {
+    setStatus('Fetching MLS team list…');
+    const teamsResp = await fetch(`${SPORTSDB_BASE}/search_all_teams.php?l=American%20Major%20League%20Soccer`);
+    const teamsJson = await teamsResp.json();
+    const teams = teamsJson.teams || [];
+    if (teams.length === 0) throw new Error('No teams returned by TheSportsDB');
+
+    // Build a teamId → { name, elo } map seeded at default
+    const ratings = {};
+    teams.forEach(t => {
+      ratings[t.idTeam] = { name: t.strTeam, elo: ELO_DEFAULT, externalId: t.idTeam };
+    });
+    setStatus(`Found ${teams.length} teams. Fetching season match data…`);
+
+    // Pull every season serially to be polite to the API
+    let allMatches = [];
+    for (const season of MLS_SEASONS) {
+      setStatus(`Fetching ${season} season…`);
+      const evResp = await fetch(`${SPORTSDB_BASE}/eventsseason.php?id=${MLS_LEAGUE_ID}&s=${season}`);
+      const evJson = await evResp.json();
+      const events = (evJson.events || []).filter(e =>
+        e.intHomeScore !== null && e.intHomeScore !== '' &&
+        e.intAwayScore !== null && e.intAwayScore !== ''
+      );
+      allMatches = allMatches.concat(events);
+    }
+
+    if (allMatches.length === 0) throw new Error('No completed matches returned for any season');
+
+    // Sort by date so ELO updates happen in real order
+    allMatches.sort((a, b) => new Date(a.strTimestamp || a.dateEvent) - new Date(b.strTimestamp || b.dateEvent));
+
+    setStatus(`Replaying ${allMatches.length} matches through ELO…`);
+
+    let processed = 0;
+    for (const m of allMatches) {
+      const homeId = m.idHomeTeam;
+      const awayId = m.idAwayTeam;
+      // Some matches may reference teams not in the current league set (relegated/expansion).
+      // Auto-add them at default ELO so the chain doesn't break.
+      if (!ratings[homeId]) ratings[homeId] = { name: m.strHomeTeam, elo: ELO_DEFAULT, externalId: homeId };
+      if (!ratings[awayId]) ratings[awayId] = { name: m.strAwayTeam, elo: ELO_DEFAULT, externalId: awayId };
+
+      const hs = parseInt(m.intHomeScore);
+      const as = parseInt(m.intAwayScore);
+      const result = hs > as ? 1 : (hs < as ? 0 : 0.5);
+      const upd = eloUpdate(ratings[homeId].elo, ratings[awayId].elo, result);
+      ratings[homeId].elo = upd.home;
+      ratings[awayId].elo = upd.away;
+      processed++;
+    }
+
+    setStatus(`Writing ${Object.keys(ratings).length} opponent ratings to Supabase…`);
+
+    // Upsert by external_id so re-running updates rather than duplicating
+    const rows = Object.values(ratings).map(r => ({
+      name: r.name,
+      external_id: r.externalId,
+      source: 'thesportsdb',
+      league: 'MLS',
+      current_elo: r.elo,
+      initial_elo: ELO_DEFAULT,
+      last_synced_at: new Date().toISOString(),
+    }));
+
+    const { error } = await sb.from('opponents').upsert(rows, { onConflict: 'name' });
+    if (error) throw error;
+
+    state.opponents = rows;
+    renderOpponentList();
+    setStatus(`✓ Seeded ${rows.length} teams from ${processed} matches across ${MLS_SEASONS.length} seasons`);
+  } catch (e) {
+    console.error('Seed failed:', e);
+    setStatus(`✗ ${e.message}`);
+    alert('Seed failed: ' + e.message);
+  }
+}
+
+async function loadOpponents() {
+  if (!sb) return;
+  try {
+    const { data, error } = await sb.from('opponents').select('*').order('current_elo', { ascending: false });
+    if (error) throw error;
+    state.opponents = data || [];
+  } catch (e) {
+    console.warn('loadOpponents failed (table may not exist yet):', e.message);
+    state.opponents = [];
+  }
+}
+
+function renderOpponentList() {
+  const el = document.getElementById('opponentList');
+  if (!el) return;
+  const list = state.opponents || [];
+  if (list.length === 0) {
+    el.innerHTML = '<div style="font-size:11px;color:var(--text3);font-family:\'Barlow Condensed\',sans-serif;letter-spacing:1px;padding:8px 0">No opponents seeded yet. Click the button above to pull MLS data.</div>';
+    return;
+  }
+  el.innerHTML = `
+    <div style="font-size:11px;color:var(--text3);font-family:'Barlow Condensed',sans-serif;letter-spacing:1px;margin-bottom:6px">${list.length} OPPONENTS · RANKED BY ELO</div>
+    <div style="max-height:300px;overflow-y:auto;border:1px solid var(--border);border-radius:var(--radius)">
+      ${list.map((o, i) => `
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:6px 10px;border-bottom:1px solid var(--border);font-size:12px">
+          <span><span style="color:var(--text3);font-family:'JetBrains Mono',monospace;width:24px;display:inline-block">${i + 1}.</span> ${o.name}</span>
+          <span style="font-family:'JetBrains Mono',monospace;color:var(--accent);font-weight:600">${o.current_elo}</span>
+        </div>
+      `).join('')}
+    </div>
+  `;
 }
 
 // ── EXPORT (updated) ──
