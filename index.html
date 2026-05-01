@@ -1829,6 +1829,7 @@
   <div class="nav-tab" onclick="switchTab('loading')">📊 Planned Loading</div>
   <div class="nav-tab" onclick="switchTab('month')">🗓 Month</div>
   <div class="nav-tab" onclick="switchTab('week')">⚡ Week</div>
+  <div class="nav-tab" onclick="switchTab('matches')">⚽ Matches</div>
   <div class="nav-tab" onclick="switchTab('library')">📚 Drill Library</div>
   <div class="nav-tab" onclick="switchTab('settings')">⚙ Settings</div>
 </nav>
@@ -1923,6 +1924,41 @@
       <button class="btn btn-ghost btn-sm" onclick="openWeekSettings()">⚙ Week Settings</button>
     </div>
     <div class="week-days" id="weekDays"></div>
+  </div>
+
+  <!-- ── MATCHES VIEW ── -->
+  <div id="view-matches" class="view">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:10px">
+      <div>
+        <h2 style="margin:0;font-family:'Barlow Condensed',sans-serif;letter-spacing:2px;font-size:24px">SEASON MATCHES</h2>
+        <div style="font-size:11px;color:var(--text3);font-family:'Barlow Condensed',sans-serif;letter-spacing:1px;margin-top:2px">Predicted vs actual difficulty across the season</div>
+      </div>
+      <button class="btn btn-primary btn-sm" onclick="openAddGame()">＋ Add Match</button>
+    </div>
+
+    <!-- Stats summary -->
+    <div id="matchStats" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;margin-bottom:18px"></div>
+
+    <!-- MDI timeline chart -->
+    <div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:16px;margin-bottom:18px">
+      <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px">
+        <div>
+          <div style="font-family:'Barlow Condensed',sans-serif;letter-spacing:2px;font-size:14px;color:var(--text2)">MATCH DIFFICULTY TIMELINE</div>
+          <div style="font-size:10px;color:var(--text3);font-family:'Barlow Condensed',sans-serif;letter-spacing:1px;margin-top:2px">Each match plotted by date · colour = difficulty tier</div>
+        </div>
+        <div style="display:flex;gap:6px;font-size:10px;font-family:'Barlow Condensed',sans-serif;letter-spacing:1px">
+          <span style="display:flex;align-items:center;gap:4px"><span style="width:8px;height:8px;background:#2eb86b;border-radius:50%"></span>EASY</span>
+          <span style="display:flex;align-items:center;gap:4px"><span style="width:8px;height:8px;background:#c5d12b;border-radius:50%"></span>MOD</span>
+          <span style="display:flex;align-items:center;gap:4px"><span style="width:8px;height:8px;background:#f5a623;border-radius:50%"></span>CHAL</span>
+          <span style="display:flex;align-items:center;gap:4px"><span style="width:8px;height:8px;background:#ff6b6b;border-radius:50%"></span>HARD</span>
+          <span style="display:flex;align-items:center;gap:4px"><span style="width:8px;height:8px;background:#d63b3b;border-radius:50%"></span>V.HARD</span>
+        </div>
+      </div>
+      <div id="mdiChart"></div>
+    </div>
+
+    <!-- Match list -->
+    <div id="matchList"></div>
   </div>
 
   <!-- ── LIBRARY VIEW ── -->
@@ -2020,6 +2056,43 @@
           <button class="btn btn-primary btn-sm" onclick="seedMlsOpponents()">⬇ Seed MLS Opponents from TheSportsDB</button>
           <span id="seedStatus" style="font-size:11px;color:var(--text3);font-family:'Barlow Condensed',sans-serif;letter-spacing:1px"></span>
         </div>
+
+        <details style="margin-top:10px;background:var(--surface3);border-radius:var(--radius);padding:8px 12px">
+          <summary style="cursor:pointer;font-family:'Barlow Condensed',sans-serif;letter-spacing:1.5px;font-size:12px;color:var(--text2)">📖 What do these values mean?</summary>
+          <div style="padding-top:12px;font-size:12px;color:var(--text2);line-height:1.5">
+
+            <div style="font-family:'Barlow Condensed',sans-serif;letter-spacing:1.5px;color:var(--accent);font-size:11px;margin-top:8px;margin-bottom:6px">ELO RATING SCALE</div>
+            <table style="width:100%;border-collapse:collapse;font-size:11px">
+              <tr><td style="padding:4px 8px;border-bottom:1px solid var(--border);font-family:'JetBrains Mono',monospace">1850+</td><td style="padding:4px 8px;border-bottom:1px solid var(--border)">Elite — dynasty-level (rare)</td></tr>
+              <tr><td style="padding:4px 8px;border-bottom:1px solid var(--border);font-family:'JetBrains Mono',monospace">1700–1850</td><td style="padding:4px 8px;border-bottom:1px solid var(--border)">Top tier — title contenders, MLS Cup level</td></tr>
+              <tr><td style="padding:4px 8px;border-bottom:1px solid var(--border);font-family:'JetBrains Mono',monospace">1550–1700</td><td style="padding:4px 8px;border-bottom:1px solid var(--border)">Above average — playoff teams</td></tr>
+              <tr><td style="padding:4px 8px;border-bottom:1px solid var(--border);font-family:'JetBrains Mono',monospace">1450–1550</td><td style="padding:4px 8px;border-bottom:1px solid var(--border)">Average — mid-table</td></tr>
+              <tr><td style="padding:4px 8px;border-bottom:1px solid var(--border);font-family:'JetBrains Mono',monospace">1300–1450</td><td style="padding:4px 8px;border-bottom:1px solid var(--border)">Bottom — relegation-zone equivalents</td></tr>
+              <tr><td style="padding:4px 8px;font-family:'JetBrains Mono',monospace">&lt;1300</td><td style="padding:4px 8px">Very weak — expansion / lower tier</td></tr>
+            </table>
+
+            <div style="font-family:'Barlow Condensed',sans-serif;letter-spacing:1.5px;color:var(--accent);font-size:11px;margin-top:14px;margin-bottom:6px">MATCH DIFFICULTY INDEX (MDI)</div>
+            <table style="width:100%;border-collapse:collapse;font-size:11px">
+              <tr><td style="padding:4px 8px;border-bottom:1px solid var(--border);color:#2eb86b;font-family:'JetBrains Mono',monospace;font-weight:700">0–3</td><td style="padding:4px 8px;border-bottom:1px solid var(--border)"><b>EASY</b> — heavy favourite, can train hard the week before</td></tr>
+              <tr><td style="padding:4px 8px;border-bottom:1px solid var(--border);color:#c5d12b;font-family:'JetBrains Mono',monospace;font-weight:700">3–5</td><td style="padding:4px 8px;border-bottom:1px solid var(--border)"><b>MODERATE</b> — slight favourite</td></tr>
+              <tr><td style="padding:4px 8px;border-bottom:1px solid var(--border);color:#f5a623;font-family:'JetBrains Mono',monospace;font-weight:700">5–6.5</td><td style="padding:4px 8px;border-bottom:1px solid var(--border)"><b>CHALLENGING</b> — coin-flip / slight underdog</td></tr>
+              <tr><td style="padding:4px 8px;border-bottom:1px solid var(--border);color:#ff6b6b;font-family:'JetBrains Mono',monospace;font-weight:700">6.5–8</td><td style="padding:4px 8px;border-bottom:1px solid var(--border)"><b>HARD</b> — underdog, taper training, prioritise recovery</td></tr>
+              <tr><td style="padding:4px 8px;color:#d63b3b;font-family:'JetBrains Mono',monospace;font-weight:700">8–10</td><td style="padding:4px 8px"><b>VERY HARD</b> — heavy underdog</td></tr>
+            </table>
+
+            <div style="font-family:'Barlow Condensed',sans-serif;letter-spacing:1.5px;color:var(--accent);font-size:11px;margin-top:14px;margin-bottom:6px">ELO MOVEMENT AFTER A MATCH</div>
+            <table style="width:100%;border-collapse:collapse;font-size:11px">
+              <tr><td style="padding:4px 8px;border-bottom:1px solid var(--border);font-family:'JetBrains Mono',monospace">±5 or less</td><td style="padding:4px 8px;border-bottom:1px solid var(--border)">Result was expected</td></tr>
+              <tr><td style="padding:4px 8px;border-bottom:1px solid var(--border);font-family:'JetBrains Mono',monospace">±10–15</td><td style="padding:4px 8px;border-bottom:1px solid var(--border)">Moderately surprising</td></tr>
+              <tr><td style="padding:4px 8px;font-family:'JetBrains Mono',monospace">±20</td><td style="padding:4px 8px">Big upset (max with K=20)</td></tr>
+            </table>
+
+            <div style="font-size:10px;color:var(--text3);margin-top:14px;font-family:'Barlow Condensed',sans-serif;letter-spacing:1px;line-height:1.6">
+              MDI formula: based on Robertson &amp; Joyce (2014) match difficulty index from logistic regression, adapted to use ELO ratings instead of league rank. Includes 100-pt home advantage adjustment per FIFA-style football ELO. Updated via standard ELO formula (K=20).
+            </div>
+          </div>
+        </details>
+
         <div id="opponentList" style="margin-top:10px"></div>
       </div>
 
@@ -2242,6 +2315,41 @@
             <div class="chip" onclick="selectChip(this,'venue','Away');refreshGameMdi()">Away</div>
             <div class="chip" onclick="selectChip(this,'venue','Neutral');refreshGameMdi()">Neutral</div>
           </div>
+        </div>
+      </div>
+
+      <hr class="section-divider">
+      <div class="subsection-label">Match Context <span style="color:var(--text3);font-size:10px;font-weight:400;letter-spacing:0;text-transform:none">— modifies MDI</span></div>
+      <div class="form-grid" style="margin-bottom:12px">
+        <div class="form-group">
+          <label>Travel (km) <span style="color:var(--text3);font-size:10px">— optional</span></label>
+          <input type="number" id="gameTravelKm" min="0" placeholder="0" oninput="refreshGameMdi()">
+        </div>
+        <div class="form-group">
+          <label>Time Zone Δ (hours)</label>
+          <input type="number" id="gameTzHours" min="0" max="12" placeholder="0" oninput="refreshGameMdi()">
+        </div>
+      </div>
+      <div class="form-group" style="margin-bottom:12px">
+        <label>Weather Conditions</label>
+        <div class="chip-row" id="gameWeatherChips">
+          <div class="chip chip-none active" onclick="selectChip(this,'weather','');refreshGameMdi()">Normal</div>
+          <div class="chip" onclick="selectChip(this,'weather','Hot');refreshGameMdi()">🔥 Hot</div>
+          <div class="chip" onclick="selectChip(this,'weather','Cold');refreshGameMdi()">❄ Cold</div>
+          <div class="chip" onclick="selectChip(this,'weather','Rain');refreshGameMdi()">🌧 Rain</div>
+          <div class="chip" onclick="selectChip(this,'weather','Snow');refreshGameMdi()">🌨 Snow</div>
+          <div class="chip" onclick="selectChip(this,'weather','Wind');refreshGameMdi()">💨 Wind</div>
+          <div class="chip" onclick="selectChip(this,'weather','Altitude');refreshGameMdi()">⛰ Altitude</div>
+        </div>
+      </div>
+      <div class="form-grid" style="margin-bottom:14px">
+        <div class="form-group">
+          <label>Days Rest <span id="gameRestAuto" style="color:var(--text3);font-size:10px"></span></label>
+          <input type="number" id="gameDaysRest" min="0" max="30" placeholder="auto" oninput="refreshGameMdi()">
+        </div>
+        <div class="form-group">
+          <label>Recent Form <span id="gameFormAuto" style="color:var(--text3);font-size:10px"></span></label>
+          <input type="text" id="gameForm" maxlength="5" placeholder="auto" oninput="this.value=this.value.toUpperCase().replace(/[^WDL]/g,'').slice(0,5);refreshGameMdi()" style="font-family:'JetBrains Mono',monospace;letter-spacing:3px;text-align:center">
         </div>
       </div>
 
@@ -2809,6 +2917,11 @@ function dbToGame(r) {
     result:     r.result      || '',
     squadSize:  r.squad_size  ?? null,
     available:  r.available   ?? null,
+    travelKm:         r.travel_km          ?? null,
+    tzHours:          r.tz_hours           ?? null,
+    weather:          r.weather            || '',
+    daysRestOverride: r.days_rest_override ?? null,
+    formOverride:     r.form_override      || '',
   };
 }
 function gameToDB(g) {
@@ -2825,6 +2938,11 @@ function gameToDB(g) {
     result:      g.result     || null,
     squad_size:  g.squadSize  ?? null,
     available:   g.available  ?? null,
+    travel_km:          g.travelKm         ?? null,
+    tz_hours:           g.tzHours          ?? null,
+    weather:            g.weather          || null,
+    days_rest_override: g.daysRestOverride ?? null,
+    form_override:      g.formOverride     || null,
   };
 }
 function dbToDrill(r) {
@@ -2996,13 +3114,14 @@ function switchTab(tab) {
   document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
   document.getElementById('view-' + tab).classList.add('active');
   document.querySelectorAll('.nav-tab').forEach(t => {
-    const match = tab === 'loading' ? 'planned' : tab === 'library' ? 'drill' : tab;
+    const match = tab === 'loading' ? 'planned' : tab === 'library' ? 'drill' : tab === 'matches' ? '⚽ matches' : tab;
     if (t.textContent.toLowerCase().includes(match)) t.classList.add('active');
   });
   if (tab === 'year')     renderYear();
   if (tab === 'loading')  renderLoading();
   if (tab === 'month')    renderMonth();
   if (tab === 'week')     renderWeek();
+  if (tab === 'matches')  renderMatches();
   if (tab === 'library')  renderLibrary();
   if (tab === 'settings') renderSettings();
 }
@@ -3559,12 +3678,12 @@ function renderWeek() {
     if (isGame) {
       const g = state.games.find(gg => gg.date === dateStr);
       const hasLoad = g && (g.td || g.hsr || g.sprint || g.acc || g.dec);
-      // MDI lookup
+      // MDI lookup (full context)
       const oppRecord = g?.opponent_id
         ? state.opponents.find(o => o.id === g.opponent_id)
         : state.opponents.find(o => o.name?.toLowerCase() === g?.opponent?.toLowerCase());
       const yourElo = state.settings?.team_elo || ELO_DEFAULT;
-      const mdi = oppRecord ? calculateMDI(yourElo, oppRecord.current_elo, g.venue) : null;
+      const mdi = (oppRecord && g) ? calculateMDI(yourElo, oppRecord.current_elo, buildMatchContext(g, state.games)) : null;
       // Result chip
       const resultColor = g?.result === 'W' ? '#2eb86b' : g?.result === 'L' ? '#ff6b6b' : g?.result === 'D' ? '#c5d12b' : null;
       const scoreText = (g?.scoreUs != null && g?.scoreThem != null) ? `${g.scoreUs}–${g.scoreThem}` : null;
@@ -3780,20 +3899,24 @@ let editingGameId = null;
 function clearGameForm() {
   ['gameDate','gameOpponent','gameCompetition','gameNotes',
    'gameTD','gameHSR','gameSprint','gameAcc','gameDec',
-   'gameScoreUs','gameScoreThem','gameSquadSize','gameAvailable'
+   'gameScoreUs','gameScoreThem','gameSquadSize','gameAvailable',
+   'gameTravelKm','gameTzHours','gameDaysRest','gameForm'
   ].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
   document.getElementById('gameOppEloChip').style.display = 'none';
   document.getElementById('gameOppEloChip').textContent = '';
   document.getElementById('gameMdiPreview').style.display = 'none';
   document.getElementById('gameAvailPct').textContent = '';
-  chipSelections['venue']  = 'Home';
-  chipSelections['result'] = '';
-  // Reset venue + result chips visually
+  document.getElementById('gameRestAuto').textContent = '';
+  document.getElementById('gameFormAuto').textContent = '';
+  chipSelections['venue']   = 'Home';
+  chipSelections['result']  = '';
+  chipSelections['weather'] = '';
+  // Reset all chips
   document.getElementById('gameModal').querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
+  // Venue chips (3) → first; Result chips (4) → first; Weather chips (7) → first
   document.querySelectorAll('#gameModal .chip-row').forEach(row => {
     const chips = row.querySelectorAll('.chip');
-    if (chips.length === 3) chips[0].classList.add('active'); // Venue → Home
-    if (chips.length === 4) chips[0].classList.add('active'); // Result → none
+    if (chips.length) chips[0].classList.add('active');
   });
 }
 
@@ -3842,23 +3965,35 @@ function editGame(id) {
   document.getElementById('gameScoreThem').value   = g.scoreThem ?? '';
   document.getElementById('gameSquadSize').value   = g.squadSize ?? '';
   document.getElementById('gameAvailable').value   = g.available ?? '';
+  document.getElementById('gameTravelKm').value    = g.travelKm ?? '';
+  document.getElementById('gameTzHours').value     = g.tzHours ?? '';
+  document.getElementById('gameDaysRest').value    = g.daysRestOverride ?? '';
+  document.getElementById('gameForm').value        = g.formOverride ?? '';
 
-  // Venue + result chips
-  chipSelections['venue']  = g.venue  || 'Home';
-  chipSelections['result'] = g.result || '';
+  // Venue + result + weather chips
+  chipSelections['venue']   = g.venue   || 'Home';
+  chipSelections['result']  = g.result  || '';
+  chipSelections['weather'] = g.weather || '';
   document.querySelectorAll('#gameModal .chip-row').forEach(row => {
     const chips = row.querySelectorAll('.chip');
     chips.forEach(c => c.classList.remove('active'));
-    if (chips.length === 3) {
-      // Venue
+    // Detect row by content of first chip
+    const firstText = chips[0]?.textContent.trim();
+    if (firstText === 'Home') {
       const target = Array.from(chips).find(c => c.textContent.trim() === chipSelections['venue']);
       (target || chips[0]).classList.add('active');
-    } else if (chips.length === 4) {
-      // Result
+    } else if (firstText === '—') {
       const r = chipSelections['result'];
       if (!r) chips[0].classList.add('active');
       else {
         const target = Array.from(chips).find(c => c.textContent.trim() === r);
+        (target || chips[0]).classList.add('active');
+      }
+    } else if (firstText === 'Normal') {
+      const w = chipSelections['weather'];
+      if (!w) chips[0].classList.add('active');
+      else {
+        const target = Array.from(chips).find(c => c.textContent.includes(w));
         (target || chips[0]).classList.add('active');
       }
     }
@@ -3886,21 +4021,57 @@ function onOpponentChange() {
 function refreshGameMdi() {
   const name = document.getElementById('gameOpponent').value.trim();
   const opp = (state.opponents || []).find(o => o.name.toLowerCase() === name.toLowerCase());
-  const venue = chipSelections['venue'] || 'Home';
-  const yourElo = state.settings?.team_elo || ELO_DEFAULT;
   const preview = document.getElementById('gameMdiPreview');
   if (!opp) { preview.style.display = 'none'; return; }
-  const mdi = calculateMDI(yourElo, opp.current_elo, venue);
-  const pWin = eloExpected(yourElo, opp.current_elo, venue === 'Home' ? -HOME_ADV_ELO : 0);
-  const tier = mdi <= 3 ? 'EASY' : mdi <= 5 ? 'MODERATE' : mdi <= 6.5 ? 'CHALLENGING' : mdi <= 8 ? 'HARD' : 'VERY HARD';
+
+  const yourElo = state.settings?.team_elo || ELO_DEFAULT;
+  const venue   = chipSelections['venue']   || 'Home';
+  const weather = chipSelections['weather'] || '';
+  const travelKm = document.getElementById('gameTravelKm').value;
+  const tzHours  = document.getElementById('gameTzHours').value;
+
+  // Build a synthetic game record so we can auto-compute rest + form
+  const dateStr = document.getElementById('gameDate').value;
+  const synthetic = { id: editingGameId || '__preview__', date: dateStr };
+
+  // Days rest: manual override → use it; else auto from previous match
+  const restManual = document.getElementById('gameDaysRest').value;
+  const restAuto = computeDaysRest(synthetic, state.games);
+  const daysRest = restManual !== '' ? restManual : (restAuto ?? '');
+  document.getElementById('gameRestAuto').textContent =
+    restManual !== '' ? '(manual)' : (restAuto != null ? `(auto: ${restAuto})` : '(no prev match)');
+
+  // Form: manual override → use it; else auto from prior matches
+  const formManual = document.getElementById('gameForm').value;
+  const formAuto = computeRecentForm(synthetic, state.games);
+  const form = formManual || formAuto;
+  document.getElementById('gameFormAuto').textContent =
+    formManual ? '(manual)' : (formAuto ? `(auto: ${formAuto})` : '(no prev results)');
+
+  const ctx = { venue, travelKm, weather, daysRest, tzHours, form };
+  const bd = mdiBreakdown(yourElo, opp.current_elo, ctx);
+  const tier = bd.mdi <= 3 ? 'EASY' : bd.mdi <= 5 ? 'MODERATE' : bd.mdi <= 6.5 ? 'CHALLENGING' : bd.mdi <= 8 ? 'HARD' : 'VERY HARD';
+
   preview.style.display = 'block';
-  preview.style.borderLeftColor = mdiColor(mdi);
-  document.getElementById('gameMdiValue').textContent = mdi.toFixed(1);
-  document.getElementById('gameMdiValue').style.color = mdiColor(mdi);
+  preview.style.borderLeftColor = mdiColor(bd.mdi);
+  document.getElementById('gameMdiValue').textContent = bd.mdi.toFixed(1);
+  document.getElementById('gameMdiValue').style.color = mdiColor(bd.mdi);
   document.getElementById('gameMdiLabel').textContent = tier;
-  document.getElementById('gameMdiLabel').style.color = mdiColor(mdi);
-  document.getElementById('gameMdiDetail').textContent =
-    `Your ELO ${yourElo}  vs  ${opp.name} ${opp.current_elo}  ·  ${venue}  ·  Predicted win ${Math.round(pWin * 100)}%`;
+  document.getElementById('gameMdiLabel').style.color = mdiColor(bd.mdi);
+
+  const baseLine = `Base ELO diff (${opp.name} ${opp.current_elo} − you ${yourElo}): <b>${bd.eloDiff >= 0 ? '+' : ''}${bd.eloDiff}</b>`;
+  const modLines = bd.mods.map(m => {
+    const sign = m.value > 0 ? '+' : (m.value < 0 ? '' : '');
+    const colour = m.value > 0 ? '#ff6b6b' : m.value < 0 ? '#2eb86b' : 'var(--text3)';
+    return `<div style="display:flex;justify-content:space-between;font-family:'Barlow Condensed',sans-serif;letter-spacing:0.5px;font-size:11px;color:var(--text2)">
+      <span>${m.label}</span><span style="font-family:'JetBrains Mono',monospace;color:${colour};font-weight:600">${sign}${m.value}</span>
+    </div>`;
+  }).join('');
+  const totalLine = `<div style="display:flex;justify-content:space-between;font-family:'Barlow Condensed',sans-serif;letter-spacing:1px;font-size:11px;color:var(--text);margin-top:4px;padding-top:4px;border-top:1px solid var(--border)">
+    <span>ADJUSTED · Predicted win ${Math.round(bd.pWin * 100)}%</span>
+    <span style="font-family:'JetBrains Mono',monospace;font-weight:700">${bd.adjDiff >= 0 ? '+' : ''}${bd.adjDiff}</span>
+  </div>`;
+  document.getElementById('gameMdiDetail').innerHTML = `<div style="margin-top:6px">${baseLine}</div>${modLines}${totalLine}`;
 }
 
 function deriveResult() {
@@ -3957,6 +4128,11 @@ async function saveGame() {
     result,
     squadSize: parseInt(document.getElementById('gameSquadSize').value) || null,
     available: parseInt(document.getElementById('gameAvailable').value) || null,
+    travelKm:         parseInt(document.getElementById('gameTravelKm').value) || null,
+    tzHours:          parseInt(document.getElementById('gameTzHours').value)  || null,
+    weather:          chipSelections['weather'] || '',
+    daysRestOverride: parseInt(document.getElementById('gameDaysRest').value) || null,
+    formOverride:     document.getElementById('gameForm').value || '',
   };
 
   // Detect newly-entered result so we can update ELO once
@@ -4102,7 +4278,7 @@ function openDayPanel(dateStr) {
       ? state.opponents.find(o => o.id === game.opponent_id)
       : state.opponents.find(o => o.name?.toLowerCase() === game.opponent?.toLowerCase());
     const yourElo = state.settings?.team_elo || ELO_DEFAULT;
-    const mdi = oppRecord ? calculateMDI(yourElo, oppRecord.current_elo, game.venue) : null;
+    const mdi = oppRecord ? calculateMDI(yourElo, oppRecord.current_elo, buildMatchContext(game, state.games)) : null;
     const resultColor = game.result === 'W' ? '#2eb86b' : game.result === 'L' ? '#ff6b6b' : game.result === 'D' ? '#c5d12b' : null;
     const scoreText = (game.scoreUs != null && game.scoreThem != null) ? `${game.scoreUs}–${game.scoreThem}` : null;
 
@@ -5358,15 +5534,135 @@ function eloUpdate(homeRating, awayRating, result, k = ELO_K) {
   return { home: Math.round(newHome), away: Math.round(newAway) };
 }
 
-// Compute MDI (0–10) for an upcoming match
-function calculateMDI(yourRating, oppRating, venue) {
-  let locationAdj = 0;
-  if (venue === 'Home') locationAdj = -HOME_ADV_ELO;
-  else if (venue === 'Away') locationAdj = 0;
-  else if (venue === 'Neutral') locationAdj = 0;
-  // Future: international away tag → +INTL_AWAY_PENALTY
-  const pWin = eloExpected(yourRating, oppRating, locationAdj);
-  return Math.round((1 - pWin) * 100) / 10; // 0.0 – 10.0
+// ── MDI MODIFIERS ──
+// Each modifier returns an ELO penalty added to (opp - you) diff.
+// Positive value = harder match for you. Negative = easier.
+
+function modVenue(venue) {
+  if (venue === 'Home') return { value: -HOME_ADV_ELO, label: 'Home advantage' };
+  return { value: 0, label: 'Away/neutral' };
+}
+
+function modTravel(km) {
+  const k = Number(km) || 0;
+  if (k >= 3000) return { value: 35, label: `Travel ${k}km (long-haul)` };
+  if (k >= 1000) return { value: 20, label: `Travel ${k}km (long domestic)` };
+  if (k >= 200)  return { value: 10, label: `Travel ${k}km (regional)` };
+  if (k > 0)     return { value: 0,  label: `Travel ${k}km (local)` };
+  return { value: 0, label: '' };
+}
+
+function modWeather(weather) {
+  const map = {
+    Hot:      { value: 15, label: 'Weather: Hot' },
+    Cold:     { value: 10, label: 'Weather: Cold' },
+    Rain:     { value: 10, label: 'Weather: Rain' },
+    Snow:     { value: 10, label: 'Weather: Snow' },
+    Wind:     { value: 5,  label: 'Weather: Wind' },
+    Altitude: { value: 25, label: 'High altitude' },
+  };
+  return map[weather] || { value: 0, label: '' };
+}
+
+function modDaysRest(days) {
+  const d = Number(days);
+  if (!d || d <= 0) return { value: 0, label: '' };
+  if (d >= 7)  return { value: 0,  label: `${d} days rest` };
+  if (d >= 5)  return { value: 5,  label: `${d} days rest (short)` };
+  if (d >= 3)  return { value: 15, label: `${d} days rest (very short)` };
+  return { value: 25, label: `${d} days rest (extreme)` };
+}
+
+function modTimeZone(hours) {
+  const h = Math.abs(Number(hours) || 0);
+  if (h >= 4) return { value: 15, label: `${h}h time zone change` };
+  if (h >= 1) return { value: 5,  label: `${h}h time zone change` };
+  return { value: 0, label: '' };
+}
+
+function modForm(formString) {
+  // formString like "WWDLW" — most recent first
+  if (!formString || formString.length === 0) return { value: 0, label: '' };
+  const wins   = (formString.match(/W/g) || []).length;
+  const losses = (formString.match(/L/g) || []).length;
+  const len = formString.length;
+  if (wins === len && len >= 5) return { value: -10, label: `Form ${formString} (hot streak boost)` };
+  if (wins >= 4)                return { value: -5,  label: `Form ${formString} (good run)` };
+  if (losses === len && len >= 5) return { value: 20, label: `Form ${formString} (cold streak)` };
+  if (losses >= 4)              return { value: 10,  label: `Form ${formString} (poor run)` };
+  return { value: 0, label: `Form ${formString}` };
+}
+
+// ── AUTO-COMPUTE HELPERS ──
+
+// Days between this match and the previous played match (in chronological order)
+function computeDaysRest(game, allGames) {
+  if (!game.date) return null;
+  const thisDate = new Date(game.date);
+  const prev = (allGames || [])
+    .filter(g => g.id !== game.id && g.date && new Date(g.date) < thisDate)
+    .sort((a, b) => new Date(b.date) - new Date(a.date))[0];
+  if (!prev) return null;
+  return Math.round((thisDate - new Date(prev.date)) / (1000 * 60 * 60 * 24));
+}
+
+// Build a full MDI context from a stored game (with auto-fallbacks for rest + form)
+function buildMatchContext(game, allGames) {
+  const daysRest = game.daysRestOverride ?? computeDaysRest(game, allGames);
+  const form     = game.formOverride     || computeRecentForm(game, allGames);
+  return {
+    venue:    game.venue    || 'Home',
+    travelKm: game.travelKm,
+    weather:  game.weather,
+    daysRest,
+    tzHours:  game.tzHours,
+    form,
+  };
+}
+
+// Last N played matches (results only) before this match. Returns "WWDL" etc.
+function computeRecentForm(game, allGames, n = 5) {
+  if (!game.date) return '';
+  const thisDate = new Date(game.date);
+  const prior = (allGames || [])
+    .filter(g => g.id !== game.id && g.date && new Date(g.date) < thisDate && g.result)
+    .sort((a, b) => new Date(b.date) - new Date(a.date))
+    .slice(0, n)
+    .map(g => g.result);
+  return prior.join('');
+}
+
+// ── CORE MDI ──
+// ctx: { venue, travelKm, weather, daysRest, tzHours, form }
+function calculateMDI(yourRating, oppRating, ctxOrVenue) {
+  // Backwards-compat: if 3rd arg is a string, treat as venue only
+  const ctx = (typeof ctxOrVenue === 'string') ? { venue: ctxOrVenue } : (ctxOrVenue || {});
+  const breakdown = mdiBreakdown(yourRating, oppRating, ctx);
+  return breakdown.mdi;
+}
+
+function mdiBreakdown(yourRating, oppRating, ctx = {}) {
+  const mods = [
+    modVenue(ctx.venue || 'Home'),
+    modTravel(ctx.travelKm),
+    modWeather(ctx.weather),
+    modDaysRest(ctx.daysRest),
+    modTimeZone(ctx.tzHours),
+    modForm(ctx.form),
+  ];
+  const totalMod = mods.reduce((s, m) => s + m.value, 0);
+  const eloDiff = (oppRating - yourRating);
+  const adjDiff = eloDiff + totalMod;
+  const pWin = 1 / (1 + Math.pow(10, adjDiff / 400));
+  const mdi = Math.round((1 - pWin) * 100) / 10;
+  return {
+    mdi,
+    pWin,
+    eloDiff,
+    totalMod,
+    adjDiff,
+    mods: mods.filter(m => m.label),
+  };
 }
 
 // MDI colour for badges (green easy → red hard)
@@ -5380,7 +5676,7 @@ function mdiColor(mdi) {
 
 // ── SEED MLS OPPONENTS FROM THESPORTSDB ──
 const MLS_LEAGUE_ID  = 4346;
-const MLS_SEASONS    = ['2020', '2021', '2022', '2023', '2024', '2025'];
+const MLS_SEASONS    = ['2023', '2024', '2025']; // Recent seasons keep ratings reflective of current rosters
 const SPORTSDB_BASE  = 'https://www.thesportsdb.com/api/v1/json/3';
 
 async function seedMlsOpponents() {
@@ -5501,6 +5797,200 @@ function renderOpponentList() {
           <span style="font-family:'JetBrains Mono',monospace;color:var(--accent);font-weight:600">${o.current_elo}</span>
         </div>
       `).join('')}
+    </div>
+  `;
+}
+
+// ── MATCHES VIEW (MDI timeline + list) ──
+
+function renderMatches() {
+  const games = (state.games || []).slice().sort((a, b) => new Date(a.date) - new Date(b.date));
+  const yourElo = state.settings?.team_elo || ELO_DEFAULT;
+
+  // Annotate each game with full-context MDI + opponent record
+  const annotated = games.map(g => {
+    const opp = g.opponent_id
+      ? state.opponents.find(o => o.id === g.opponent_id)
+      : state.opponents.find(o => o.name?.toLowerCase() === g.opponent?.toLowerCase());
+    if (!opp) return { ...g, _mdi: null, _pWin: null, _oppElo: null, _oppRec: null };
+    const ctx = buildMatchContext(g, games);
+    const bd = mdiBreakdown(yourElo, opp.current_elo, ctx);
+    return { ...g, _mdi: bd.mdi, _pWin: bd.pWin, _oppElo: opp.current_elo, _oppRec: opp, _bd: bd };
+  });
+
+  renderMatchStats(annotated);
+  renderMdiChart(annotated);
+  renderMatchList(annotated);
+}
+
+function renderMatchStats(games) {
+  const el = document.getElementById('matchStats');
+  if (!el) return;
+
+  const total   = games.length;
+  const won     = games.filter(g => g.result === 'W').length;
+  const drew    = games.filter(g => g.result === 'D').length;
+  const lost    = games.filter(g => g.result === 'L').length;
+  const played  = won + drew + lost;
+  const withMdi = games.filter(g => g._mdi != null);
+  const avgMdi  = withMdi.length ? (withMdi.reduce((s, g) => s + g._mdi, 0) / withMdi.length) : null;
+
+  // Performance vs expectation: did you outperform predicted win prob?
+  let overperform = 0, underperform = 0;
+  games.forEach(g => {
+    if (g._pWin == null || !g.result) return;
+    const actual = g.result === 'W' ? 1 : g.result === 'D' ? 0.5 : 0;
+    if (actual > g._pWin + 0.1) overperform++;
+    else if (actual < g._pWin - 0.1) underperform++;
+  });
+
+  const stat = (label, value, color) => `
+    <div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:10px 12px">
+      <div style="font-size:10px;color:var(--text3);font-family:'Barlow Condensed',sans-serif;letter-spacing:1.5px;text-transform:uppercase">${label}</div>
+      <div style="font-family:'JetBrains Mono',monospace;font-size:20px;font-weight:700;color:${color || 'var(--text)'};margin-top:2px">${value}</div>
+    </div>`;
+
+  el.innerHTML = [
+    stat('Total Matches', total),
+    stat('Played', played),
+    stat('Won', won, '#2eb86b'),
+    stat('Drew', drew, '#c5d12b'),
+    stat('Lost', lost, '#ff6b6b'),
+    avgMdi != null ? stat('Avg MDI', avgMdi.toFixed(1), mdiColor(avgMdi)) : '',
+    played > 0 ? stat('Outperformed', overperform, '#2eb86b') : '',
+    played > 0 ? stat('Underperformed', underperform, '#ff6b6b') : '',
+  ].filter(Boolean).join('');
+}
+
+function renderMdiChart(games) {
+  const host = document.getElementById('mdiChart');
+  if (!host) return;
+  if (games.length === 0) {
+    host.innerHTML = '<div style="text-align:center;padding:40px;color:var(--text3);font-family:\'Barlow Condensed\',sans-serif;letter-spacing:1px">No matches yet — add some to see the timeline</div>';
+    return;
+  }
+
+  const W = 900, H = 280;
+  const padL = 40, padR = 20, padT = 20, padB = 40;
+  const innerW = W - padL - padR;
+  const innerH = H - padT - padB;
+
+  // X axis = date range across all matches
+  const dates = games.map(g => new Date(g.date).getTime());
+  const minDate = Math.min(...dates);
+  const maxDate = Math.max(...dates);
+  const dateSpan = Math.max(maxDate - minDate, 1);
+
+  const xPos = (date) => padL + ((new Date(date).getTime() - minDate) / dateSpan) * innerW;
+  const yPos = (mdi)  => padT + (mdi / 10) * innerH; // 0 at top, 10 at bottom (harder = lower)
+  const yPosInverted = (mdi) => padT + ((10 - mdi) / 10) * innerH; // 0 at bottom, 10 at top (harder = higher visually)
+
+  // Use the inverted scale: harder matches plot higher = visually intuitive ("difficulty climbing")
+  const y = yPosInverted;
+
+  // Y gridlines at MDI 0, 2, 4, 6, 8, 10
+  const gridLines = [0, 2, 4, 6, 8, 10].map(v => `
+    <line x1="${padL}" y1="${y(v)}" x2="${W - padR}" y2="${y(v)}" stroke="var(--border)" stroke-width="0.5" stroke-dasharray="2,3"/>
+    <text x="${padL - 6}" y="${y(v) + 3}" font-family="'JetBrains Mono', monospace" font-size="9" fill="var(--text3)" text-anchor="end">${v}</text>
+  `).join('');
+
+  // X axis date labels: month boundaries within the range
+  let monthLabels = '';
+  const startD = new Date(minDate);
+  const endD = new Date(maxDate);
+  const cursor = new Date(startD.getFullYear(), startD.getMonth(), 1);
+  while (cursor <= endD) {
+    const x = xPos(cursor);
+    if (x >= padL && x <= W - padR) {
+      const label = cursor.toLocaleString('en', { month: 'short' });
+      monthLabels += `
+        <line x1="${x}" y1="${padT}" x2="${x}" y2="${H - padB}" stroke="var(--border)" stroke-width="0.5" opacity="0.4"/>
+        <text x="${x}" y="${H - padB + 14}" font-family="'Barlow Condensed', sans-serif" font-size="10" fill="var(--text3)" text-anchor="middle" letter-spacing="1px">${label.toUpperCase()}</text>
+      `;
+    }
+    cursor.setMonth(cursor.getMonth() + 1);
+  }
+
+  // Trend line connecting matches with MDI (in chronological order)
+  const mdiPoints = games.filter(g => g._mdi != null);
+  let trendPath = '';
+  if (mdiPoints.length > 1) {
+    trendPath = mdiPoints.map((g, i) => `${i === 0 ? 'M' : 'L'} ${xPos(g.date).toFixed(1)} ${y(g._mdi).toFixed(1)}`).join(' ');
+  }
+
+  // Match dots
+  const dots = games.map((g, i) => {
+    if (g._mdi == null) {
+      // No MDI (no opponent rating) — small grey dot at midline
+      return `<circle cx="${xPos(g.date)}" cy="${y(5)}" r="3" fill="var(--text3)" opacity="0.4"><title>${g.opponent || 'TBC'} (no rating)</title></circle>`;
+    }
+    const c = mdiColor(g._mdi);
+    const r = g.result ? 6 : 5;
+    const stroke = g.result === 'W' ? '#2eb86b' : g.result === 'L' ? '#ff6b6b' : g.result === 'D' ? '#c5d12b' : 'none';
+    const strokeW = g.result ? 2 : 0;
+    const dateLabel = new Date(g.date).toLocaleDateString();
+    const tooltip = `${g.opponent || 'TBC'}\n${dateLabel} · ${g.venue}\nMDI ${g._mdi.toFixed(1)}${g.result ? '\nResult: ' + g.result : ''}${g.scoreUs != null ? ' (' + g.scoreUs + '–' + g.scoreThem + ')' : ''}`;
+    return `<circle cx="${xPos(g.date)}" cy="${y(g._mdi)}" r="${r}" fill="${c}" stroke="${stroke}" stroke-width="${strokeW}" style="cursor:pointer"><title>${tooltip}</title></circle>`;
+  }).join('');
+
+  host.innerHTML = `
+    <svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;display:block" preserveAspectRatio="xMidYMid meet">
+      ${gridLines}
+      ${monthLabels}
+      ${trendPath ? `<path d="${trendPath}" stroke="var(--accent)" stroke-width="1.5" fill="none" opacity="0.5"/>` : ''}
+      ${dots}
+      <text x="${padL}" y="${padT - 6}" font-family="'Barlow Condensed', sans-serif" font-size="10" fill="var(--text3)" letter-spacing="1px">DIFFICULTY ↑</text>
+    </svg>
+    <div style="font-size:10px;color:var(--text3);text-align:center;margin-top:6px;font-family:'Barlow Condensed',sans-serif;letter-spacing:1px">
+      Outlined dots = match played (border colour shows W/D/L) · Hover for details
+    </div>
+  `;
+}
+
+function renderMatchList(games) {
+  const host = document.getElementById('matchList');
+  if (!host) return;
+  if (games.length === 0) {
+    host.innerHTML = '<div style="text-align:center;padding:30px;color:var(--text3);font-family:\'Barlow Condensed\',sans-serif;letter-spacing:1px">No matches yet</div>';
+    return;
+  }
+
+  host.innerHTML = `
+    <div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden">
+      <div style="display:grid;grid-template-columns:90px 1fr 70px 60px 70px 100px 60px;gap:8px;padding:10px 14px;background:var(--surface3);font-size:10px;font-family:'Barlow Condensed',sans-serif;letter-spacing:1.5px;color:var(--text3);text-transform:uppercase">
+        <span>Date</span>
+        <span>Opponent</span>
+        <span>Venue</span>
+        <span>MDI</span>
+        <span>Pred Win</span>
+        <span>Result</span>
+        <span></span>
+      </div>
+      ${games.map(g => {
+        const dateStr = new Date(g.date).toLocaleDateString('en', { month: 'short', day: 'numeric' });
+        const mdiStr = g._mdi != null ? g._mdi.toFixed(1) : '—';
+        const pWinStr = g._pWin != null ? Math.round(g._pWin * 100) + '%' : '—';
+        const resultColor = g.result === 'W' ? '#2eb86b' : g.result === 'L' ? '#ff6b6b' : g.result === 'D' ? '#c5d12b' : 'var(--text3)';
+        const scoreText = (g.scoreUs != null && g.scoreThem != null) ? `${g.scoreUs}–${g.scoreThem}` : '';
+        return `
+          <div style="display:grid;grid-template-columns:90px 1fr 70px 60px 70px 100px 60px;gap:8px;padding:10px 14px;border-top:1px solid var(--border);font-size:12px;align-items:center">
+            <span style="font-family:'JetBrains Mono',monospace;color:var(--text3);font-size:11px">${dateStr}</span>
+            <span>
+              <span style="font-weight:600">${g.opponent || 'TBC'}</span>
+              ${g._oppElo ? `<span style="font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--text3);margin-left:6px">ELO ${g._oppElo}</span>` : ''}
+              ${g.competition ? `<div style="font-size:10px;color:var(--text3)">${g.competition}</div>` : ''}
+            </span>
+            <span style="font-size:11px;color:var(--text2)">${g.venue || ''}</span>
+            <span style="font-family:'JetBrains Mono',monospace;font-weight:700;color:${g._mdi != null ? mdiColor(g._mdi) : 'var(--text3)'}">${mdiStr}</span>
+            <span style="font-family:'JetBrains Mono',monospace;color:var(--text2)">${pWinStr}</span>
+            <span style="display:flex;align-items:center;gap:6px">
+              ${g.result ? `<span style="font-family:'Barlow Condensed',sans-serif;font-weight:700;color:${resultColor}">${g.result}</span>` : ''}
+              ${scoreText ? `<span style="font-family:'JetBrains Mono',monospace;font-size:11px">${scoreText}</span>` : '<span style="color:var(--text3);font-size:10px">—</span>'}
+            </span>
+            <button class="btn btn-ghost btn-sm" onclick="editGame('${g.id}')">✏</button>
+          </div>
+        `;
+      }).join('')}
     </div>
   `;
 }
