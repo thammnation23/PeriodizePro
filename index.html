@@ -2201,32 +2201,81 @@
 
 <!-- ═══ GAME MODAL ═══ -->
 <div class="modal-overlay" id="gameModal">
-  <div class="modal" style="width:420px">
+  <div class="modal" style="width:480px">
     <div class="modal-header">
-      <div class="modal-title">Add Match</div>
+      <div class="modal-title" id="gameModalTitle">Add Match</div>
       <button class="modal-close" onclick="closeModal('gameModal')">✕</button>
     </div>
     <div class="modal-body">
+
+      <!-- Live MDI preview -->
+      <div id="gameMdiPreview" style="display:none;margin-bottom:14px;padding:10px 12px;border-radius:var(--radius);background:var(--surface2);border-left:4px solid var(--accent)">
+        <div style="font-size:10px;color:var(--text3);font-family:'Barlow Condensed',sans-serif;letter-spacing:2px;text-transform:uppercase">Match Difficulty Index</div>
+        <div style="display:flex;align-items:baseline;gap:10px;margin-top:4px">
+          <span id="gameMdiValue" style="font-family:'JetBrains Mono',monospace;font-size:24px;font-weight:700">—</span>
+          <span style="font-size:10px;color:var(--text3)">/ 10</span>
+          <span id="gameMdiLabel" style="font-family:'Barlow Condensed',sans-serif;letter-spacing:1px;font-size:13px"></span>
+        </div>
+        <div id="gameMdiDetail" style="font-size:11px;color:var(--text2);margin-top:3px;font-family:'Barlow Condensed',sans-serif"></div>
+      </div>
+
       <div class="form-group" style="margin-bottom:16px">
         <label>Date</label>
         <input type="date" id="gameDate">
       </div>
+
       <div class="form-group" style="margin-bottom:16px">
-        <label>Opponent</label>
-        <input type="text" id="gameOpponent" placeholder="e.g. Liverpool FC">
+        <label>Opponent <span id="gameOppEloChip" style="display:none;margin-left:8px;font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--accent)"></span></label>
+        <input type="text" id="gameOpponent" list="opponentList" placeholder="Type or pick from MLS list..." oninput="onOpponentChange()">
+        <datalist id="opponentList"></datalist>
       </div>
-      <div class="form-group" style="margin-bottom:16px">
-        <label>Competition</label>
-        <input type="text" id="gameCompetition" placeholder="e.g. Premier League, Cup...">
-      </div>
-      <div class="form-group" style="margin-bottom:16px">
-        <label>Home / Away</label>
-        <div class="chip-row">
-          <div class="chip active" onclick="selectChip(this,'venue','Home')">Home</div>
-          <div class="chip" onclick="selectChip(this,'venue','Away')">Away</div>
-          <div class="chip" onclick="selectChip(this,'venue','Neutral')">Neutral</div>
+
+      <div class="form-grid">
+        <div class="form-group">
+          <label>Competition</label>
+          <input type="text" id="gameCompetition" placeholder="e.g. MLS, US Open Cup">
+        </div>
+        <div class="form-group">
+          <label>Venue</label>
+          <div class="chip-row">
+            <div class="chip active" onclick="selectChip(this,'venue','Home');refreshGameMdi()">Home</div>
+            <div class="chip" onclick="selectChip(this,'venue','Away');refreshGameMdi()">Away</div>
+            <div class="chip" onclick="selectChip(this,'venue','Neutral');refreshGameMdi()">Neutral</div>
+          </div>
         </div>
       </div>
+
+      <hr class="section-divider">
+      <div class="subsection-label">Result <span style="color:var(--text3);font-size:10px;font-weight:400;letter-spacing:0;text-transform:none">— fill in after the match</span></div>
+      <div class="form-grid" style="margin-bottom:8px">
+        <div class="form-group">
+          <label>Score (Us)</label>
+          <input type="number" id="gameScoreUs" placeholder="0" min="0" oninput="deriveResult()">
+        </div>
+        <div class="form-group">
+          <label>Score (Them)</label>
+          <input type="number" id="gameScoreThem" placeholder="0" min="0" oninput="deriveResult()">
+        </div>
+      </div>
+      <div class="chip-row" id="gameResultChips" style="margin-bottom:14px">
+        <div class="chip chip-none active" onclick="selectChip(this,'result','')">—</div>
+        <div class="chip" style="border-color:#2eb86b" onclick="selectChip(this,'result','W')">W</div>
+        <div class="chip" style="border-color:#c5d12b" onclick="selectChip(this,'result','D')">D</div>
+        <div class="chip" style="border-color:#ff6b6b" onclick="selectChip(this,'result','L')">L</div>
+      </div>
+
+      <div class="form-grid">
+        <div class="form-group">
+          <label>Squad Size</label>
+          <input type="number" id="gameSquadSize" placeholder="25" min="1" oninput="updateAvailPct()">
+        </div>
+        <div class="form-group">
+          <label>Available <span id="gameAvailPct" style="color:var(--text3);font-size:10px;font-weight:400;letter-spacing:0"></span></label>
+          <input type="number" id="gameAvailable" placeholder="22" min="0" oninput="updateAvailPct()">
+        </div>
+      </div>
+
+      <hr class="section-divider">
       <div class="form-group" style="margin-bottom:16px">
         <label style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:1px">Projected Match Load</label>
         <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-top:6px">
@@ -2252,14 +2301,16 @@
           </div>
         </div>
       </div>
+
       <div class="form-group">
         <label>Notes</label>
         <textarea id="gameNotes" placeholder="Pre-match context, travel, etc."></textarea>
       </div>
     </div>
     <div class="modal-footer">
+      <button class="btn btn-danger btn-sm" id="deleteGameBtn" style="display:none" onclick="deleteGame()">Delete</button>
       <button class="btn btn-ghost" onclick="closeModal('gameModal')">Cancel</button>
-      <button class="btn btn-primary" onclick="saveGame()">Add Match</button>
+      <button class="btn btn-primary" onclick="saveGame()">Save Match</button>
     </div>
   </div>
 </div>
@@ -2751,7 +2802,13 @@ function sessionToDB(s) {
 function dbToGame(r) {
   return {
     id: r.id, date: r.date, opponent: r.opponent, competition: r.competition, venue: r.venue, notes: r.notes,
-    td: r.td || '', hsr: r.hsr || '', sprint: r.sprint || '', acc: r.acc || '', dec: r.dec || ''
+    td: r.td || '', hsr: r.hsr || '', sprint: r.sprint || '', acc: r.acc || '', dec: r.dec || '',
+    opponent_id: r.opponent_id || null,
+    scoreUs:    r.score_us    ?? null,
+    scoreThem:  r.score_them  ?? null,
+    result:     r.result      || '',
+    squadSize:  r.squad_size  ?? null,
+    available:  r.available   ?? null,
   };
 }
 function gameToDB(g) {
@@ -2761,7 +2818,13 @@ function gameToDB(g) {
     hsr:    g.hsr    ? parseInt(g.hsr)    : null,
     sprint: g.sprint ? parseInt(g.sprint) : null,
     acc:    g.acc    ? parseInt(g.acc)    : null,
-    dec:    g.dec    ? parseInt(g.dec)    : null
+    dec:    g.dec    ? parseInt(g.dec)    : null,
+    opponent_id: g.opponent_id || null,
+    score_us:    g.scoreUs    ?? null,
+    score_them:  g.scoreThem  ?? null,
+    result:      g.result     || null,
+    squad_size:  g.squadSize  ?? null,
+    available:   g.available  ?? null,
   };
 }
 function dbToDrill(r) {
@@ -3496,14 +3559,37 @@ function renderWeek() {
     if (isGame) {
       const g = state.games.find(gg => gg.date === dateStr);
       const hasLoad = g && (g.td || g.hsr || g.sprint || g.acc || g.dec);
+      // MDI lookup
+      const oppRecord = g?.opponent_id
+        ? state.opponents.find(o => o.id === g.opponent_id)
+        : state.opponents.find(o => o.name?.toLowerCase() === g?.opponent?.toLowerCase());
+      const yourElo = state.settings?.team_elo || ELO_DEFAULT;
+      const mdi = oppRecord ? calculateMDI(yourElo, oppRecord.current_elo, g.venue) : null;
+      // Result chip
+      const resultColor = g?.result === 'W' ? '#2eb86b' : g?.result === 'L' ? '#ff6b6b' : g?.result === 'D' ? '#c5d12b' : null;
+      const scoreText = (g?.scoreUs != null && g?.scoreThem != null) ? `${g.scoreUs}–${g.scoreThem}` : null;
+
       sessionsHTML = `
-        <div class="session-card game-card">
+        <div class="session-card game-card" style="cursor:pointer" onclick="editGame('${g?.id || ''}')">
           <div class="session-card-header">
             <span class="session-type" style="color:var(--game)">⚽ Match</span>
-            <span class="session-duration">${g?.venue || ''}</span>
+            <div style="display:flex;align-items:center;gap:6px">
+              ${mdi != null ? `<span style="font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:700;color:${mdiColor(mdi)};background:${mdiColor(mdi)}22;padding:2px 5px;border-radius:3px" title="Match Difficulty Index">MDI ${mdi.toFixed(1)}</span>` : ''}
+              <span class="session-duration">${g?.venue || ''}</span>
+            </div>
           </div>
-          <div style="font-size:12px;color:var(--text2);margin-bottom:4px;">${g?.opponent || 'Opponent TBC'}</div>
+          <div style="font-size:12px;color:var(--text2);margin-bottom:4px;display:flex;align-items:center;gap:6px">
+            <span>${g?.opponent || 'Opponent TBC'}</span>
+            ${oppRecord ? `<span style="font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--text3)">·  ELO ${oppRecord.current_elo}</span>` : ''}
+          </div>
           ${g?.competition ? `<div style="font-size:11px;color:var(--text3);margin-bottom:6px">${g.competition}</div>` : ''}
+          ${(scoreText || g?.result) ? `
+            <div style="display:flex;align-items:center;gap:8px;margin-top:4px;padding:4px 6px;background:var(--surface3);border-radius:3px">
+              ${g.result ? `<span style="font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:13px;color:${resultColor}">${g.result}</span>` : ''}
+              ${scoreText ? `<span style="font-family:'JetBrains Mono',monospace;font-size:13px;color:var(--text)">${scoreText}</span>` : ''}
+              ${g.available != null && g.squadSize ? `<span style="font-size:10px;color:var(--text3);margin-left:auto">${g.available}/${g.squadSize}</span>` : ''}
+            </div>
+          ` : ''}
           ${hasLoad ? `
           <div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:6px;padding-top:6px;border-top:1px solid var(--border)">
             ${g.td     ? `<div class="metric-chip"><div class="metric-label">TD</div><div class="metric-value">${fmtNum(g.td)}</div></div>` : ''}
@@ -3689,30 +3775,175 @@ async function deleteSession() {
 }
 
 // ── GAME MODAL ──
-function openAddGame() {
-  chipSelections['venue'] = 'Home';
-  document.getElementById('gameDate').value = '';
-  document.getElementById('gameOpponent').value = '';
-  document.getElementById('gameCompetition').value = '';
-  document.getElementById('gameNotes').value = '';
-  document.getElementById('gameTD').value = '';
-  document.getElementById('gameHSR').value = '';
-  document.getElementById('gameSprint').value = '';
-  document.getElementById('gameAcc').value = '';
-  document.getElementById('gameDec').value = '';
-  document.getElementById('gameModal').querySelectorAll('.chip').forEach(c => {
-    c.classList.toggle('active', c.textContent === 'Home');
+let editingGameId = null;
+
+function clearGameForm() {
+  ['gameDate','gameOpponent','gameCompetition','gameNotes',
+   'gameTD','gameHSR','gameSprint','gameAcc','gameDec',
+   'gameScoreUs','gameScoreThem','gameSquadSize','gameAvailable'
+  ].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+  document.getElementById('gameOppEloChip').style.display = 'none';
+  document.getElementById('gameOppEloChip').textContent = '';
+  document.getElementById('gameMdiPreview').style.display = 'none';
+  document.getElementById('gameAvailPct').textContent = '';
+  chipSelections['venue']  = 'Home';
+  chipSelections['result'] = '';
+  // Reset venue + result chips visually
+  document.getElementById('gameModal').querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
+  document.querySelectorAll('#gameModal .chip-row').forEach(row => {
+    const chips = row.querySelectorAll('.chip');
+    if (chips.length === 3) chips[0].classList.add('active'); // Venue → Home
+    if (chips.length === 4) chips[0].classList.add('active'); // Result → none
   });
+}
+
+function populateOpponentList() {
+  const list = document.getElementById('opponentList');
+  if (!list) return;
+  list.innerHTML = (state.opponents || [])
+    .map(o => `<option value="${o.name.replace(/"/g,'&quot;')}">`)
+    .join('');
+}
+
+function openAddGame() {
+  editingGameId = null;
+  document.getElementById('gameModalTitle').textContent = 'Add Match';
+  document.getElementById('deleteGameBtn').style.display = 'none';
+  clearGameForm();
+  populateOpponentList();
   openModal('gameModal');
+}
+
+function openAddGameOnDate(dateStr) {
+  openAddGame();
+  document.getElementById('gameDate').value = dateStr;
+  refreshGameMdi();
+}
+
+function editGame(id) {
+  const g = state.games.find(x => x.id === id);
+  if (!g) return;
+  editingGameId = id;
+  document.getElementById('gameModalTitle').textContent = 'Edit Match';
+  document.getElementById('deleteGameBtn').style.display = 'inline-flex';
+  clearGameForm();
+  populateOpponentList();
+
+  document.getElementById('gameDate').value        = g.date || '';
+  document.getElementById('gameOpponent').value    = g.opponent || '';
+  document.getElementById('gameCompetition').value = g.competition || '';
+  document.getElementById('gameNotes').value       = g.notes || '';
+  document.getElementById('gameTD').value          = g.td || '';
+  document.getElementById('gameHSR').value         = g.hsr || '';
+  document.getElementById('gameSprint').value      = g.sprint || '';
+  document.getElementById('gameAcc').value         = g.acc || '';
+  document.getElementById('gameDec').value         = g.dec || '';
+  document.getElementById('gameScoreUs').value     = g.scoreUs ?? '';
+  document.getElementById('gameScoreThem').value   = g.scoreThem ?? '';
+  document.getElementById('gameSquadSize').value   = g.squadSize ?? '';
+  document.getElementById('gameAvailable').value   = g.available ?? '';
+
+  // Venue + result chips
+  chipSelections['venue']  = g.venue  || 'Home';
+  chipSelections['result'] = g.result || '';
+  document.querySelectorAll('#gameModal .chip-row').forEach(row => {
+    const chips = row.querySelectorAll('.chip');
+    chips.forEach(c => c.classList.remove('active'));
+    if (chips.length === 3) {
+      // Venue
+      const target = Array.from(chips).find(c => c.textContent.trim() === chipSelections['venue']);
+      (target || chips[0]).classList.add('active');
+    } else if (chips.length === 4) {
+      // Result
+      const r = chipSelections['result'];
+      if (!r) chips[0].classList.add('active');
+      else {
+        const target = Array.from(chips).find(c => c.textContent.trim() === r);
+        (target || chips[0]).classList.add('active');
+      }
+    }
+  });
+
+  onOpponentChange();
+  updateAvailPct();
+  openModal('gameModal');
+}
+
+function onOpponentChange() {
+  const name = document.getElementById('gameOpponent').value.trim();
+  const opp = (state.opponents || []).find(o => o.name.toLowerCase() === name.toLowerCase());
+  const chip = document.getElementById('gameOppEloChip');
+  if (opp) {
+    chip.style.display = 'inline';
+    chip.textContent = `ELO ${opp.current_elo}`;
+  } else {
+    chip.style.display = 'none';
+    chip.textContent = '';
+  }
+  refreshGameMdi();
+}
+
+function refreshGameMdi() {
+  const name = document.getElementById('gameOpponent').value.trim();
+  const opp = (state.opponents || []).find(o => o.name.toLowerCase() === name.toLowerCase());
+  const venue = chipSelections['venue'] || 'Home';
+  const yourElo = state.settings?.team_elo || ELO_DEFAULT;
+  const preview = document.getElementById('gameMdiPreview');
+  if (!opp) { preview.style.display = 'none'; return; }
+  const mdi = calculateMDI(yourElo, opp.current_elo, venue);
+  const pWin = eloExpected(yourElo, opp.current_elo, venue === 'Home' ? -HOME_ADV_ELO : 0);
+  const tier = mdi <= 3 ? 'EASY' : mdi <= 5 ? 'MODERATE' : mdi <= 6.5 ? 'CHALLENGING' : mdi <= 8 ? 'HARD' : 'VERY HARD';
+  preview.style.display = 'block';
+  preview.style.borderLeftColor = mdiColor(mdi);
+  document.getElementById('gameMdiValue').textContent = mdi.toFixed(1);
+  document.getElementById('gameMdiValue').style.color = mdiColor(mdi);
+  document.getElementById('gameMdiLabel').textContent = tier;
+  document.getElementById('gameMdiLabel').style.color = mdiColor(mdi);
+  document.getElementById('gameMdiDetail').textContent =
+    `Your ELO ${yourElo}  vs  ${opp.name} ${opp.current_elo}  ·  ${venue}  ·  Predicted win ${Math.round(pWin * 100)}%`;
+}
+
+function deriveResult() {
+  const us   = parseInt(document.getElementById('gameScoreUs').value);
+  const them = parseInt(document.getElementById('gameScoreThem').value);
+  if (isNaN(us) || isNaN(them)) return;
+  let r = '';
+  if (us > them) r = 'W';
+  else if (us < them) r = 'L';
+  else r = 'D';
+  chipSelections['result'] = r;
+  const chips = document.getElementById('gameResultChips').querySelectorAll('.chip');
+  chips.forEach(c => c.classList.remove('active'));
+  Array.from(chips).find(c => c.textContent.trim() === r)?.classList.add('active');
+}
+
+function updateAvailPct() {
+  const size = parseInt(document.getElementById('gameSquadSize').value);
+  const avail = parseInt(document.getElementById('gameAvailable').value);
+  const el = document.getElementById('gameAvailPct');
+  if (!isNaN(size) && size > 0 && !isNaN(avail)) {
+    el.textContent = `(${Math.round((avail / size) * 100)}%)`;
+  } else {
+    el.textContent = '';
+  }
 }
 
 async function saveGame() {
   const dateStr = document.getElementById('gameDate').value;
   if (!dateStr) { alert('Please select a match date.'); return; }
+
+  const opponentName = document.getElementById('gameOpponent').value.trim();
+  const opp = (state.opponents || []).find(o => o.name.toLowerCase() === opponentName.toLowerCase());
+
+  const scoreUs   = document.getElementById('gameScoreUs').value;
+  const scoreThem = document.getElementById('gameScoreThem').value;
+  const result    = chipSelections['result'] || '';
+
   const game = {
-    id: genId(),
+    id: editingGameId || genId(),
     date: dateStr,
-    opponent: document.getElementById('gameOpponent').value,
+    opponent: opponentName,
+    opponent_id: opp?.id || null,
     competition: document.getElementById('gameCompetition').value,
     venue: chipSelections['venue'] || 'Home',
     notes: document.getElementById('gameNotes').value,
@@ -3721,11 +3952,74 @@ async function saveGame() {
     sprint: document.getElementById('gameSprint').value,
     acc:    document.getElementById('gameAcc').value,
     dec:    document.getElementById('gameDec').value,
+    scoreUs:   scoreUs   === '' ? null : parseInt(scoreUs),
+    scoreThem: scoreThem === '' ? null : parseInt(scoreThem),
+    result,
+    squadSize: parseInt(document.getElementById('gameSquadSize').value) || null,
+    available: parseInt(document.getElementById('gameAvailable').value) || null,
   };
-  state.games.push(game);
+
+  // Detect newly-entered result so we can update ELO once
+  const prev = editingGameId ? state.games.find(x => x.id === editingGameId) : null;
+  const isNewResult = !!result && (!prev || !prev.result);
+
+  if (editingGameId) {
+    const idx = state.games.findIndex(x => x.id === editingGameId);
+    if (idx !== -1) state.games[idx] = game;
+  } else {
+    state.games.push(game);
+  }
+
   closeModal('gameModal');
   renderWeek();
   await saveGameDB(game);
+
+  // ELO update from this match (only when the result is freshly recorded and we know the opponent)
+  if (isNewResult && opp) {
+    await applyMatchToElo(game, opp);
+  }
+}
+
+async function deleteGame() {
+  if (!editingGameId) return;
+  if (!confirm('Delete this match?')) return;
+  const id = editingGameId;
+  state.games = state.games.filter(x => x.id !== id);
+  closeModal('gameModal');
+  renderWeek();
+  const { error } = await sb.from('games').delete().eq('id', id);
+  if (error) console.error('deleteGame failed:', error.message);
+}
+
+// Update both your team ELO and opponent ELO based on a played match
+async function applyMatchToElo(game, opp) {
+  const yourElo = state.settings?.team_elo || ELO_DEFAULT;
+  const oppElo  = opp.current_elo || ELO_DEFAULT;
+
+  // Map venue to home/away perspective for ELO calc
+  // If venue is Home, "home" team in ELO formula is your team
+  let homeRating, awayRating, resultScore;
+  if (game.venue === 'Home') {
+    homeRating = yourElo; awayRating = oppElo;
+    resultScore = game.result === 'W' ? 1 : game.result === 'L' ? 0 : 0.5;
+  } else {
+    homeRating = oppElo; awayRating = yourElo;
+    resultScore = game.result === 'W' ? 0 : game.result === 'L' ? 1 : 0.5;
+  }
+  const upd = eloUpdate(homeRating, awayRating, resultScore);
+  const newYour = game.venue === 'Home' ? upd.home : upd.away;
+  const newOpp  = game.venue === 'Home' ? upd.away : upd.home;
+
+  // Persist your team ELO
+  if (state.settings?.id) {
+    state.settings.team_elo = newYour;
+    await sb.from('app_settings').update({ team_elo: newYour }).eq('id', state.settings.id);
+  }
+  // Persist opponent ELO
+  await sb.from('opponents').update({ current_elo: newOpp, last_synced_at: new Date().toISOString() }).eq('id', opp.id);
+  opp.current_elo = newOpp;
+
+  console.log(`ELO update — you: ${yourElo} → ${newYour}  ·  ${opp.name}: ${oppElo} → ${newOpp}`);
 }
 
 // ── WEEK SETTINGS ──
@@ -3804,12 +4098,26 @@ function openDayPanel(dateStr) {
 
   // Game strip
   if (game) {
+    const oppRecord = game.opponent_id
+      ? state.opponents.find(o => o.id === game.opponent_id)
+      : state.opponents.find(o => o.name?.toLowerCase() === game.opponent?.toLowerCase());
+    const yourElo = state.settings?.team_elo || ELO_DEFAULT;
+    const mdi = oppRecord ? calculateMDI(yourElo, oppRecord.current_elo, game.venue) : null;
+    const resultColor = game.result === 'W' ? '#2eb86b' : game.result === 'L' ? '#ff6b6b' : game.result === 'D' ? '#c5d12b' : null;
+    const scoreText = (game.scoreUs != null && game.scoreThem != null) ? `${game.scoreUs}–${game.scoreThem}` : null;
+
     html += `
-      <div class="game-strip" style="margin-bottom:12px">
+      <div class="game-strip" style="margin-bottom:12px;cursor:pointer" onclick="editGame('${game.id}')">
         <div class="game-strip-left">
           <span class="game-marker">⚽ Match</span>
           <span class="game-strip-title">${game.opponent || 'TBC'}</span>
           <span class="game-strip-date">${game.competition || ''} ${game.venue ? '· ' + game.venue : ''}</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;margin-left:auto">
+          ${mdi != null ? `<span style="font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:700;color:${mdiColor(mdi)};background:${mdiColor(mdi)}22;padding:3px 6px;border-radius:3px" title="Match Difficulty Index">MDI ${mdi.toFixed(1)}</span>` : ''}
+          ${game.result ? `<span style="font-family:'Barlow Condensed',sans-serif;font-weight:700;color:${resultColor}">${game.result}</span>` : ''}
+          ${scoreText ? `<span style="font-family:'JetBrains Mono',monospace;font-size:13px">${scoreText}</span>` : ''}
+          <button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();editGame('${game.id}')">✏ Edit</button>
         </div>
       </div>`;
   }
