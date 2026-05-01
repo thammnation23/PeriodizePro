@@ -2636,34 +2636,60 @@ let chipSelections = {};
 // ── LOAD from Supabase ──
 async function loadAllData() {
   setSyncStatus('syncing');
-  try {
-    const uid = currentUser.id;
-    const season = document.getElementById('seasonSelect')?.value || '2025-26';
+  const uid = currentUser.id;
+  const season = document.getElementById('seasonSelect')?.value || '2025-26';
 
-    // Add 10s timeout to each request so it never hangs
-    const withTimeout = (promise, ms = 10000) =>
-      Promise.race([promise, new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), ms))]);
-
-    const [sessRes, gameRes, wsRes, drillRes, settingsRes] = await Promise.all([
-      withTimeout(sb.from('sessions').select('*').eq('user_id', uid)),
-      withTimeout(sb.from('games').select('*').eq('user_id', uid)),
-      withTimeout(sb.from('week_settings').select('*').eq('user_id', uid).eq('season', season)),
-      withTimeout(sb.from('drills').select('*').order('created_at', { ascending: false })),
-      withTimeout(sb.from('app_settings').select('*').limit(1).maybeSingle()),
+  // Per-query timeout so a single hung request can't block the rest
+  const withTimeout = (promise, label, ms = 25000) =>
+    Promise.race([
+      promise,
+      new Promise((_, rej) => setTimeout(() => rej(new Error(`${label} timeout`)), ms))
     ]);
 
-    if (sessRes.error)     console.error('Sessions error:', sessRes.error.message);
-    if (gameRes.error)     console.error('Games error:',    gameRes.error.message);
-    if (wsRes.error)       console.error('WeekSettings error:', wsRes.error.message);
-    if (drillRes.error)    console.error('Drills error:',   drillRes.error.message);
-    if (settingsRes.error) console.error('Settings error:', settingsRes.error.message);
+  // allSettled → each query independent. Failures don't wipe successful ones.
+  const results = await Promise.allSettled([
+    withTimeout(sb.from('sessions').select('*').eq('user_id', uid),                                'sessions'),
+    withTimeout(sb.from('games').select('*').eq('user_id', uid),                                   'games'),
+    withTimeout(sb.from('week_settings').select('*').eq('user_id', uid).eq('season', season),      'week_settings'),
+    withTimeout(sb.from('drills').select('*').order('created_at', { ascending: false }),           'drills'),
+    withTimeout(sb.from('app_settings').select('*').limit(1).maybeSingle(),                        'app_settings'),
+  ]);
 
-    state.sessions = (sessRes.data || []).map(dbToSession);
-    state.games    = (gameRes.data || []).map(dbToGame);
-    state.media    = (drillRes.data || []).map(dbToDrill);
-    state.settings = settingsRes.data || null;
+  const [sessR, gameR, wsR, drillR, settingsR] = results;
+  let anyFailed = false;
+
+  // Sessions
+  if (sessR.status === 'fulfilled' && !sessR.value.error) {
+    state.sessions = (sessR.value.data || []).map(dbToSession);
+  } else {
+    anyFailed = true;
+    console.error('Sessions load failed:', sessR.reason?.message || sessR.value?.error?.message);
+  }
+  // Games
+  if (gameR.status === 'fulfilled' && !gameR.value.error) {
+    state.games = (gameR.value.data || []).map(dbToGame);
+  } else {
+    anyFailed = true;
+    console.error('Games load failed:', gameR.reason?.message || gameR.value?.error?.message);
+  }
+  // Drills
+  if (drillR.status === 'fulfilled' && !drillR.value.error) {
+    state.media = (drillR.value.data || []).map(dbToDrill);
+  } else {
+    anyFailed = true;
+    console.error('Drills load failed:', drillR.reason?.message || drillR.value?.error?.message);
+  }
+  // Settings
+  if (settingsR.status === 'fulfilled' && !settingsR.value.error) {
+    state.settings = settingsR.value.data || null;
+  } else {
+    anyFailed = true;
+    console.error('Settings load failed:', settingsR.reason?.message || settingsR.value?.error?.message);
+  }
+  // Week settings
+  if (wsR.status === 'fulfilled' && !wsR.value.error) {
     state.weekSettings = {};
-    (wsRes.data || []).forEach(ws => {
+    (wsR.value.data || []).forEach(ws => {
       state.weekSettings[ws.week_num] = {
         type:     ws.type,
         gymPhase: ws.gym_phase,
@@ -2673,18 +2699,16 @@ async function loadAllData() {
         dbId:     ws.id,
       };
     });
-
-    // Opponents (best-effort — table may not exist yet pre-migration)
-    await loadOpponents();
-
-    console.log(`Loaded: ${state.sessions.length} sessions, ${state.games.length} games, ${state.media.length} drills, ${state.opponents.length} opponents`);
-    setSyncStatus('ok');
-  } catch(e) {
-    console.error('loadAllData failed:', e.message);
-    // Don't leave stuck — show empty app with error indicator
-    state = emptyState();
-    setSyncStatus('error');
+  } else {
+    anyFailed = true;
+    console.error('Week settings load failed:', wsR.reason?.message || wsR.value?.error?.message);
   }
+
+  // Opponents — best effort, doesn't block sync status
+  await loadOpponents();
+
+  console.log(`Loaded: ${state.sessions.length} sessions, ${state.games.length} games, ${state.media.length} drills, ${state.opponents.length} opponents`);
+  setSyncStatus(anyFailed ? 'error' : 'ok');
 }
 
 // ── FIELD MAPPERS: DB ↔ App ──
