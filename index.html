@@ -1843,6 +1843,14 @@
     <div id="yearGrid"></div>
     <div class="year-legend" style="margin-top:16px" id="yearLegendField"></div>
     <div class="year-legend" style="margin-top:8px" id="yearLegendGym"></div>
+    <div class="year-legend" style="margin-top:8px" id="yearLegendMdi">
+      <span style="font-family:'Barlow Condensed',sans-serif;letter-spacing:1.5px;color:var(--text3);font-size:11px;margin-right:8px">MATCH MDI:</span>
+      <span style="display:inline-flex;align-items:center;gap:4px;margin-right:10px"><span style="width:14px;height:14px;background:#2eb86b;border-radius:2px"></span>Easy</span>
+      <span style="display:inline-flex;align-items:center;gap:4px;margin-right:10px"><span style="width:14px;height:14px;background:#c5d12b;border-radius:2px"></span>Moderate</span>
+      <span style="display:inline-flex;align-items:center;gap:4px;margin-right:10px"><span style="width:14px;height:14px;background:#f5a623;border-radius:2px"></span>Challenging</span>
+      <span style="display:inline-flex;align-items:center;gap:4px;margin-right:10px"><span style="width:14px;height:14px;background:#ff6b6b;border-radius:2px"></span>Hard</span>
+      <span style="display:inline-flex;align-items:center;gap:4px"><span style="width:14px;height:14px;background:#d63b3b;border-radius:2px"></span>Very Hard</span>
+    </div>
   </div>
 
   <!-- ── LOADING VIEW ── -->
@@ -2044,16 +2052,17 @@
         </div>
         <div class="form-grid" style="margin-bottom:14px">
           <div class="form-group">
-            <label>Your Team Name</label>
-            <input type="text" id="settingsTeamName" placeholder="e.g. Inter Miami CF">
+            <label>Your Team</label>
+            <select id="settingsTeamName" onchange="onTeamPicked()"></select>
           </div>
           <div class="form-group">
             <label>Your Team ELO</label>
             <input type="number" id="settingsTeamElo" placeholder="1500" min="800" max="2400">
           </div>
         </div>
-        <div style="display:flex;gap:10px;align-items:center;margin-bottom:10px">
-          <button class="btn btn-primary btn-sm" onclick="seedMlsOpponents()">⬇ Seed MLS Opponents from TheSportsDB</button>
+        <div style="display:flex;gap:10px;align-items:center;margin-bottom:8px;flex-wrap:wrap">
+          <button class="btn btn-primary btn-sm" onclick="seedMlsOpponents()">⬇ Seed MLS Opponents</button>
+          <button class="btn btn-primary btn-sm" onclick="importMyTeamSchedule()">📅 Import My Schedule</button>
           <span id="seedStatus" style="font-size:11px;color:var(--text3);font-family:'Barlow Condensed',sans-serif;letter-spacing:1px"></span>
         </div>
 
@@ -2673,6 +2682,26 @@
   </div>
 </div>
 
+<!-- ═══ ELO HISTORY MODAL ═══ -->
+<div class="modal-overlay" id="eloHistoryModal">
+  <div class="modal" style="width:760px">
+    <div class="modal-header">
+      <div class="modal-title" id="eloHistoryTitle">ELO History</div>
+      <button class="modal-close" onclick="closeModal('eloHistoryModal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div id="eloHistoryStats"></div>
+      <div id="eloHistoryChart"></div>
+      <div style="font-size:10px;color:var(--text3);text-align:center;margin-top:8px;font-family:'Barlow Condensed',sans-serif;letter-spacing:1px">
+        Each point = match-driven ELO update · hover for date + rating
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('eloHistoryModal')">Close</button>
+    </div>
+  </div>
+</div>
+
 <!-- ═══ MEDIA DETAIL MODAL ═══ -->
 <div class="modal-overlay" id="mediaDetailModal">
   <div class="modal" style="width:680px">
@@ -3197,17 +3226,34 @@ function renderYear() {
       const dateStr = formatDate(cellDate);
 
       const sessions = state.sessions.filter(s => s.date === dateStr);
-      const isGame = state.games.some(g => g.date === dateStr);
+      const game = state.games.find(g => g.date === dateStr);
+      const isGame = !!game;
 
       const cell = document.createElement('div');
       cell.className = 'year-cell';
 
       if (isGame) {
         cell.classList.add('game');
-        const g = document.createElement('div');
-        g.style.cssText = 'font-size:8px;';
-        g.textContent = '⚽';
-        cell.appendChild(g);
+        // MDI heatmap — colour the cell by computed match difficulty (when opponent rated)
+        const opp = game.opponent_id
+          ? state.opponents.find(o => o.id === game.opponent_id)
+          : state.opponents.find(o => o.name?.toLowerCase() === game.opponent?.toLowerCase());
+        const yourElo = state.settings?.team_elo || ELO_DEFAULT;
+        const mdi = opp ? calculateMDI(yourElo, opp.current_elo, buildMatchContext(game, state.games)) : null;
+        if (mdi != null) {
+          const c = mdiColor(mdi);
+          cell.style.background = c;
+          cell.style.borderColor = c;
+          cell.style.color = '#fff';
+          cell.style.cssText += 'display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;font-family:"JetBrains Mono",monospace;';
+          cell.textContent = mdi.toFixed(1);
+        } else {
+          // No opponent rating yet — fall back to plain match marker
+          const g = document.createElement('div');
+          g.style.cssText = 'font-size:8px;';
+          g.textContent = '⚽';
+          cell.appendChild(g);
+        }
       } else if (sessions.length > 0) {
         const s = sessions[0];
         const c1 = getTypeColorFromSettings(s.type);
@@ -4015,6 +4061,23 @@ function onOpponentChange() {
     chip.style.display = 'none';
     chip.textContent = '';
   }
+
+  // Auto-fill travel km if your team + opponent are both known MLS teams,
+  // venue is Away (or Neutral), and the field hasn't been set manually
+  const travelEl = document.getElementById('gameTravelKm');
+  const venue = chipSelections['venue'] || 'Home';
+  if (travelEl && !travelEl.value && venue !== 'Home') {
+    const myCoords  = getTeamCoords(state.settings?.team_name);
+    const oppCoords = getTeamCoords(name);
+    if (myCoords && oppCoords) {
+      const km = haversineKm(myCoords, oppCoords);
+      if (km != null) {
+        travelEl.value = km;
+        travelEl.placeholder = `${km} (auto)`;
+      }
+    }
+  }
+
   refreshGameMdi();
 }
 
@@ -4191,9 +4254,15 @@ async function applyMatchToElo(game, opp) {
     state.settings.team_elo = newYour;
     await sb.from('app_settings').update({ team_elo: newYour }).eq('id', state.settings.id);
   }
-  // Persist opponent ELO
-  await sb.from('opponents').update({ current_elo: newOpp, last_synced_at: new Date().toISOString() }).eq('id', opp.id);
+  // Persist opponent ELO + append to history
+  const newHistory = [...(opp.elo_history || []), { date: game.date, elo: newOpp }];
+  await sb.from('opponents').update({
+    current_elo: newOpp,
+    elo_history: newHistory,
+    last_synced_at: new Date().toISOString()
+  }).eq('id', opp.id);
   opp.current_elo = newOpp;
+  opp.elo_history = newHistory;
 
   console.log(`ELO update — you: ${yourElo} → ${newYour}  ·  ${opp.name}: ${oppElo} → ${newOpp}`);
 }
@@ -5198,7 +5267,15 @@ function renderSettings() {
   // Team / ELO settings
   const teamNameEl = document.getElementById('settingsTeamName');
   const teamEloEl  = document.getElementById('settingsTeamElo');
-  if (teamNameEl) teamNameEl.value = s?.team_name || 'My Team';
+  if (teamNameEl) {
+    // Populate dropdown with MLS teams + Other
+    teamNameEl.innerHTML = `
+      <option value="">— Select your team —</option>
+      ${MLS_TEAMS.map(t => `<option value="${t.name}">${t.name}</option>`).join('')}
+      <option value="__other__">Other (non-MLS)</option>
+    `;
+    teamNameEl.value = s?.team_name || '';
+  }
   if (teamEloEl)  teamEloEl.value  = s?.team_elo  || 1500;
 
   renderSettingsRows('sessionTypes', getSessionTypes());
@@ -5679,6 +5756,59 @@ const MLS_LEAGUE_ID  = 4346;
 const MLS_SEASONS    = ['2023', '2024', '2025']; // Recent seasons keep ratings reflective of current rosters
 const SPORTSDB_BASE  = 'https://www.thesportsdb.com/api/v1/json/3';
 
+// MLS team home stadium coordinates (approximate, sufficient for travel-distance estimation)
+const MLS_TEAMS = [
+  { name: 'Atlanta United',         lat: 33.7553, lng:  -84.4006 },
+  { name: 'Austin FC',              lat: 30.3877, lng:  -97.7196 },
+  { name: 'CF Montréal',            lat: 45.5631, lng:  -73.5524 },
+  { name: 'Charlotte FC',           lat: 35.2259, lng:  -80.8528 },
+  { name: 'Chicago Fire',           lat: 41.8623, lng:  -87.6167 },
+  { name: 'Colorado Rapids',        lat: 39.8056, lng: -104.8919 },
+  { name: 'Columbus Crew',          lat: 39.9685, lng:  -83.0167 },
+  { name: 'DC United',              lat: 38.8682, lng:  -77.0124 },
+  { name: 'FC Cincinnati',          lat: 39.1110, lng:  -84.5223 },
+  { name: 'FC Dallas',              lat: 33.1554, lng:  -96.8353 },
+  { name: 'Houston Dynamo',         lat: 29.7522, lng:  -95.3522 },
+  { name: 'Inter Miami',            lat: 26.1924, lng:  -80.1614 },
+  { name: 'LA Galaxy',              lat: 33.8644, lng: -118.2611 },
+  { name: 'Los Angeles FC',         lat: 34.0125, lng: -118.2849 },
+  { name: 'Minnesota United',       lat: 44.9533, lng:  -93.1656 },
+  { name: 'Nashville SC',           lat: 36.1322, lng:  -86.7654 },
+  { name: 'New England Revolution', lat: 42.0909, lng:  -71.2643 },
+  { name: 'New York City FC',       lat: 40.8295, lng:  -73.9261 },
+  { name: 'New York Red Bulls',     lat: 40.7369, lng:  -74.1503 },
+  { name: 'Orlando City',           lat: 28.5413, lng:  -81.3892 },
+  { name: 'Philadelphia Union',     lat: 39.8326, lng:  -75.3782 },
+  { name: 'Portland Timbers',       lat: 45.5217, lng: -122.6919 },
+  { name: 'Real Salt Lake',         lat: 40.5829, lng: -111.8929 },
+  { name: 'San Diego FC',           lat: 32.7157, lng: -117.1611 },
+  { name: 'San Jose Earthquakes',   lat: 37.3509, lng: -121.9251 },
+  { name: 'Seattle Sounders',       lat: 47.5952, lng: -122.3316 },
+  { name: 'Sporting Kansas City',   lat: 39.1218, lng:  -94.8240 },
+  { name: 'St. Louis City SC',      lat: 38.6326, lng:  -90.2104 },
+  { name: 'Toronto FC',             lat: 43.6332, lng:  -79.4185 },
+  { name: 'Vancouver Whitecaps',    lat: 49.2768, lng: -123.1119 },
+];
+
+// Look up a team's coordinates by (case-insensitive) name match
+function getTeamCoords(name) {
+  if (!name) return null;
+  const n = name.toLowerCase().trim();
+  return MLS_TEAMS.find(t => t.name.toLowerCase() === n) || null;
+}
+
+// Haversine great-circle distance in km between two lat/lng points
+function haversineKm(a, b) {
+  if (!a || !b) return null;
+  const R = 6371;
+  const toRad = d => d * Math.PI / 180;
+  const dLat = toRad(b.lat - a.lat);
+  const dLng = toRad(b.lng - a.lng);
+  const lat1 = toRad(a.lat), lat2 = toRad(b.lat);
+  const h = Math.sin(dLat/2) ** 2 + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng/2) ** 2;
+  return Math.round(2 * R * Math.asin(Math.sqrt(h)));
+}
+
 async function seedMlsOpponents() {
   const statusEl = document.getElementById('seedStatus');
   const setStatus = (txt) => { if (statusEl) statusEl.textContent = txt; };
@@ -5697,10 +5827,10 @@ async function seedMlsOpponents() {
     const teams = teamsJson.teams || [];
     if (teams.length === 0) throw new Error('No teams returned by TheSportsDB');
 
-    // Build a teamId → { name, elo } map seeded at default
+    // Build a teamId → { name, elo, history } map seeded at default
     const ratings = {};
     teams.forEach(t => {
-      ratings[t.idTeam] = { name: t.strTeam, elo: ELO_DEFAULT, externalId: t.idTeam };
+      ratings[t.idTeam] = { name: t.strTeam, elo: ELO_DEFAULT, externalId: t.idTeam, history: [] };
     });
     setStatus(`Found ${teams.length} teams. Fetching season match data…`);
 
@@ -5730,8 +5860,8 @@ async function seedMlsOpponents() {
       const awayId = m.idAwayTeam;
       // Some matches may reference teams not in the current league set (relegated/expansion).
       // Auto-add them at default ELO so the chain doesn't break.
-      if (!ratings[homeId]) ratings[homeId] = { name: m.strHomeTeam, elo: ELO_DEFAULT, externalId: homeId };
-      if (!ratings[awayId]) ratings[awayId] = { name: m.strAwayTeam, elo: ELO_DEFAULT, externalId: awayId };
+      if (!ratings[homeId]) ratings[homeId] = { name: m.strHomeTeam, elo: ELO_DEFAULT, externalId: homeId, history: [] };
+      if (!ratings[awayId]) ratings[awayId] = { name: m.strAwayTeam, elo: ELO_DEFAULT, externalId: awayId, history: [] };
 
       const hs = parseInt(m.intHomeScore);
       const as = parseInt(m.intAwayScore);
@@ -5739,6 +5869,12 @@ async function seedMlsOpponents() {
       const upd = eloUpdate(ratings[homeId].elo, ratings[awayId].elo, result);
       ratings[homeId].elo = upd.home;
       ratings[awayId].elo = upd.away;
+
+      const matchDate = (m.strTimestamp || m.dateEvent || '').slice(0, 10);
+      if (matchDate) {
+        ratings[homeId].history.push({ date: matchDate, elo: upd.home });
+        ratings[awayId].history.push({ date: matchDate, elo: upd.away });
+      }
       processed++;
     }
 
@@ -5753,6 +5889,7 @@ async function seedMlsOpponents() {
       current_elo: r.elo,
       initial_elo: ELO_DEFAULT,
       last_synced_at: new Date().toISOString(),
+      elo_history: r.history,
     }));
 
     const { error } = await sb.from('opponents').upsert(rows, { onConflict: 'name' });
@@ -5765,6 +5902,122 @@ async function seedMlsOpponents() {
     console.error('Seed failed:', e);
     setStatus(`✗ ${e.message}`);
     alert('Seed failed: ' + e.message);
+  }
+}
+
+// ── YOUR TEAM PICKER ──
+function onTeamPicked() {
+  // Convenience: auto-fill ELO from the seeded opponents table if your team is in there
+  const name = document.getElementById('settingsTeamName').value;
+  if (!name || name === '__other__') return;
+  const seeded = (state.opponents || []).find(o => o.name.toLowerCase() === name.toLowerCase());
+  if (seeded && (!state.settings?.team_elo || state.settings.team_elo === 1500)) {
+    document.getElementById('settingsTeamElo').value = seeded.current_elo;
+  }
+}
+
+// ── IMPORT MY TEAM'S MLS SCHEDULE ──
+async function importMyTeamSchedule() {
+  const teamName = state.settings?.team_name;
+  if (!teamName || teamName === '__other__') {
+    alert('Pick your team in Settings → Match Difficulty Index first.');
+    return;
+  }
+  const statusEl = document.getElementById('seedStatus');
+  const setStatus = (txt) => { if (statusEl) statusEl.textContent = txt; };
+
+  const seasons = MLS_SEASONS;
+  if (!confirm(
+    `This will fetch ${teamName}'s full schedule from TheSportsDB ` +
+    `(seasons ${seasons[0]}–${seasons[seasons.length - 1]}) and add any missing matches to your games. ` +
+    `Existing matches won't be touched. Continue?`
+  )) return;
+
+  try {
+    setStatus(`Fetching ${teamName} schedule…`);
+
+    let allMatches = [];
+    for (const season of seasons) {
+      setStatus(`Fetching ${season} season…`);
+      const resp = await fetch(`${SPORTSDB_BASE}/eventsseason.php?id=${MLS_LEAGUE_ID}&s=${season}`);
+      const json = await resp.json();
+      const events = (json.events || []).filter(e =>
+        e.strHomeTeam?.toLowerCase() === teamName.toLowerCase() ||
+        e.strAwayTeam?.toLowerCase() === teamName.toLowerCase()
+      );
+      allMatches = allMatches.concat(events);
+    }
+
+    if (allMatches.length === 0) {
+      alert(`No matches found for "${teamName}" in TheSportsDB. Double-check your team name spelling matches MLS team list exactly.`);
+      setStatus('');
+      return;
+    }
+
+    setStatus(`Found ${allMatches.length} matches. Importing…`);
+
+    // Pre-cache existing games by date+opponent so we skip duplicates
+    const existing = new Set(state.games.map(g => `${g.date}|${(g.opponent || '').toLowerCase()}`));
+    const myCoords = getTeamCoords(teamName);
+    let created = 0, skipped = 0;
+
+    for (const ev of allMatches) {
+      const isHome = ev.strHomeTeam.toLowerCase() === teamName.toLowerCase();
+      const oppName = isHome ? ev.strAwayTeam : ev.strHomeTeam;
+      const date    = (ev.strTimestamp || ev.dateEvent || '').slice(0, 10);
+      if (!date) { skipped++; continue; }
+
+      const key = `${date}|${oppName.toLowerCase()}`;
+      if (existing.has(key)) { skipped++; continue; }
+
+      // Find matching opponent record for opponent_id
+      const oppRec = (state.opponents || []).find(o => o.name.toLowerCase() === oppName.toLowerCase());
+      const oppCoords = getTeamCoords(oppName);
+      const venue = isHome ? 'Home' : 'Away';
+
+      // Auto travel: km from my home stadium to opponent's home stadium (only if I'm away)
+      let travelKm = null;
+      if (!isHome && myCoords && oppCoords) {
+        travelKm = haversineKm(myCoords, oppCoords);
+      }
+
+      // If the match is in the past and has scores, capture result
+      let scoreUs = null, scoreThem = null, result = '';
+      const hs = ev.intHomeScore !== '' && ev.intHomeScore != null ? parseInt(ev.intHomeScore) : null;
+      const as = ev.intAwayScore !== '' && ev.intAwayScore != null ? parseInt(ev.intAwayScore) : null;
+      if (hs != null && as != null) {
+        scoreUs   = isHome ? hs : as;
+        scoreThem = isHome ? as : hs;
+        result = scoreUs > scoreThem ? 'W' : scoreUs < scoreThem ? 'L' : 'D';
+      }
+
+      const game = {
+        id: genId(),
+        date,
+        opponent: oppName,
+        opponent_id: oppRec?.id || null,
+        competition: 'MLS',
+        venue,
+        notes: '',
+        td: '', hsr: '', sprint: '', acc: '', dec: '',
+        scoreUs, scoreThem, result,
+        squadSize: null, available: null,
+        travelKm, tzHours: null, weather: '',
+        daysRestOverride: null, formOverride: '',
+      };
+      state.games.push(game);
+      await saveGameDB(game);
+      created++;
+    }
+
+    setStatus(`✓ Imported ${created} matches · skipped ${skipped} duplicates`);
+    if (typeof renderMatches === 'function') renderMatches();
+    if (typeof renderWeek === 'function') renderWeek();
+    if (typeof renderYear === 'function') renderYear();
+  } catch (e) {
+    console.error('Schedule import failed:', e);
+    setStatus(`✗ ${e.message}`);
+    alert('Schedule import failed: ' + e.message);
   }
 }
 
@@ -5789,15 +6042,116 @@ function renderOpponentList() {
     return;
   }
   el.innerHTML = `
-    <div style="font-size:11px;color:var(--text3);font-family:'Barlow Condensed',sans-serif;letter-spacing:1px;margin-bottom:6px">${list.length} OPPONENTS · RANKED BY ELO</div>
+    <div style="font-size:11px;color:var(--text3);font-family:'Barlow Condensed',sans-serif;letter-spacing:1px;margin-bottom:6px">${list.length} OPPONENTS · RANKED BY ELO · CLICK A TEAM FOR HISTORY</div>
     <div style="max-height:300px;overflow-y:auto;border:1px solid var(--border);border-radius:var(--radius)">
       ${list.map((o, i) => `
-        <div style="display:flex;align-items:center;justify-content:space-between;padding:6px 10px;border-bottom:1px solid var(--border);font-size:12px">
+        <div onclick="openOpponentHistory('${o.id}')" style="display:flex;align-items:center;justify-content:space-between;padding:6px 10px;border-bottom:1px solid var(--border);font-size:12px;cursor:pointer" onmouseover="this.style.background='var(--surface3)'" onmouseout="this.style.background=''">
           <span><span style="color:var(--text3);font-family:'JetBrains Mono',monospace;width:24px;display:inline-block">${i + 1}.</span> ${o.name}</span>
-          <span style="font-family:'JetBrains Mono',monospace;color:var(--accent);font-weight:600">${o.current_elo}</span>
+          <span style="display:flex;align-items:center;gap:8px">
+            <span style="font-size:9px;color:var(--text3);font-family:'Barlow Condensed',sans-serif;letter-spacing:1px">${(o.elo_history || []).length} updates</span>
+            <span style="font-family:'JetBrains Mono',monospace;color:var(--accent);font-weight:600">${o.current_elo}</span>
+          </span>
         </div>
       `).join('')}
     </div>
+  `;
+}
+
+// ── ELO HISTORY CHART ──
+function openOpponentHistory(oppId) {
+  const opp = state.opponents.find(o => o.id === oppId);
+  if (!opp) return;
+  const history = opp.elo_history || [];
+
+  document.getElementById('eloHistoryTitle').textContent = `${opp.name} — ELO History`;
+  document.getElementById('eloHistoryStats').innerHTML = renderEloHistoryStats(opp);
+  document.getElementById('eloHistoryChart').innerHTML = renderEloHistoryChart(history);
+  openModal('eloHistoryModal');
+}
+
+function renderEloHistoryStats(opp) {
+  const h = opp.elo_history || [];
+  if (h.length === 0) {
+    return `<div style="color:var(--text3);font-size:11px">No history recorded yet</div>`;
+  }
+  const elos = h.map(p => p.elo);
+  const min  = Math.min(...elos);
+  const max  = Math.max(...elos);
+  const first = elos[0];
+  const last  = opp.current_elo;
+  const change = last - first;
+  const changeColor = change > 0 ? '#2eb86b' : change < 0 ? '#ff6b6b' : 'var(--text3)';
+  const stat = (label, value, color) => `
+    <div style="background:var(--surface3);border-radius:var(--radius);padding:8px 10px">
+      <div style="font-size:9px;color:var(--text3);font-family:'Barlow Condensed',sans-serif;letter-spacing:1.5px;text-transform:uppercase">${label}</div>
+      <div style="font-family:'JetBrains Mono',monospace;font-size:16px;font-weight:700;color:${color || 'var(--text)'};margin-top:2px">${value}</div>
+    </div>`;
+  return `
+    <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:6px;margin-bottom:14px">
+      ${stat('Current', last, 'var(--accent)')}
+      ${stat('Peak', max)}
+      ${stat('Low', min)}
+      ${stat('Net Change', (change >= 0 ? '+' : '') + change, changeColor)}
+      ${stat('Updates', h.length)}
+    </div>
+  `;
+}
+
+function renderEloHistoryChart(history) {
+  if (history.length === 0) {
+    return `<div style="text-align:center;padding:40px;color:var(--text3);font-family:'Barlow Condensed',sans-serif;letter-spacing:1px">No history yet — record some match results to start tracking</div>`;
+  }
+  // Sort by date ascending
+  const sorted = history.slice().sort((a, b) => new Date(a.date) - new Date(b.date));
+  const W = 700, H = 240, padL = 50, padR = 20, padT = 20, padB = 30;
+  const innerW = W - padL - padR;
+  const innerH = H - padT - padB;
+
+  const dates = sorted.map(p => new Date(p.date).getTime());
+  const elos  = sorted.map(p => p.elo);
+  const minDate = Math.min(...dates), maxDate = Math.max(...dates);
+  const minElo  = Math.min(...elos) - 20;
+  const maxElo  = Math.max(...elos) + 20;
+  const dateSpan = Math.max(maxDate - minDate, 1);
+  const eloSpan  = Math.max(maxElo - minElo, 1);
+
+  const xPos = (d) => padL + ((new Date(d).getTime() - minDate) / dateSpan) * innerW;
+  const yPos = (e) => padT + ((maxElo - e) / eloSpan) * innerH;
+
+  // Y gridlines at nice intervals
+  const yStep = eloSpan > 200 ? 50 : eloSpan > 100 ? 25 : 10;
+  const yStart = Math.ceil(minElo / yStep) * yStep;
+  let gridLines = '';
+  for (let v = yStart; v <= maxElo; v += yStep) {
+    const y = yPos(v);
+    gridLines += `
+      <line x1="${padL}" y1="${y}" x2="${W - padR}" y2="${y}" stroke="var(--border)" stroke-width="0.5" stroke-dasharray="2,3"/>
+      <text x="${padL - 6}" y="${y + 3}" font-family="'JetBrains Mono', monospace" font-size="9" fill="var(--text3)" text-anchor="end">${v}</text>
+    `;
+  }
+
+  // Trend line
+  const path = sorted.map((p, i) => `${i === 0 ? 'M' : 'L'} ${xPos(p.date).toFixed(1)} ${yPos(p.elo).toFixed(1)}`).join(' ');
+
+  // Endpoint labels
+  const startLabel = new Date(minDate).toLocaleDateString('en', { month: 'short', day: 'numeric', year: '2-digit' });
+  const endLabel   = new Date(maxDate).toLocaleDateString('en', { month: 'short', day: 'numeric', year: '2-digit' });
+
+  // Sparse dots — too many history points clutter the chart, so only mark every Nth + first/last
+  const stride = sorted.length > 50 ? Math.ceil(sorted.length / 50) : 1;
+  const dots = sorted.map((p, i) => {
+    if (i !== 0 && i !== sorted.length - 1 && i % stride !== 0) return '';
+    return `<circle cx="${xPos(p.date)}" cy="${yPos(p.elo)}" r="2.5" fill="var(--accent)"><title>${new Date(p.date).toLocaleDateString()} · ELO ${p.elo}</title></circle>`;
+  }).join('');
+
+  return `
+    <svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;display:block">
+      ${gridLines}
+      <path d="${path}" stroke="var(--accent)" stroke-width="1.5" fill="none"/>
+      ${dots}
+      <text x="${padL}" y="${H - 8}" font-family="'JetBrains Mono', monospace" font-size="9" fill="var(--text3)" text-anchor="start">${startLabel}</text>
+      <text x="${W - padR}" y="${H - 8}" font-family="'JetBrains Mono', monospace" font-size="9" fill="var(--text3)" text-anchor="end">${endLabel}</text>
+    </svg>
   `;
 }
 
@@ -5933,13 +6287,23 @@ function renderMdiChart(games) {
     return `<circle cx="${xPos(g.date)}" cy="${y(g._mdi)}" r="${r}" fill="${c}" stroke="${stroke}" stroke-width="${strokeW}" style="cursor:pointer"><title>${tooltip}</title></circle>`;
   }).join('');
 
+  // Endpoint date labels (first and last match)
+  const startLabel = new Date(minDate).toLocaleDateString('en', { month: 'short', day: 'numeric', year: 'numeric' });
+  const endLabel   = new Date(maxDate).toLocaleDateString('en', { month: 'short', day: 'numeric', year: 'numeric' });
+
   host.innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px;font-family:'Barlow Condensed',sans-serif;letter-spacing:1px;font-size:11px;color:var(--text2)">
+      <span><span style="color:var(--text3)">SEASON:</span> ${startLabel} <span style="color:var(--text3)">→</span> ${endLabel}</span>
+      <span style="color:var(--text3)">${games.length} MATCHES · GAME 1 → GAME ${games.length}</span>
+    </div>
     <svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;display:block" preserveAspectRatio="xMidYMid meet">
       ${gridLines}
       ${monthLabels}
       ${trendPath ? `<path d="${trendPath}" stroke="var(--accent)" stroke-width="1.5" fill="none" opacity="0.5"/>` : ''}
       ${dots}
       <text x="${padL}" y="${padT - 6}" font-family="'Barlow Condensed', sans-serif" font-size="10" fill="var(--text3)" letter-spacing="1px">DIFFICULTY ↑</text>
+      <text x="${padL}" y="${H - 4}" font-family="'JetBrains Mono', monospace" font-size="9" fill="var(--text3)" text-anchor="start">G1</text>
+      <text x="${W - padR}" y="${H - 4}" font-family="'JetBrains Mono', monospace" font-size="9" fill="var(--text3)" text-anchor="end">G${games.length}</text>
     </svg>
     <div style="font-size:10px;color:var(--text3);text-align:center;margin-top:6px;font-family:'Barlow Condensed',sans-serif;letter-spacing:1px">
       Outlined dots = match played (border colour shows W/D/L) · Hover for details
