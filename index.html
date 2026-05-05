@@ -3162,6 +3162,23 @@ function renderYear() {
   const container = document.getElementById('yearGrid');
   container.innerHTML = '';
 
+  // ── DIAGNOSTIC: log game date range vs season window range
+  // (helps debug "imported matches don't show on annual plan")
+  if (state.games?.length) {
+    const gameDates = state.games.map(g => g.date).filter(Boolean).sort();
+    const week1 = formatDate(getWeekStart(1));
+    const week52end = new Date(getWeekStart(52));
+    week52end.setDate(week52end.getDate() + 6);
+    const seasonEnd = formatDate(week52end);
+    console.log(`[YearView] ${state.games.length} games · range ${gameDates[0]} → ${gameDates[gameDates.length-1]}`);
+    console.log(`[YearView] Season window: ${week1} → ${seasonEnd} (Season start: ${state.settings?.season_start || 'default'})`);
+    const inWindow = gameDates.filter(d => d >= week1 && d <= seasonEnd).length;
+    console.log(`[YearView] Games inside window: ${inWindow} / ${gameDates.length}`);
+    if (inWindow === 0 && gameDates.length > 0) {
+      console.warn('[YearView] No games fall within the displayed season window. Adjust Season Start in Settings to include them.');
+    }
+  }
+
   // Build week→month map
   const weekMonths = [];
   for (let w = 1; w <= 52; w++) {
@@ -6269,21 +6286,51 @@ function renderMdiChart(games) {
     cursor.setMonth(cursor.getMonth() + 1);
   }
 
-  // Trend line connecting matches with MDI (in chronological order)
-  const mdiPoints = games.filter(g => g._mdi != null);
-  let trendPath = '';
-  if (mdiPoints.length > 1) {
-    trendPath = mdiPoints.map((g, i) => `${i === 0 ? 'M' : 'L'} ${xPos(g.date).toFixed(1)} ${y(g._mdi).toFixed(1)}`).join(' ');
-  }
+  // Trend line uses same collision-resolved x positions (set further down)
+  let trendPath = '__PENDING__';
 
   // Match dots — team badge with home/away ring
   const BADGE_R = 12;       // badge radius
   const RING_R  = BADGE_R + 3;
+
+  // Anti-collision: walk left→right by date and push overlapping badges right.
+  // If they would clip off the chart, walk back from the right edge to redistribute.
+  const minSpacing = (RING_R + 2) * 2;
+  const sortedForLayout = games.slice().sort((a, b) => new Date(a.date) - new Date(b.date));
+  const positions = new Map();
+  let lastX = padL - minSpacing;
+  for (const g of sortedForLayout) {
+    let x = xPos(g.date);
+    if (x < lastX + minSpacing) x = lastX + minSpacing;
+    positions.set(g.id, x);
+    lastX = x;
+  }
+  // If we ran off the right edge, compress from the right
+  if (lastX > W - padR) {
+    let nextLastX = W - padR;
+    for (let i = sortedForLayout.length - 1; i >= 0; i--) {
+      const id = sortedForLayout[i].id;
+      let x = positions.get(id);
+      if (x > nextLastX) x = nextLastX;
+      positions.set(id, x);
+      nextLastX = x - minSpacing;
+    }
+  }
+
+  // Now build trend path using collision-resolved positions
+  const mdiPoints = sortedForLayout.filter(g => g._mdi != null);
+  if (mdiPoints.length > 1) {
+    trendPath = mdiPoints.map((g, i) => `${i === 0 ? 'M' : 'L'} ${(positions.get(g.id) ?? xPos(g.date)).toFixed(1)} ${y(g._mdi).toFixed(1)}`).join(' ');
+  } else {
+    trendPath = '';
+  }
+
   const dots = games.map((g, i) => {
     if (g._mdi == null) {
-      return `<circle cx="${xPos(g.date)}" cy="${y(5)}" r="3" fill="var(--text3)" opacity="0.4"><title>${g.opponent || 'TBC'} (no rating)</title></circle>`;
+      const cx = positions.get(g.id) ?? xPos(g.date);
+      return `<circle cx="${cx}" cy="${y(5)}" r="3" fill="var(--text3)" opacity="0.4"><title>${g.opponent || 'TBC'} (no rating)</title></circle>`;
     }
-    const cx = xPos(g.date);
+    const cx = positions.get(g.id) ?? xPos(g.date);
     const cy = y(g._mdi);
     const ringColor = mdiColor(g._mdi);
     const isHome = g.venue === 'Home';
