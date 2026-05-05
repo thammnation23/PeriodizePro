@@ -1941,7 +1941,11 @@
         <h2 style="margin:0;font-family:'Barlow Condensed',sans-serif;letter-spacing:2px;font-size:24px">SEASON MATCHES</h2>
         <div style="font-size:11px;color:var(--text3);font-family:'Barlow Condensed',sans-serif;letter-spacing:1px;margin-top:2px">Predicted vs actual difficulty across the season</div>
       </div>
-      <button class="btn btn-primary btn-sm" onclick="openAddGame()">＋ Add Match</button>
+      <div style="display:flex;align-items:center;gap:10px">
+        <label style="font-size:11px;color:var(--text3);font-family:'Barlow Condensed',sans-serif;letter-spacing:1.5px">SEASON:</label>
+        <select id="matchesSeasonFilter" onchange="renderMatches()" style="min-width:120px"></select>
+        <button class="btn btn-primary btn-sm" onclick="openAddGame()">＋ Add Match</button>
+      </div>
     </div>
 
     <!-- Stats summary -->
@@ -5958,19 +5962,38 @@ async function importMyTeamSchedule() {
     setStatus(`Fetching ${teamName} schedule…`);
 
     let allMatches = [];
+    let totalSeasonEvents = 0;
+    const sampleTeamNames = new Set();
     for (const season of seasons) {
       setStatus(`Fetching ${season} season…`);
       const resp = await fetch(`${SPORTSDB_BASE}/eventsseason.php?id=${MLS_LEAGUE_ID}&s=${season}`);
       const json = await resp.json();
-      const events = (json.events || []).filter(e =>
+      const allEvents = json.events || [];
+      totalSeasonEvents += allEvents.length;
+      // Collect a sample of team names returned so we can diagnose mismatches
+      allEvents.slice(0, 30).forEach(e => {
+        if (e.strHomeTeam) sampleTeamNames.add(e.strHomeTeam);
+        if (e.strAwayTeam) sampleTeamNames.add(e.strAwayTeam);
+      });
+      const events = allEvents.filter(e =>
         e.strHomeTeam?.toLowerCase() === teamName.toLowerCase() ||
         e.strAwayTeam?.toLowerCase() === teamName.toLowerCase()
       );
+      console.log(`[Import] ${season}: ${allEvents.length} season events · ${events.length} matched "${teamName}"`);
       allMatches = allMatches.concat(events);
     }
 
+    console.log(`[Import] Total events across ${seasons.length} seasons: ${totalSeasonEvents}`);
+    console.log(`[Import] Sample team names returned by API:`, Array.from(sampleTeamNames).sort());
+    console.log(`[Import] Looking for: "${teamName}" (case-insensitive exact match)`);
+
     if (allMatches.length === 0) {
-      alert(`No matches found for "${teamName}" in TheSportsDB. Double-check your team name spelling matches MLS team list exactly.`);
+      const sampleList = Array.from(sampleTeamNames).sort().slice(0, 10).join(', ');
+      alert(
+        `No matches found for "${teamName}" across ${seasons.length} seasons.\n\n` +
+        `TheSportsDB returned ${totalSeasonEvents} total events. Check the Console for the full team list — your team name in Settings must match TheSportsDB spelling exactly.\n\n` +
+        `Sample names returned: ${sampleList}…`
+      );
       setStatus('');
       return;
     }
@@ -6179,8 +6202,24 @@ function renderEloHistoryChart(history) {
 // ── MATCHES VIEW (MDI timeline + list) ──
 
 function renderMatches() {
-  const games = (state.games || []).slice().sort((a, b) => new Date(a.date) - new Date(b.date));
+  const allGames = (state.games || []).slice().sort((a, b) => new Date(a.date) - new Date(b.date));
   const yourElo = state.settings?.team_elo || ELO_DEFAULT;
+
+  // Build season dropdown from available year(s) — default to most recent
+  const filterEl = document.getElementById('matchesSeasonFilter');
+  const years = Array.from(new Set(allGames.map(g => g.date?.slice(0, 4)).filter(Boolean))).sort();
+  const previousValue = filterEl?.value || (years.length ? years[years.length - 1] : 'all');
+  if (filterEl) {
+    filterEl.innerHTML = `
+      <option value="all">All Seasons</option>
+      ${years.map(y => `<option value="${y}">${y}</option>`).join('')}
+    `;
+    filterEl.value = previousValue && (previousValue === 'all' || years.includes(previousValue)) ? previousValue : (years[years.length - 1] || 'all');
+  }
+  const selectedYear = filterEl?.value || 'all';
+  const games = selectedYear === 'all'
+    ? allGames
+    : allGames.filter(g => g.date?.startsWith(selectedYear));
 
   // Annotate each game with full-context MDI + opponent record
   const annotated = games.map(g => {
