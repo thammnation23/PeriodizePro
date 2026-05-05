@@ -6488,20 +6488,17 @@ async function bootApp(user) {
     </div>
   `;
 
+  // Hide overlay no matter what — wrap each step so a single throw doesn't strand the user on the loading screen.
   try {
-    await loadAllData();
-  } catch(e) {
-    console.error('Boot load error:', e);
+    try { await loadAllData(); }            catch(e) { console.error('Boot — loadAllData threw:', e); }
+    try { applySeasonStart(); }             catch(e) { console.error('Boot — applySeasonStart threw:', e); }
+    try { rebuildSessionTypeChips(); }      catch(e) { console.error('Boot — rebuildSessionTypeChips threw:', e); }
+  } finally {
+    const overlay = document.getElementById('authOverlay');
+    if (overlay) overlay.style.display = 'none';
+    try { renderYear(); } catch(e) { console.error('Boot — renderYear threw:', e); }
+    booting = false;
   }
-
-  // Apply custom settings
-  applySeasonStart();
-  rebuildSessionTypeChips();
-
-  // Always show the app regardless of load result
-  document.getElementById('authOverlay').style.display = 'none';
-  renderYear();
-  booting = false;
 }
 
 // onAuthStateChange — handles sign-in events
