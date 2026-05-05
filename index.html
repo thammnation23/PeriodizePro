@@ -5753,7 +5753,7 @@ function mdiColor(mdi) {
 
 // ── SEED MLS OPPONENTS FROM THESPORTSDB ──
 const MLS_LEAGUE_ID  = 4346;
-const MLS_SEASONS    = ['2023', '2024', '2025']; // Recent seasons keep ratings reflective of current rosters
+const MLS_SEASONS    = ['2024', '2025', '2026']; // Last 3 seasons — keeps ratings reflective of current rosters
 const SPORTSDB_BASE  = 'https://www.thesportsdb.com/api/v1/json/3';
 
 // MLS team home stadium coordinates (approximate, sufficient for travel-distance estimation)
@@ -5827,10 +5827,13 @@ async function seedMlsOpponents() {
     const teams = teamsJson.teams || [];
     if (teams.length === 0) throw new Error('No teams returned by TheSportsDB');
 
-    // Build a teamId → { name, elo, history } map seeded at default
+    // Build a teamId → { name, elo, history, badge } map seeded at default
     const ratings = {};
     teams.forEach(t => {
-      ratings[t.idTeam] = { name: t.strTeam, elo: ELO_DEFAULT, externalId: t.idTeam, history: [] };
+      ratings[t.idTeam] = {
+        name: t.strTeam, elo: ELO_DEFAULT, externalId: t.idTeam,
+        badge: t.strBadge || null, history: [],
+      };
     });
     setStatus(`Found ${teams.length} teams. Fetching season match data…`);
 
@@ -5880,7 +5883,7 @@ async function seedMlsOpponents() {
 
     setStatus(`Writing ${Object.keys(ratings).length} opponent ratings to Supabase…`);
 
-    // Upsert by external_id so re-running updates rather than duplicating
+    // Upsert by name so re-running updates rather than duplicating
     const rows = Object.values(ratings).map(r => ({
       name: r.name,
       external_id: r.externalId,
@@ -5890,6 +5893,7 @@ async function seedMlsOpponents() {
       initial_elo: ELO_DEFAULT,
       last_synced_at: new Date().toISOString(),
       elo_history: r.history,
+      badge_url: r.badge,
     }));
 
     const { error } = await sb.from('opponents').upsert(rows, { onConflict: 'name' });
@@ -6224,8 +6228,8 @@ function renderMdiChart(games) {
     return;
   }
 
-  const W = 900, H = 280;
-  const padL = 40, padR = 20, padT = 20, padB = 40;
+  const W = 900, H = 360;
+  const padL = 40, padR = 20, padT = 30, padB = 40;
   const innerW = W - padL - padR;
   const innerH = H - padT - padB;
 
@@ -6272,19 +6276,51 @@ function renderMdiChart(games) {
     trendPath = mdiPoints.map((g, i) => `${i === 0 ? 'M' : 'L'} ${xPos(g.date).toFixed(1)} ${y(g._mdi).toFixed(1)}`).join(' ');
   }
 
-  // Match dots
+  // Match dots — team badge with home/away ring
+  const BADGE_R = 12;       // badge radius
+  const RING_R  = BADGE_R + 3;
   const dots = games.map((g, i) => {
     if (g._mdi == null) {
-      // No MDI (no opponent rating) — small grey dot at midline
       return `<circle cx="${xPos(g.date)}" cy="${y(5)}" r="3" fill="var(--text3)" opacity="0.4"><title>${g.opponent || 'TBC'} (no rating)</title></circle>`;
     }
-    const c = mdiColor(g._mdi);
-    const r = g.result ? 6 : 5;
-    const stroke = g.result === 'W' ? '#2eb86b' : g.result === 'L' ? '#ff6b6b' : g.result === 'D' ? '#c5d12b' : 'none';
-    const strokeW = g.result ? 2 : 0;
+    const cx = xPos(g.date);
+    const cy = y(g._mdi);
+    const ringColor = mdiColor(g._mdi);
+    const isHome = g.venue === 'Home';
+    const isAway = g.venue === 'Away';
+    // Home = solid ring, Away = dashed ring, Neutral = dotted
+    const ringDash = isHome ? '' : (isAway ? 'stroke-dasharray="3,2"' : 'stroke-dasharray="1,2"');
+    const venueIcon = isHome ? '🏠' : isAway ? '✈' : '◇';
+
     const dateLabel = new Date(g.date).toLocaleDateString();
-    const tooltip = `${g.opponent || 'TBC'}\n${dateLabel} · ${g.venue}\nMDI ${g._mdi.toFixed(1)}${g.result ? '\nResult: ' + g.result : ''}${g.scoreUs != null ? ' (' + g.scoreUs + '–' + g.scoreThem + ')' : ''}`;
-    return `<circle cx="${xPos(g.date)}" cy="${y(g._mdi)}" r="${r}" fill="${c}" stroke="${stroke}" stroke-width="${strokeW}" style="cursor:pointer"><title>${tooltip}</title></circle>`;
+    const venueWord = g.venue || '';
+    const resultLine = g.result ? `\nResult: ${g.result}${g.scoreUs != null ? ' (' + g.scoreUs + '–' + g.scoreThem + ')' : ''}` : '';
+    const tooltip = `${g.opponent || 'TBC'} ${venueIcon}\n${dateLabel} · ${venueWord}\nMDI ${g._mdi.toFixed(1)}${resultLine}`;
+
+    // Result indicator (corner pip when match has been played)
+    const resultColor = g.result === 'W' ? '#2eb86b' : g.result === 'L' ? '#ff6b6b' : g.result === 'D' ? '#c5d12b' : null;
+    const resultPip = resultColor
+      ? `<circle cx="${cx + RING_R - 3}" cy="${cy - RING_R + 3}" r="4" fill="${resultColor}" stroke="var(--surface2)" stroke-width="1.5"/>
+         <text x="${cx + RING_R - 3}" y="${cy - RING_R + 6}" font-family="'Barlow Condensed', sans-serif" font-size="8" font-weight="700" fill="#000" text-anchor="middle">${g.result}</text>`
+      : '';
+
+    // Badge image with circle clip — falls back to coloured letter circle if no badge URL
+    const badgeUrl = g._oppRec?.badge_url;
+    const initials = (g.opponent || '?').slice(0, 2).toUpperCase();
+    const badgeOrFallback = badgeUrl
+      ? `<image href="${badgeUrl}" x="${cx - BADGE_R}" y="${cy - BADGE_R}" width="${BADGE_R * 2}" height="${BADGE_R * 2}" clip-path="circle(${BADGE_R}px at ${BADGE_R}px ${BADGE_R}px)"/>`
+      : `<circle cx="${cx}" cy="${cy}" r="${BADGE_R}" fill="${ringColor}" opacity="0.85"/>
+         <text x="${cx}" y="${cy + 3}" font-family="'Barlow Condensed', sans-serif" font-size="10" font-weight="700" fill="#fff" text-anchor="middle">${initials}</text>`;
+
+    return `
+      <g style="cursor:pointer">
+        <title>${tooltip}</title>
+        <circle cx="${cx}" cy="${cy}" r="${BADGE_R + 1}" fill="var(--surface2)"/>
+        ${badgeOrFallback}
+        <circle cx="${cx}" cy="${cy}" r="${RING_R}" fill="none" stroke="${ringColor}" stroke-width="2" ${ringDash}/>
+        ${resultPip}
+      </g>
+    `;
   }).join('');
 
   // Endpoint date labels (first and last match)
@@ -6305,8 +6341,11 @@ function renderMdiChart(games) {
       <text x="${padL}" y="${H - 4}" font-family="'JetBrains Mono', monospace" font-size="9" fill="var(--text3)" text-anchor="start">G1</text>
       <text x="${W - padR}" y="${H - 4}" font-family="'JetBrains Mono', monospace" font-size="9" fill="var(--text3)" text-anchor="end">G${games.length}</text>
     </svg>
-    <div style="font-size:10px;color:var(--text3);text-align:center;margin-top:6px;font-family:'Barlow Condensed',sans-serif;letter-spacing:1px">
-      Outlined dots = match played (border colour shows W/D/L) · Hover for details
+    <div style="display:flex;justify-content:center;gap:14px;margin-top:8px;font-size:10px;color:var(--text3);font-family:'Barlow Condensed',sans-serif;letter-spacing:1px;flex-wrap:wrap">
+      <span><svg width="20" height="20" style="vertical-align:middle"><circle cx="10" cy="10" r="7" fill="none" stroke="#888" stroke-width="2"/></svg> HOME (solid ring)</span>
+      <span><svg width="20" height="20" style="vertical-align:middle"><circle cx="10" cy="10" r="7" fill="none" stroke="#888" stroke-width="2" stroke-dasharray="3,2"/></svg> AWAY (dashed)</span>
+      <span><svg width="20" height="20" style="vertical-align:middle"><circle cx="10" cy="10" r="7" fill="none" stroke="#888" stroke-width="2" stroke-dasharray="1,2"/></svg> NEUTRAL</span>
+      <span>· RING COLOUR = MDI · CORNER PIP = W/D/L · HOVER FOR DETAILS</span>
     </div>
   `;
 }
