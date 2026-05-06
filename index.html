@@ -5613,7 +5613,7 @@ function jumpToMonthFromPopover() {
 
 // ── MATCH DIFFICULTY INDEX (ELO + MDI) ──
 
-const ELO_K        = 20;     // standard rating volatility for soccer
+const ELO_K        = 30;     // bumped from 20 → spreads ratings faster for short MLS seasons
 const ELO_DEFAULT  = 1500;   // starting rating for unseeded teams
 const HOME_ADV_ELO = 100;    // FIFA-style home advantage
 const INTL_AWAY_PENALTY = 75; // Robertson & Joyce found international away ~hardest
@@ -5624,11 +5624,34 @@ function eloExpected(yourRating, oppRating, locationAdj = 0) {
   return 1 / (1 + Math.pow(10, diff / 400));
 }
 
+// FiveThirtyEight-style margin of victory multiplier.
+// Bigger goal margins → larger ELO swing.
+// Upset wins (underdog wins) → larger swing than expected wins.
+// Reduces auto-correlation (heavy favourite winning by 5 doesn't pump rating absurdly).
+function movMultiplier(goalDiff, winnerEloDiff) {
+  if (goalDiff <= 0) return 1; // draw uses no MoV
+  const ln = Math.log(Math.abs(goalDiff) + 1);
+  const adjustment = 2.2 / ((winnerEloDiff * 0.001) + 2.2);
+  return ln * adjustment;
+}
+
 // Update ratings after a match. result: 1 = home win, 0.5 = draw, 0 = away win
-function eloUpdate(homeRating, awayRating, result, k = ELO_K) {
+// scores are optional — when present, MoV multiplier is applied
+function eloUpdate(homeRating, awayRating, result, k = ELO_K, homeScore = null, awayScore = null) {
   const expectedHome = eloExpected(homeRating, awayRating, -HOME_ADV_ELO);
-  const newHome = homeRating + k * (result - expectedHome);
-  const newAway = awayRating + k * ((1 - result) - (1 - expectedHome));
+
+  let mult = 1;
+  if (homeScore != null && awayScore != null && homeScore !== awayScore) {
+    const goalDiff = Math.abs(homeScore - awayScore);
+    // ELO diff from the WINNER's perspective (positive = winner was favoured, negative = upset)
+    const winnerEloDiff = result === 1
+      ? (homeRating + HOME_ADV_ELO) - awayRating  // home won
+      : awayRating - (homeRating + HOME_ADV_ELO); // away won
+    mult = movMultiplier(goalDiff, winnerEloDiff);
+  }
+
+  const newHome = homeRating + k * mult * (result - expectedHome);
+  const newAway = awayRating + k * mult * ((1 - result) - (1 - expectedHome));
   return { home: Math.round(newHome), away: Math.round(newAway) };
 }
 
