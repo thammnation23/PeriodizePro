@@ -1830,6 +1830,7 @@
   <div class="nav-tab" onclick="switchTab('month')">🗓 Month</div>
   <div class="nav-tab" onclick="switchTab('week')">⚡ Week</div>
   <div class="nav-tab" onclick="switchTab('matches')">⚽ Matches</div>
+  <div class="nav-tab" onclick="switchTab('squad')">👥 Squad</div>
   <div class="nav-tab" onclick="switchTab('library')">📚 Drill Library</div>
   <div class="nav-tab" onclick="switchTab('settings')">⚙ Settings</div>
 </nav>
@@ -1971,6 +1972,21 @@
 
     <!-- Match list -->
     <div id="matchList"></div>
+  </div>
+
+  <!-- ── SQUAD VIEW ── -->
+  <div id="view-squad" class="view">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:10px">
+      <div>
+        <h2 style="margin:0;font-family:'Barlow Condensed',sans-serif;letter-spacing:2px;font-size:24px">SQUAD</h2>
+        <div style="font-size:11px;color:var(--text3);font-family:'Barlow Condensed',sans-serif;letter-spacing:1px;margin-top:2px">Roster · current availability · click any player for season log</div>
+      </div>
+      <button class="btn btn-primary btn-sm" onclick="openAddPlayer()">＋ Add Player</button>
+    </div>
+
+    <div id="squadStats" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:10px;margin-bottom:18px"></div>
+
+    <div id="squadList"></div>
   </div>
 
   <!-- ── LIBRARY VIEW ── -->
@@ -2276,6 +2292,10 @@
         <textarea id="sessionNotes" placeholder="Session notes, coaching cues, focus areas..."></textarea>
       </div>
 
+      <hr class="section-divider">
+      <div class="subsection-label">Squad Availability <span style="color:var(--text3);font-size:10px;font-weight:400;letter-spacing:0;text-transform:none">— Full · Modified · RTP · Out</span></div>
+      <div id="sessionRoster"></div>
+
     </div>
     <div class="modal-footer">
       <button class="btn btn-danger btn-sm" id="deleteSessionBtn" style="display:none" onclick="deleteSession()">Delete</button>
@@ -2427,6 +2447,11 @@
         <label>Notes</label>
         <textarea id="gameNotes" placeholder="Pre-match context, travel, etc."></textarea>
       </div>
+
+      <hr class="section-divider">
+      <div class="subsection-label">Squad Availability + Minutes <span style="color:var(--text3);font-size:10px;font-weight:400;letter-spacing:0;text-transform:none">— Full · Modified · RTP · Out</span></div>
+      <div id="gameRoster"></div>
+
     </div>
     <div class="modal-footer">
       <button class="btn btn-danger btn-sm" id="deleteGameBtn" style="display:none" onclick="deleteGame()">Delete</button>
@@ -2686,6 +2711,60 @@
   </div>
 </div>
 
+<!-- ═══ ADD/EDIT PLAYER MODAL ═══ -->
+<div class="modal-overlay" id="playerModal">
+  <div class="modal" style="width:440px">
+    <div class="modal-header">
+      <div class="modal-title" id="playerModalTitle">Add Player</div>
+      <button class="modal-close" onclick="closeModal('playerModal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group" style="margin-bottom:14px">
+        <label>Name</label>
+        <input type="text" id="playerName" placeholder="e.g. Lionel Messi">
+      </div>
+      <div class="form-grid" style="margin-bottom:14px">
+        <div class="form-group">
+          <label>Position</label>
+          <input type="text" id="playerPosition" placeholder="e.g. CM, CB, GK">
+        </div>
+        <div class="form-group">
+          <label>Shirt #</label>
+          <input type="number" id="playerShirt" min="1" max="99" placeholder="10">
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Notes</label>
+        <textarea id="playerNotes" placeholder="Injury history, contract notes..."></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-danger btn-sm" id="deletePlayerBtn" style="display:none" onclick="deletePlayer()">Delete</button>
+      <button class="btn btn-ghost" onclick="closeModal('playerModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="savePlayer()">Save Player</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ PLAYER HISTORY MODAL ═══ -->
+<div class="modal-overlay" id="playerHistoryModal">
+  <div class="modal" style="width:780px">
+    <div class="modal-header">
+      <div class="modal-title" id="playerHistoryTitle">Player History</div>
+      <button class="modal-close" onclick="closeModal('playerHistoryModal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div id="playerHistoryStats"></div>
+      <div id="playerHistoryTimeline"></div>
+      <div id="playerHistoryLog"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost btn-sm" onclick="editPlayerFromHistory()">✏ Edit Player Info</button>
+      <button class="btn btn-ghost" onclick="closeModal('playerHistoryModal')">Close</button>
+    </div>
+  </div>
+</div>
+
 <!-- ═══ ELO HISTORY MODAL ═══ -->
 <div class="modal-overlay" id="eloHistoryModal">
   <div class="modal" style="width:760px">
@@ -2815,7 +2894,7 @@ const MONTHS = ['January','February','March','April','May','June','July','August
 const MONTHS_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
 function emptyState() {
-  return { sessions: [], games: [], weekSettings: {}, media: [], settings: null, opponents: [] };
+  return { sessions: [], games: [], weekSettings: {}, media: [], settings: null, opponents: [], players: [], playerLogs: [] };
 }
 let state = emptyState();
 let currentWeek = getCurrentWeekNum();
@@ -2898,6 +2977,8 @@ async function loadAllData() {
 
   // Opponents — best effort, doesn't block sync status
   await loadOpponents();
+  // Players + player logs — same best-effort treatment
+  await loadPlayers();
 
   console.log(`Loaded: ${state.sessions.length} sessions, ${state.games.length} games, ${state.media.length} drills, ${state.opponents.length} opponents`);
   setSyncStatus(anyFailed ? 'error' : 'ok');
@@ -3147,7 +3228,7 @@ function switchTab(tab) {
   document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
   document.getElementById('view-' + tab).classList.add('active');
   document.querySelectorAll('.nav-tab').forEach(t => {
-    const match = tab === 'loading' ? 'planned' : tab === 'library' ? 'drill' : tab === 'matches' ? '⚽ matches' : tab;
+    const match = tab === 'loading' ? 'planned' : tab === 'library' ? 'drill' : tab === 'matches' ? '⚽ matches' : tab === 'squad' ? '👥 squad' : tab;
     if (t.textContent.toLowerCase().includes(match)) t.classList.add('active');
   });
   if (tab === 'year')     renderYear();
@@ -3155,6 +3236,7 @@ function switchTab(tab) {
   if (tab === 'month')    renderMonth();
   if (tab === 'week')     renderWeek();
   if (tab === 'matches')  renderMatches();
+  if (tab === 'squad')    renderSquad();
   if (tab === 'library')  renderLibrary();
   if (tab === 'settings') renderSettings();
 }
@@ -3851,7 +3933,22 @@ function openAddSessionOnDate(dateStr) {
   chipSelections['type'] = 'Intensive';
   chipSelections['type2'] = '';
   rebuildSessionTypeChips();
+  // Roster matrix — fresh session, no existing logs
+  const newId = currentSessionDraftId();
+  currentReadSessionRoster = renderRosterMatrix('sessionRoster', dateStr, 'session', newId, []);
   openModal('sessionModal');
+}
+
+// Closure-captured reader for the session roster matrix; called on save.
+let currentReadSessionRoster = () => [];
+let currentReadGameRoster    = () => [];
+
+// Generate a draft id used for new sessions/games before save (so player_logs can reference it)
+function currentSessionDraftId() {
+  return editingSessionId || (crypto.randomUUID ? crypto.randomUUID() : genId());
+}
+function currentGameDraftId() {
+  return editingGameId || (crypto.randomUUID ? crypto.randomUUID() : genId());
 }
 
 function editSession(id) {
@@ -3884,6 +3981,10 @@ function editSession(id) {
   currentExercises = (s.exercises || []).map(ex => ({ ...ex }));
   renderExercises();
   document.getElementById('sessionNotes').value = s.notes || '';
+
+  // Roster matrix with existing logs for this session
+  const existingLogs = state.playerLogs.filter(l => l.sessionId === s.id);
+  currentReadSessionRoster = renderRosterMatrix('sessionRoster', s.date, 'session', s.id, existingLogs);
 
   chipSelections['type'] = s.type || 'Intensive';
   chipSelections['type2'] = s.type2 || '';
@@ -3948,6 +4049,12 @@ async function saveSession() {
   closeModal('sessionModal');
   renderWeek();
   await upsertSessionDB(session); // Supabase
+
+  // Persist roster availability for this session
+  try {
+    const entries = currentReadSessionRoster();
+    await saveRosterLogs(entries, 'session', session.id, session.date);
+  } catch (e) { console.warn('Roster save failed:', e); }
 }
 
 async function deleteSession() {
@@ -4001,6 +4108,10 @@ function openAddGame() {
   document.getElementById('deleteGameBtn').style.display = 'none';
   clearGameForm();
   populateOpponentList();
+  // Roster matrix — fresh game
+  const newId = currentGameDraftId();
+  const dateStr = document.getElementById('gameDate').value || formatDate(new Date());
+  currentReadGameRoster = renderRosterMatrix('gameRoster', dateStr, 'game', newId, []);
   openModal('gameModal');
 }
 
@@ -4068,6 +4179,9 @@ function editGame(id) {
 
   onOpponentChange();
   updateAvailPct();
+  // Roster matrix with existing logs for this game
+  const existingLogs = state.playerLogs.filter(l => l.gameId === g.id);
+  currentReadGameRoster = renderRosterMatrix('gameRoster', g.date, 'game', g.id, existingLogs);
   openModal('gameModal');
 }
 
@@ -4233,6 +4347,12 @@ async function saveGame() {
   closeModal('gameModal');
   renderWeek();
   await saveGameDB(game);
+
+  // Persist roster availability + minutes for this match
+  try {
+    const entries = currentReadGameRoster();
+    await saveRosterLogs(entries, 'game', game.id, game.date);
+  } catch (e) { console.warn('Game roster save failed:', e); }
 
   // ELO update from this match (only when the result is freshly recorded and we know the opponent)
   if (isNewResult && opp) {
@@ -6086,6 +6206,388 @@ async function importMyTeamSchedule() {
     setStatus(`✗ ${e.message}`);
     alert('Schedule import failed: ' + e.message);
   }
+}
+
+// ── PLAYER ROSTER ──
+
+const STATUS_OPTIONS = ['Full', 'Modified', 'RTP', 'Out'];
+function statusColor(s) {
+  return s === 'Full' ? '#2eb86b' : s === 'Modified' ? '#c5d12b' : s === 'RTP' ? '#f5a623' : s === 'Out' ? '#ff6b6b' : 'var(--text3)';
+}
+
+let editingPlayerId = null;
+
+async function loadPlayers() {
+  if (!sb || !currentUser) return;
+  try {
+    const [pRes, lRes] = await Promise.all([
+      sb.from('players').select('*').eq('user_id', currentUser.id).order('shirt_number', { nullsFirst: false }),
+      sb.from('player_logs').select('*').eq('user_id', currentUser.id),
+    ]);
+    state.players    = (pRes.data    || []).map(r => ({ id: r.id, name: r.name, position: r.position, shirtNumber: r.shirt_number, notes: r.notes }));
+    state.playerLogs = (lRes.data    || []).map(r => ({
+      id: r.id, playerId: r.player_id, date: r.date,
+      sessionId: r.session_id, gameId: r.game_id,
+      status: r.status, plannedMinutes: r.planned_minutes, actualMinutes: r.actual_minutes,
+      notes: r.notes,
+    }));
+  } catch (e) {
+    console.warn('loadPlayers failed (table may not exist yet):', e.message);
+    state.players    = [];
+    state.playerLogs = [];
+  }
+}
+
+// Latest log entry for a player (overall current status)
+function latestPlayerLog(playerId) {
+  const logs = state.playerLogs.filter(l => l.playerId === playerId);
+  if (logs.length === 0) return null;
+  return logs.slice().sort((a, b) => new Date(b.date) - new Date(a.date))[0];
+}
+
+function currentPlayerStatus(playerId) {
+  return latestPlayerLog(playerId)?.status || 'Full';
+}
+
+// ── SQUAD VIEW ──
+function renderSquad() {
+  renderSquadStats();
+  renderSquadList();
+}
+
+function renderSquadStats() {
+  const el = document.getElementById('squadStats');
+  if (!el) return;
+  const players = state.players || [];
+  const counts = { Full: 0, Modified: 0, RTP: 0, Out: 0 };
+  players.forEach(p => {
+    const s = currentPlayerStatus(p.id);
+    if (counts[s] != null) counts[s]++;
+  });
+  const total = players.length;
+  const stat = (label, value, color) => `
+    <div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:10px 12px">
+      <div style="font-size:10px;color:var(--text3);font-family:'Barlow Condensed',sans-serif;letter-spacing:1.5px;text-transform:uppercase">${label}</div>
+      <div style="font-family:'JetBrains Mono',monospace;font-size:20px;font-weight:700;color:${color || 'var(--text)'};margin-top:2px">${value}</div>
+    </div>`;
+  el.innerHTML = [
+    stat('Roster', total),
+    stat('Full', counts.Full, statusColor('Full')),
+    stat('Modified', counts.Modified, statusColor('Modified')),
+    stat('RTP', counts.RTP, statusColor('RTP')),
+    stat('Out', counts.Out, statusColor('Out')),
+  ].join('');
+}
+
+function renderSquadList() {
+  const host = document.getElementById('squadList');
+  if (!host) return;
+  const players = state.players || [];
+  if (players.length === 0) {
+    host.innerHTML = '<div style="text-align:center;padding:30px;color:var(--text3);font-family:\'Barlow Condensed\',sans-serif;letter-spacing:1px">No players yet — click ＋ Add Player</div>';
+    return;
+  }
+  host.innerHTML = `
+    <div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden">
+      <div style="display:grid;grid-template-columns:50px 1fr 80px 100px 100px 60px;gap:8px;padding:10px 14px;background:var(--surface3);font-size:10px;font-family:'Barlow Condensed',sans-serif;letter-spacing:1.5px;color:var(--text3);text-transform:uppercase">
+        <span>#</span><span>Name</span><span>Pos</span><span>Status</span><span>Last Log</span><span></span>
+      </div>
+      ${players.map(p => {
+        const latest = latestPlayerLog(p.id);
+        const s = latest?.status || 'Full';
+        const lastDate = latest?.date ? new Date(latest.date).toLocaleDateString('en', { month: 'short', day: 'numeric' }) : '—';
+        return `
+          <div onclick="openPlayerHistory('${p.id}')" style="display:grid;grid-template-columns:50px 1fr 80px 100px 100px 60px;gap:8px;padding:10px 14px;border-top:1px solid var(--border);font-size:12px;align-items:center;cursor:pointer" onmouseover="this.style.background='var(--surface3)'" onmouseout="this.style.background=''">
+            <span style="font-family:'JetBrains Mono',monospace;color:var(--text3)">${p.shirtNumber || '—'}</span>
+            <span style="font-weight:600">${p.name}</span>
+            <span style="font-size:11px;color:var(--text2)">${p.position || ''}</span>
+            <span><span style="display:inline-block;padding:2px 8px;border-radius:3px;font-family:'Barlow Condensed',sans-serif;letter-spacing:1px;font-size:11px;font-weight:700;background:${statusColor(s)}22;color:${statusColor(s)}">${s.toUpperCase()}</span></span>
+            <span style="font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--text3)">${lastDate}</span>
+            <button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();openEditPlayer('${p.id}')">✏</button>
+          </div>
+        `;
+      }).join('')}
+    </div>
+  `;
+}
+
+// ── ADD/EDIT PLAYER ──
+function openAddPlayer() {
+  editingPlayerId = null;
+  document.getElementById('playerModalTitle').textContent = 'Add Player';
+  document.getElementById('deletePlayerBtn').style.display = 'none';
+  ['playerName','playerPosition','playerShirt','playerNotes'].forEach(id => { document.getElementById(id).value = ''; });
+  openModal('playerModal');
+}
+
+function openEditPlayer(id) {
+  const p = state.players.find(x => x.id === id);
+  if (!p) return;
+  editingPlayerId = id;
+  document.getElementById('playerModalTitle').textContent = 'Edit Player';
+  document.getElementById('deletePlayerBtn').style.display = 'inline-flex';
+  document.getElementById('playerName').value     = p.name;
+  document.getElementById('playerPosition').value = p.position || '';
+  document.getElementById('playerShirt').value    = p.shirtNumber || '';
+  document.getElementById('playerNotes').value    = p.notes || '';
+  openModal('playerModal');
+}
+
+async function savePlayer() {
+  const name = document.getElementById('playerName').value.trim();
+  if (!name) { alert('Player name is required.'); return; }
+  const player = {
+    id: editingPlayerId || (crypto.randomUUID ? crypto.randomUUID() : genId()),
+    user_id: currentUser.id,
+    name,
+    position:     document.getElementById('playerPosition').value || null,
+    shirt_number: parseInt(document.getElementById('playerShirt').value) || null,
+    notes:        document.getElementById('playerNotes').value || null,
+  };
+  setSyncStatus('syncing');
+  const { error } = await sb.from('players').upsert(player);
+  if (error) { setSyncStatus('error'); alert('Save failed: ' + error.message); return; }
+
+  // Update local state
+  const local = { id: player.id, name, position: player.position, shirtNumber: player.shirt_number, notes: player.notes };
+  if (editingPlayerId) {
+    const idx = state.players.findIndex(x => x.id === editingPlayerId);
+    if (idx !== -1) state.players[idx] = local;
+  } else {
+    state.players.push(local);
+  }
+  setSyncStatus('ok');
+  closeModal('playerModal');
+  renderSquad();
+}
+
+async function deletePlayer() {
+  if (!editingPlayerId) return;
+  if (!confirm('Delete this player and all their log entries?')) return;
+  setSyncStatus('syncing');
+  const { error } = await sb.from('players').delete().eq('id', editingPlayerId);
+  if (error) { setSyncStatus('error'); alert('Delete failed: ' + error.message); return; }
+  state.players    = state.players.filter(p => p.id !== editingPlayerId);
+  state.playerLogs = state.playerLogs.filter(l => l.playerId !== editingPlayerId);
+  setSyncStatus('ok');
+  closeModal('playerModal');
+  renderSquad();
+}
+
+// ── PLAYER HISTORY MODAL ──
+let viewingPlayerId = null;
+function openPlayerHistory(playerId) {
+  viewingPlayerId = playerId;
+  const p = state.players.find(x => x.id === playerId);
+  if (!p) return;
+  document.getElementById('playerHistoryTitle').textContent = `${p.name}${p.shirtNumber ? ' #' + p.shirtNumber : ''}${p.position ? ' · ' + p.position : ''}`;
+  const logs = state.playerLogs.filter(l => l.playerId === playerId).sort((a, b) => new Date(a.date) - new Date(b.date));
+
+  // Stats
+  const totalLogs = logs.length;
+  const totalMinutes = logs.reduce((s, l) => s + (l.actualMinutes || 0), 0);
+  const counts = { Full: 0, Modified: 0, RTP: 0, Out: 0 };
+  logs.forEach(l => { if (counts[l.status] != null) counts[l.status]++; });
+  const stat = (label, value, color) => `
+    <div style="background:var(--surface3);border-radius:var(--radius);padding:8px 10px">
+      <div style="font-size:9px;color:var(--text3);font-family:'Barlow Condensed',sans-serif;letter-spacing:1.5px;text-transform:uppercase">${label}</div>
+      <div style="font-family:'JetBrains Mono',monospace;font-size:16px;font-weight:700;color:${color || 'var(--text)'};margin-top:2px">${value}</div>
+    </div>`;
+  document.getElementById('playerHistoryStats').innerHTML = `
+    <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:6px;margin-bottom:14px">
+      ${stat('Logs', totalLogs)}
+      ${stat('Minutes', totalMinutes)}
+      ${stat('Full', counts.Full, statusColor('Full'))}
+      ${stat('Modified', counts.Modified, statusColor('Modified'))}
+      ${stat('RTP', counts.RTP, statusColor('RTP'))}
+      ${stat('Out', counts.Out, statusColor('Out'))}
+    </div>
+  `;
+
+  // Timeline strip — coloured dots per log entry
+  if (logs.length === 0) {
+    document.getElementById('playerHistoryTimeline').innerHTML = `<div style="text-align:center;padding:30px;color:var(--text3);font-family:'Barlow Condensed',sans-serif;letter-spacing:1px">No status logged yet — record statuses on session/match forms</div>`;
+    document.getElementById('playerHistoryLog').innerHTML = '';
+    return;
+  }
+  const minDate = new Date(logs[0].date).getTime();
+  const maxDate = new Date(logs[logs.length - 1].date).getTime();
+  const span = Math.max(maxDate - minDate, 1);
+  const W = 700, H = 60;
+  const dots = logs.map(l => {
+    const x = 10 + ((new Date(l.date).getTime() - minDate) / span) * (W - 20);
+    const c = statusColor(l.status);
+    return `<circle cx="${x}" cy="${H/2}" r="6" fill="${c}"><title>${new Date(l.date).toLocaleDateString()} · ${l.status}${l.actualMinutes != null ? ' · ' + l.actualMinutes + 'min' : ''}</title></circle>`;
+  }).join('');
+  document.getElementById('playerHistoryTimeline').innerHTML = `
+    <div style="background:var(--surface3);border-radius:var(--radius);padding:10px;margin-bottom:14px">
+      <svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;display:block">
+        <line x1="10" y1="${H/2}" x2="${W-10}" y2="${H/2}" stroke="var(--border)" stroke-width="1"/>
+        ${dots}
+      </svg>
+      <div style="display:flex;justify-content:space-between;font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--text3);margin-top:4px">
+        <span>${new Date(minDate).toLocaleDateString('en', {month:'short', day:'numeric'})}</span>
+        <span>${new Date(maxDate).toLocaleDateString('en', {month:'short', day:'numeric'})}</span>
+      </div>
+    </div>
+  `;
+
+  // Log table (most recent first)
+  const reversed = logs.slice().reverse();
+  document.getElementById('playerHistoryLog').innerHTML = `
+    <div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;max-height:300px;overflow-y:auto">
+      <div style="display:grid;grid-template-columns:90px 90px 70px 70px 1fr;gap:8px;padding:8px 12px;background:var(--surface3);font-size:10px;font-family:'Barlow Condensed',sans-serif;letter-spacing:1.5px;color:var(--text3);text-transform:uppercase">
+        <span>Date</span><span>Status</span><span>Planned</span><span>Actual</span><span>Notes</span>
+      </div>
+      ${reversed.map(l => {
+        const c = statusColor(l.status);
+        return `
+          <div style="display:grid;grid-template-columns:90px 90px 70px 70px 1fr;gap:8px;padding:8px 12px;border-top:1px solid var(--border);font-size:11px;align-items:center">
+            <span style="font-family:'JetBrains Mono',monospace;color:var(--text3)">${new Date(l.date).toLocaleDateString('en',{month:'short',day:'numeric'})}</span>
+            <span style="display:inline-block;padding:2px 6px;border-radius:3px;font-family:'Barlow Condensed',sans-serif;letter-spacing:1px;font-size:10px;font-weight:700;background:${c}22;color:${c};text-align:center">${l.status.toUpperCase()}</span>
+            <span style="font-family:'JetBrains Mono',monospace;color:var(--text2)">${l.plannedMinutes ?? ''}</span>
+            <span style="font-family:'JetBrains Mono',monospace;color:var(--text)">${l.actualMinutes ?? ''}</span>
+            <span style="color:var(--text3);font-size:10px">${l.notes || ''}</span>
+          </div>
+        `;
+      }).join('')}
+    </div>
+  `;
+
+  openModal('playerHistoryModal');
+}
+
+function editPlayerFromHistory() {
+  const id = viewingPlayerId;
+  closeModal('playerHistoryModal');
+  if (id) openEditPlayer(id);
+}
+
+// ── ROSTER MATRIX ── (used inside session and game forms)
+// Renders a player roster matrix into a host element.
+// Used for both sessions (training availability) and games (match minutes).
+// Returns a function that, when called, reads the form values and returns the array of logs to save.
+function renderRosterMatrix(hostId, dateStr, sourceType, sourceId, existingLogs = []) {
+  const host = document.getElementById(hostId);
+  if (!host) return () => [];
+  const players = (state.players || []).slice().sort((a, b) => (a.shirtNumber || 999) - (b.shirtNumber || 999));
+  if (players.length === 0) {
+    host.innerHTML = `<div style="font-size:11px;color:var(--text3);font-family:'Barlow Condensed',sans-serif;letter-spacing:1px;padding:8px 0">No players in roster yet — add some from the 👥 Squad tab to track availability here.</div>`;
+    return () => [];
+  }
+  // Build initial state from existing logs
+  const initial = {};
+  players.forEach(p => {
+    const log = existingLogs.find(l => l.playerId === p.id) || {};
+    initial[p.id] = {
+      status:         log.status         || 'Full',
+      plannedMinutes: log.plannedMinutes ?? '',
+      actualMinutes:  log.actualMinutes  ?? '',
+    };
+  });
+  // Track current edit state in-memory (off the DOM)
+  host.__rosterState = initial;
+
+  const minutesLabel = sourceType === 'game' ? 'Min' : 'Min';
+  const showMinutes = true;
+
+  host.innerHTML = `
+    <div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;margin-top:6px">
+      <div style="display:grid;grid-template-columns:40px 1fr 280px 70px 70px;gap:6px;padding:6px 10px;background:var(--surface3);font-size:9px;font-family:'Barlow Condensed',sans-serif;letter-spacing:1.5px;color:var(--text3);text-transform:uppercase">
+        <span>#</span><span>Player</span><span>Status</span><span>Planned</span><span>Actual</span>
+      </div>
+      ${players.map(p => {
+        const init = initial[p.id];
+        return `
+          <div style="display:grid;grid-template-columns:40px 1fr 280px 70px 70px;gap:6px;padding:5px 10px;border-top:1px solid var(--border);align-items:center;font-size:11px">
+            <span style="font-family:'JetBrains Mono',monospace;color:var(--text3)">${p.shirtNumber || '—'}</span>
+            <span style="font-weight:600">${p.name}${p.position ? `<span style="color:var(--text3);font-weight:400;font-size:10px;margin-left:4px">${p.position}</span>` : ''}</span>
+            <div style="display:flex;gap:3px" data-roster-status="${p.id}">
+              ${STATUS_OPTIONS.map(s => `
+                <button type="button" onclick="setRosterStatus('${hostId}','${p.id}','${s}',this)"
+                  style="flex:1;padding:3px 6px;border-radius:3px;border:1px solid ${init.status === s ? statusColor(s) : 'var(--border)'};background:${init.status === s ? statusColor(s) + '33' : 'transparent'};color:${init.status === s ? statusColor(s) : 'var(--text2)'};font-family:'Barlow Condensed',sans-serif;font-size:10px;font-weight:700;letter-spacing:1px;cursor:pointer">${s}</button>
+              `).join('')}
+            </div>
+            <input type="number" min="0" max="120" placeholder="—" value="${init.plannedMinutes}" oninput="setRosterField('${hostId}','${p.id}','plannedMinutes',this.value)" style="font-family:'JetBrains Mono',monospace;font-size:11px;text-align:center;padding:3px">
+            <input type="number" min="0" max="120" placeholder="—" value="${init.actualMinutes}" oninput="setRosterField('${hostId}','${p.id}','actualMinutes',this.value)" style="font-family:'JetBrains Mono',monospace;font-size:11px;text-align:center;padding:3px">
+          </div>
+        `;
+      }).join('')}
+    </div>
+  `;
+
+  // Reader function — call this from the parent save handler
+  return () => {
+    const out = [];
+    const stateRef = host.__rosterState || {};
+    for (const p of players) {
+      const r = stateRef[p.id] || {};
+      // Skip rows that are still default-Full with no minutes recorded — no point persisting noise
+      const hasContent = r.status !== 'Full' || r.plannedMinutes !== '' || r.actualMinutes !== '';
+      if (!hasContent) continue;
+      out.push({
+        playerId: p.id,
+        date: dateStr,
+        sessionId: sourceType === 'session' ? sourceId : null,
+        gameId:    sourceType === 'game'    ? sourceId : null,
+        status:    r.status,
+        plannedMinutes: r.plannedMinutes !== '' ? parseInt(r.plannedMinutes) : null,
+        actualMinutes:  r.actualMinutes  !== '' ? parseInt(r.actualMinutes)  : null,
+      });
+    }
+    return out;
+  };
+}
+
+function setRosterStatus(hostId, playerId, status, btn) {
+  const host = document.getElementById(hostId);
+  if (!host?.__rosterState) return;
+  host.__rosterState[playerId].status = status;
+  // Refresh the row visuals
+  const rowChips = btn.parentElement.querySelectorAll('button');
+  rowChips.forEach(b => {
+    const s = b.textContent.trim();
+    const active = s === status;
+    b.style.background = active ? statusColor(s) + '33' : 'transparent';
+    b.style.borderColor = active ? statusColor(s) : 'var(--border)';
+    b.style.color = active ? statusColor(s) : 'var(--text2)';
+  });
+}
+
+function setRosterField(hostId, playerId, field, value) {
+  const host = document.getElementById(hostId);
+  if (!host?.__rosterState) return;
+  host.__rosterState[playerId][field] = value;
+}
+
+// Persist roster matrix output to player_logs (delete existing for this source, then bulk insert).
+async function saveRosterLogs(rosterEntries, sourceType, sourceId, dateStr) {
+  if (!rosterEntries) return;
+  const idCol = sourceType === 'game' ? 'game_id' : 'session_id';
+  // Wipe existing logs for this source
+  await sb.from('player_logs').delete().eq(idCol, sourceId);
+  // Local cleanup
+  state.playerLogs = state.playerLogs.filter(l => (sourceType === 'game' ? l.gameId : l.sessionId) !== sourceId);
+  if (rosterEntries.length === 0) return;
+  // Insert fresh
+  const rows = rosterEntries.map(e => ({
+    user_id:        currentUser.id,
+    player_id:      e.playerId,
+    date:           e.date,
+    session_id:     e.sessionId,
+    game_id:        e.gameId,
+    status:         e.status,
+    planned_minutes: e.plannedMinutes,
+    actual_minutes:  e.actualMinutes,
+  }));
+  const { data, error } = await sb.from('player_logs').insert(rows).select();
+  if (error) { console.error('Roster save failed:', error.message); return; }
+  // Reflect in local state
+  (data || []).forEach(r => state.playerLogs.push({
+    id: r.id, playerId: r.player_id, date: r.date,
+    sessionId: r.session_id, gameId: r.game_id,
+    status: r.status, plannedMinutes: r.planned_minutes, actualMinutes: r.actual_minutes,
+  }));
 }
 
 async function loadOpponents() {
