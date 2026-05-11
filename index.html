@@ -3047,14 +3047,19 @@ async function loadAllData() {
     console.error('Week settings load failed:', wsR.reason?.message || wsR.value?.error?.message);
   }
 
-  // Opponents — best effort, doesn't block sync status
-  await loadOpponents();
-  // Players + player logs — same best-effort treatment
-  await loadPlayers();
-  // Coaching stints — career record
-  await loadCoachingStints();
+  // Trailing best-effort loaders — each gets a 15s timeout. They run in parallel
+  // and a hang on any one no longer strands the boot screen.
+  const bestEffort = (p, label) => Promise.race([
+    p.catch(e => console.warn(`${label} threw:`, e?.message)),
+    new Promise(res => setTimeout(() => { console.warn(`${label} timed out`); res(); }, 15000))
+  ]);
+  await Promise.all([
+    bestEffort(loadOpponents(),      'loadOpponents'),
+    bestEffort(loadPlayers(),        'loadPlayers'),
+    bestEffort(loadCoachingStints(), 'loadCoachingStints'),
+  ]);
 
-  console.log(`Loaded: ${state.sessions.length} sessions, ${state.games.length} games, ${state.media.length} drills, ${state.opponents.length} opponents`);
+  console.log(`Loaded: ${state.sessions.length} sessions, ${state.games.length} games, ${state.media.length} drills, ${state.opponents.length} opponents, ${(state.players||[]).length} players, ${(state.coachingStints||[]).length} stints`);
   setSyncStatus(anyFailed ? 'error' : 'ok');
 }
 
