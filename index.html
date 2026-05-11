@@ -1831,6 +1831,7 @@
   <div class="nav-tab" onclick="switchTab('week')">⚡ Week</div>
   <div class="nav-tab" onclick="switchTab('matches')">⚽ Matches</div>
   <div class="nav-tab" onclick="switchTab('squad')">👥 Squad</div>
+  <div class="nav-tab" onclick="switchTab('career')">🏆 Career</div>
   <div class="nav-tab" onclick="switchTab('library')">📚 Drill Library</div>
   <div class="nav-tab" onclick="switchTab('settings')">⚙ Settings</div>
 </nav>
@@ -1987,6 +1988,24 @@
     <div id="squadStats" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:10px;margin-bottom:18px"></div>
 
     <div id="squadList"></div>
+  </div>
+
+  <!-- ── CAREER VIEW ── -->
+  <div id="view-career" class="view">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:10px">
+      <div>
+        <h2 style="margin:0;font-family:'Barlow Condensed',sans-serif;letter-spacing:2px;font-size:24px">CAREER RECORD</h2>
+        <div style="font-size:11px;color:var(--text3);font-family:'Barlow Condensed',sans-serif;letter-spacing:1px;margin-top:2px">Personal coaching history — wins · draws · losses by club</div>
+      </div>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-ghost btn-sm" onclick="seedMyCareerHistory()" id="seedCareerBtn">⬇ Seed My History</button>
+        <button class="btn btn-primary btn-sm" onclick="openAddStint()">＋ Add Stint</button>
+      </div>
+    </div>
+
+    <div id="careerStats" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;margin-bottom:18px"></div>
+
+    <div id="careerList"></div>
   </div>
 
   <!-- ── LIBRARY VIEW ── -->
@@ -2711,6 +2730,59 @@
   </div>
 </div>
 
+<!-- ═══ ADD/EDIT COACHING STINT MODAL ═══ -->
+<div class="modal-overlay" id="stintModal">
+  <div class="modal" style="width:480px">
+    <div class="modal-header">
+      <div class="modal-title" id="stintModalTitle">Add Stint</div>
+      <button class="modal-close" onclick="closeModal('stintModal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group" style="margin-bottom:14px">
+        <label>Club / Team</label>
+        <input type="text" id="stintClub" placeholder="e.g. Houston Dynamo">
+      </div>
+      <div class="form-grid" style="margin-bottom:14px">
+        <div class="form-group">
+          <label>Start Date</label>
+          <input type="date" id="stintStart">
+        </div>
+        <div class="form-group">
+          <label>End Date <span style="color:var(--text3);font-size:10px">— leave blank if current</span></label>
+          <input type="date" id="stintEnd">
+        </div>
+      </div>
+      <div class="form-group" style="margin-bottom:14px">
+        <label>Display Label <span style="color:var(--text3);font-size:10px">— optional override, e.g. "Aug–Dec 2013"</span></label>
+        <input type="text" id="stintLabel" placeholder="auto-formatted if blank">
+      </div>
+      <div class="form-grid-3" style="margin-bottom:14px">
+        <div class="form-group">
+          <label style="color:#2eb86b">Wins</label>
+          <input type="number" id="stintWins" min="0" placeholder="0">
+        </div>
+        <div class="form-group">
+          <label style="color:#c5d12b">Draws</label>
+          <input type="number" id="stintDraws" min="0" placeholder="0">
+        </div>
+        <div class="form-group">
+          <label style="color:#ff6b6b">Losses</label>
+          <input type="number" id="stintLosses" min="0" placeholder="0">
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Notes</label>
+        <textarea id="stintNotes" placeholder="Role, achievements, context..."></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-danger btn-sm" id="deleteStintBtn" style="display:none" onclick="deleteStint()">Delete</button>
+      <button class="btn btn-ghost" onclick="closeModal('stintModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveStint()">Save Stint</button>
+    </div>
+  </div>
+</div>
+
 <!-- ═══ ADD/EDIT PLAYER MODAL ═══ -->
 <div class="modal-overlay" id="playerModal">
   <div class="modal" style="width:440px">
@@ -2894,7 +2966,7 @@ const MONTHS = ['January','February','March','April','May','June','July','August
 const MONTHS_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
 function emptyState() {
-  return { sessions: [], games: [], weekSettings: {}, media: [], settings: null, opponents: [], players: [], playerLogs: [] };
+  return { sessions: [], games: [], weekSettings: {}, media: [], settings: null, opponents: [], players: [], playerLogs: [], coachingStints: [] };
 }
 let state = emptyState();
 let currentWeek = getCurrentWeekNum();
@@ -2979,6 +3051,8 @@ async function loadAllData() {
   await loadOpponents();
   // Players + player logs — same best-effort treatment
   await loadPlayers();
+  // Coaching stints — career record
+  await loadCoachingStints();
 
   console.log(`Loaded: ${state.sessions.length} sessions, ${state.games.length} games, ${state.media.length} drills, ${state.opponents.length} opponents`);
   setSyncStatus(anyFailed ? 'error' : 'ok');
@@ -3228,7 +3302,7 @@ function switchTab(tab) {
   document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
   document.getElementById('view-' + tab).classList.add('active');
   document.querySelectorAll('.nav-tab').forEach(t => {
-    const match = tab === 'loading' ? 'planned' : tab === 'library' ? 'drill' : tab === 'matches' ? '⚽ matches' : tab === 'squad' ? '👥 squad' : tab;
+    const match = tab === 'loading' ? 'planned' : tab === 'library' ? 'drill' : tab === 'matches' ? '⚽ matches' : tab === 'squad' ? '👥 squad' : tab === 'career' ? '🏆 career' : tab;
     if (t.textContent.toLowerCase().includes(match)) t.classList.add('active');
   });
   if (tab === 'year')     renderYear();
@@ -3237,6 +3311,7 @@ function switchTab(tab) {
   if (tab === 'week')     renderWeek();
   if (tab === 'matches')  renderMatches();
   if (tab === 'squad')    renderSquad();
+  if (tab === 'career')   renderCareer();
   if (tab === 'library')  renderLibrary();
   if (tab === 'settings') renderSettings();
 }
@@ -6588,6 +6663,234 @@ async function saveRosterLogs(rosterEntries, sourceType, sourceId, dateStr) {
     sessionId: r.session_id, gameId: r.game_id,
     status: r.status, plannedMinutes: r.planned_minutes, actualMinutes: r.actual_minutes,
   }));
+}
+
+// ── COACHING CAREER ──
+
+let editingStintId = null;
+
+async function loadCoachingStints() {
+  if (!sb || !currentUser) return;
+  try {
+    const { data, error } = await sb.from('coaching_stints')
+      .select('*')
+      .eq('user_id', currentUser.id)
+      .order('start_date', { ascending: true, nullsFirst: true });
+    if (error) throw error;
+    state.coachingStints = (data || []).map(r => ({
+      id: r.id, clubName: r.club_name,
+      startDate: r.start_date, endDate: r.end_date,
+      periodLabel: r.period_label,
+      wins: r.wins || 0, draws: r.draws || 0, losses: r.losses || 0,
+      notes: r.notes, sortOrder: r.sort_order || 0,
+    }));
+  } catch (e) {
+    console.warn('loadCoachingStints failed (table may not exist yet):', e.message);
+    state.coachingStints = [];
+  }
+}
+
+function formatStintPeriod(s) {
+  if (s.periodLabel) return s.periodLabel;
+  const fmt = d => d ? new Date(d + 'T12:00:00').toLocaleDateString('en', { month: 'short', year: 'numeric' }) : '';
+  if (s.startDate && !s.endDate) return `${fmt(s.startDate)} – Present`;
+  if (s.startDate && s.endDate) {
+    const start = fmt(s.startDate);
+    const end   = fmt(s.endDate);
+    return start === end ? start : `${start} – ${end}`;
+  }
+  return s.periodLabel || '';
+}
+
+function renderCareer() {
+  renderCareerStats();
+  renderCareerList();
+  // Hide seed button if data already exists
+  const seedBtn = document.getElementById('seedCareerBtn');
+  if (seedBtn) seedBtn.style.display = state.coachingStints.length > 0 ? 'none' : 'inline-flex';
+}
+
+function renderCareerStats() {
+  const el = document.getElementById('careerStats');
+  if (!el) return;
+  const s = state.coachingStints || [];
+  const totalW = s.reduce((a, x) => a + (x.wins || 0), 0);
+  const totalD = s.reduce((a, x) => a + (x.draws || 0), 0);
+  const totalL = s.reduce((a, x) => a + (x.losses || 0), 0);
+  const totalMatches = totalW + totalD + totalL;
+  const winPct = totalMatches ? Math.round((totalW / totalMatches) * 100) : 0;
+  const ppg = totalMatches ? (((totalW * 3) + totalD) / totalMatches).toFixed(2) : '0.00';
+
+  const stat = (label, value, color) => `
+    <div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:10px 12px">
+      <div style="font-size:10px;color:var(--text3);font-family:'Barlow Condensed',sans-serif;letter-spacing:1.5px;text-transform:uppercase">${label}</div>
+      <div style="font-family:'JetBrains Mono',monospace;font-size:20px;font-weight:700;color:${color || 'var(--text)'};margin-top:2px">${value}</div>
+    </div>`;
+  el.innerHTML = [
+    stat('Stints', s.length),
+    stat('Matches', totalMatches),
+    stat('Wins', totalW, '#2eb86b'),
+    stat('Draws', totalD, '#c5d12b'),
+    stat('Losses', totalL, '#ff6b6b'),
+    stat('Win %', winPct + '%'),
+    stat('PPG', ppg),
+  ].join('');
+}
+
+function renderCareerList() {
+  const host = document.getElementById('careerList');
+  if (!host) return;
+  const stints = (state.coachingStints || []).slice().sort((a, b) => {
+    const sa = a.startDate ? new Date(a.startDate).getTime() : 0;
+    const sb = b.startDate ? new Date(b.startDate).getTime() : 0;
+    return sa - sb;
+  });
+  if (stints.length === 0) {
+    host.innerHTML = `<div style="text-align:center;padding:40px;color:var(--text3);font-family:'Barlow Condensed',sans-serif;letter-spacing:1px">No coaching stints yet — click ⬇ Seed My History to pre-load your career, or ＋ Add Stint manually.</div>`;
+    return;
+  }
+  host.innerHTML = `
+    <div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden">
+      <div style="display:grid;grid-template-columns:1fr 180px 50px 50px 50px 70px 50px;gap:8px;padding:10px 14px;background:var(--surface3);font-size:10px;font-family:'Barlow Condensed',sans-serif;letter-spacing:1.5px;color:var(--text3);text-transform:uppercase">
+        <span>Club</span><span>Period</span><span style="color:#2eb86b">W</span><span style="color:#c5d12b">D</span><span style="color:#ff6b6b">L</span><span>Win %</span><span></span>
+      </div>
+      ${stints.map(s => {
+        const total = (s.wins||0) + (s.draws||0) + (s.losses||0);
+        const wp = total ? Math.round((s.wins / total) * 100) : 0;
+        return `
+          <div onclick="openEditStint('${s.id}')" style="display:grid;grid-template-columns:1fr 180px 50px 50px 50px 70px 50px;gap:8px;padding:10px 14px;border-top:1px solid var(--border);font-size:12px;align-items:center;cursor:pointer" onmouseover="this.style.background='var(--surface3)'" onmouseout="this.style.background=''">
+            <span style="font-weight:600">${s.clubName}</span>
+            <span style="font-size:11px;color:var(--text2);font-family:'Barlow Condensed',sans-serif;letter-spacing:0.5px">${formatStintPeriod(s)}</span>
+            <span style="font-family:'JetBrains Mono',monospace;color:#2eb86b">${s.wins || 0}</span>
+            <span style="font-family:'JetBrains Mono',monospace;color:#c5d12b">${s.draws || 0}</span>
+            <span style="font-family:'JetBrains Mono',monospace;color:#ff6b6b">${s.losses || 0}</span>
+            <span style="font-family:'JetBrains Mono',monospace;color:${wp >= 50 ? '#2eb86b' : wp >= 30 ? '#c5d12b' : 'var(--text3)'}">${total ? wp + '%' : '—'}</span>
+            <button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();openEditStint('${s.id}')">✏</button>
+          </div>
+        `;
+      }).join('')}
+    </div>
+  `;
+}
+
+function openAddStint() {
+  editingStintId = null;
+  document.getElementById('stintModalTitle').textContent = 'Add Stint';
+  document.getElementById('deleteStintBtn').style.display = 'none';
+  ['stintClub','stintStart','stintEnd','stintLabel','stintWins','stintDraws','stintLosses','stintNotes'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+  openModal('stintModal');
+}
+
+function openEditStint(id) {
+  const s = state.coachingStints.find(x => x.id === id);
+  if (!s) return;
+  editingStintId = id;
+  document.getElementById('stintModalTitle').textContent = 'Edit Stint';
+  document.getElementById('deleteStintBtn').style.display = 'inline-flex';
+  document.getElementById('stintClub').value   = s.clubName;
+  document.getElementById('stintStart').value  = s.startDate || '';
+  document.getElementById('stintEnd').value    = s.endDate || '';
+  document.getElementById('stintLabel').value  = s.periodLabel || '';
+  document.getElementById('stintWins').value   = s.wins || '';
+  document.getElementById('stintDraws').value  = s.draws || '';
+  document.getElementById('stintLosses').value = s.losses || '';
+  document.getElementById('stintNotes').value  = s.notes || '';
+  openModal('stintModal');
+}
+
+async function saveStint() {
+  const club = document.getElementById('stintClub').value.trim();
+  if (!club) { alert('Club / team name is required.'); return; }
+  const row = {
+    id: editingStintId || (crypto.randomUUID ? crypto.randomUUID() : genId()),
+    user_id: currentUser.id,
+    club_name:    club,
+    start_date:   document.getElementById('stintStart').value || null,
+    end_date:     document.getElementById('stintEnd').value   || null,
+    period_label: document.getElementById('stintLabel').value || null,
+    wins:   parseInt(document.getElementById('stintWins').value)   || 0,
+    draws:  parseInt(document.getElementById('stintDraws').value)  || 0,
+    losses: parseInt(document.getElementById('stintLosses').value) || 0,
+    notes:  document.getElementById('stintNotes').value || null,
+  };
+  setSyncStatus('syncing');
+  const { error } = await sb.from('coaching_stints').upsert(row);
+  if (error) { setSyncStatus('error'); alert('Save failed: ' + error.message); return; }
+
+  const local = {
+    id: row.id, clubName: club,
+    startDate: row.start_date, endDate: row.end_date,
+    periodLabel: row.period_label,
+    wins: row.wins, draws: row.draws, losses: row.losses,
+    notes: row.notes,
+  };
+  if (editingStintId) {
+    const idx = state.coachingStints.findIndex(x => x.id === editingStintId);
+    if (idx !== -1) state.coachingStints[idx] = local;
+  } else {
+    state.coachingStints.push(local);
+  }
+  setSyncStatus('ok');
+  closeModal('stintModal');
+  renderCareer();
+}
+
+async function deleteStint() {
+  if (!editingStintId) return;
+  if (!confirm('Delete this stint?')) return;
+  setSyncStatus('syncing');
+  const { error } = await sb.from('coaching_stints').delete().eq('id', editingStintId);
+  if (error) { setSyncStatus('error'); alert('Delete failed: ' + error.message); return; }
+  state.coachingStints = state.coachingStints.filter(s => s.id !== editingStintId);
+  setSyncStatus('ok');
+  closeModal('stintModal');
+  renderCareer();
+}
+
+// Pre-loaded career data for the coach using this app (parsed from chat)
+const PRESEED_CAREER = [
+  { clubName: 'Swansea City',              startDate: '2011-08-01', endDate: '2012-06-30', periodLabel: '2011–12' },
+  { clubName: 'Portland Timbers',          startDate: '2013-08-01', endDate: '2013-12-31', periodLabel: 'Aug–Dec 2013' },
+  { clubName: "Oregon State Men's Soccer", startDate: '2014-01-01', endDate: '2014-12-31', periodLabel: '2014' },
+  { clubName: 'Houston Dynamo',            startDate: '2015-01-01', endDate: '2015-12-31', periodLabel: '2015' },
+  { clubName: 'Houston Dynamo',            startDate: '2016-01-01', endDate: '2016-12-31', periodLabel: '2016' },
+  { clubName: 'Orlando City B',            startDate: '2017-01-01', endDate: '2017-12-31', periodLabel: '2017' },
+  { clubName: 'Real Monarchs',             startDate: '2018-01-01', endDate: '2021-12-31', periodLabel: '2018–2021' },
+  { clubName: 'Miami FC',                  startDate: '2022-01-01', endDate: '2023-12-31', periodLabel: '2022–23' },
+  { clubName: 'Austin FC',                 startDate: '2024-01-01', endDate: '2024-12-31', periodLabel: '2024' },
+  { clubName: 'Austin FC',                 startDate: '2025-01-01', endDate: '2025-04-01', periodLabel: 'Jan–Apr 1, 2025' },
+  { clubName: 'DC United',                 startDate: '2025-07-26', endDate: '2025-12-31', periodLabel: 'Jul 26–Dec 2025' },
+  { clubName: 'Houston Dynamo',            startDate: '2026-01-01', endDate: null,         periodLabel: '2026 – Present' },
+];
+
+async function seedMyCareerHistory() {
+  if (state.coachingStints.length > 0) {
+    if (!confirm(`You already have ${state.coachingStints.length} stint(s) recorded. Seed again anyway?`)) return;
+  }
+  const rows = PRESEED_CAREER.map(s => ({
+    user_id: currentUser.id,
+    club_name: s.clubName,
+    start_date: s.startDate,
+    end_date: s.endDate,
+    period_label: s.periodLabel,
+    wins: 0, draws: 0, losses: 0,
+  }));
+  setSyncStatus('syncing');
+  const { data, error } = await sb.from('coaching_stints').insert(rows).select();
+  if (error) { setSyncStatus('error'); alert('Seed failed: ' + error.message); return; }
+  (data || []).forEach(r => state.coachingStints.push({
+    id: r.id, clubName: r.club_name,
+    startDate: r.start_date, endDate: r.end_date,
+    periodLabel: r.period_label,
+    wins: r.wins, draws: r.draws, losses: r.losses,
+    notes: r.notes,
+  }));
+  setSyncStatus('ok');
+  renderCareer();
+  alert(`Seeded ${rows.length} coaching stints. Click any row to fill in W/D/L.`);
 }
 
 async function loadOpponents() {
