@@ -1832,6 +1832,7 @@
   <div class="nav-tab" onclick="switchTab('matches')">⚽ Matches</div>
   <div class="nav-tab" onclick="switchTab('squad')">👥 Squad</div>
   <div class="nav-tab" onclick="switchTab('library')">📚 Drill Library</div>
+  <div class="nav-tab" onclick="switchTab('methodology')">📖 Methodology</div>
   <div class="nav-tab" onclick="switchTab('settings')">⚙ Settings</div>
 </nav>
 
@@ -2000,6 +2001,22 @@
     </div>
     <div class="lib-cat-tabs" id="libCatTabs"></div>
     <div class="lib-grid" id="libGrid"></div>
+  </div>
+
+  <!-- ── METHODOLOGY VIEW ── -->
+  <div id="view-methodology" class="view">
+    <div style="max-width:880px">
+      <div style="margin-bottom:20px">
+        <h2 style="margin:0;font-family:'Barlow Condensed',sans-serif;letter-spacing:2px;font-size:24px">METHODOLOGY</h2>
+        <div style="font-size:11px;color:var(--text3);font-family:'Barlow Condensed',sans-serif;letter-spacing:1px;margin-top:2px">Your coaching philosophy + standards · expand each section over time</div>
+        <div style="margin-top:12px;padding:10px 14px;border-left:3px solid var(--accent);background:rgba(0,212,255,0.05);font-size:12px;color:var(--text2);line-height:1.5">
+          📌 <b>Placeholder page.</b> This is a structured prompt — the section headers below are reminders of what a complete methodology document covers. Fill them in as you go. We can later make each section live-editable (saved to Supabase) when you're ready.
+        </div>
+      </div>
+
+      <!-- Sections rendered from a config array so it's easy to add/remove later -->
+      <div id="methodologySections"></div>
+    </div>
   </div>
 
   <!-- ── SETTINGS VIEW ── -->
@@ -3234,7 +3251,7 @@ function switchTab(tab) {
   document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
   document.getElementById('view-' + tab).classList.add('active');
   document.querySelectorAll('.nav-tab').forEach(t => {
-    const match = tab === 'loading' ? 'planned' : tab === 'library' ? 'drill' : tab === 'matches' ? '⚽ matches' : tab === 'squad' ? '👥 squad' : tab;
+    const match = tab === 'loading' ? 'planned' : tab === 'library' ? 'drill' : tab === 'matches' ? '⚽ matches' : tab === 'squad' ? '👥 squad' : tab === 'methodology' ? '📖 methodology' : tab;
     if (t.textContent.toLowerCase().includes(match)) t.classList.add('active');
   });
   if (tab === 'year')     renderYear();
@@ -3243,6 +3260,7 @@ function switchTab(tab) {
   if (tab === 'week')     renderWeek();
   if (tab === 'matches')  renderMatches();
   if (tab === 'squad')    renderSquad();
+  if (tab === 'methodology') renderMethodology();
   if (tab === 'library')  renderLibrary();
   if (tab === 'settings') renderSettings();
 }
@@ -6594,6 +6612,74 @@ async function saveRosterLogs(rosterEntries, sourceType, sourceId, dateStr) {
     sessionId: r.session_id, gameId: r.game_id,
     status: r.status, plannedMinutes: r.planned_minutes, actualMinutes: r.actual_minutes,
   }));
+}
+
+// ── METHODOLOGY (placeholder page) ──
+// Structured prompt of what a full coaching-methodology document should cover.
+// Static for now — wire each section to Supabase later when ready to make it editable.
+const METHODOLOGY_SECTIONS = [
+  {
+    title: 'Playing Philosophy',
+    prompt: 'High-level identity of your team. What is the non-negotiable style? What does a successful match look like (process, not result)? Examples: "Dominate possession in the opposition half · win the ball back within 6 seconds · create overloads through full-back rotations".',
+  },
+  {
+    title: 'Tactical Principles — In Possession',
+    prompt: 'Build-up structure, midfield rotation, attacking patterns, finishing moments. How do you progress through thirds? What are your reference triangles?',
+  },
+  {
+    title: 'Tactical Principles — Out of Possession',
+    prompt: 'Defensive shape (high/mid/low block), pressing triggers, defensive structure when overloaded, cover/balance principles, set defending rules.',
+  },
+  {
+    title: 'Transitions',
+    prompt: 'Attacking transition: first 3 seconds after winning the ball — direct vs build-up rules. Defensive transition: counter-pressing immediacy, who drops, who presses, when to foul.',
+  },
+  {
+    title: 'Periodization Model',
+    prompt: 'Tactical Periodization (Vitor Frade), Block, Polarized, or hybrid? What is your weekly microcycle template (MD-4, MD-3, MD-2, MD-1, MD, MD+1, MD+2)? How do you load-cap each session type?',
+  },
+  {
+    title: 'Set Pieces',
+    prompt: 'Attacking corners (zonal/man/hybrid), attacking free kicks, defensive corners, throw-ins (attacking and defensive), penalty taker order, set piece coach owner.',
+  },
+  {
+    title: 'Player Development',
+    prompt: 'How do individual development plans get built? Cadence of 1-on-1 reviews. Position-specific KPIs. How U18/B team integration works.',
+  },
+  {
+    title: 'Recovery & Wellness',
+    prompt: 'Post-match recovery protocol (cool-down, nutrition window, sleep targets, hydration). Wellness monitoring (sRPE, sleep score, soreness). Travel recovery rules.',
+  },
+  {
+    title: 'Load Management Rules',
+    prompt: 'TD/HSR/Sprint targets per microcycle type. Acute:Chronic Workload thresholds. Individual deviation rules. When to pull a player from a session.',
+  },
+  {
+    title: 'Standards & Non-Negotiables',
+    prompt: 'Punctuality, dress code, on-pitch behaviour, social media, leadership group expectations. What gets a player benched. What gets a player removed from the squad.',
+  },
+  {
+    title: 'Communication',
+    prompt: 'Pre-match briefing format. Half-time structure. Post-match review cadence. Weekly tactical meeting format. Coaches-to-leadership reporting.',
+  },
+  {
+    title: 'Staff Roles & Responsibilities',
+    prompt: 'Who owns warm-up. Who owns set pieces. Who runs the GPS data review. Who is the analytics lead. Who handles individual development plans.',
+  },
+];
+
+function renderMethodology() {
+  const host = document.getElementById('methodologySections');
+  if (!host) return;
+  host.innerHTML = METHODOLOGY_SECTIONS.map((s, i) => `
+    <div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:14px 18px;margin-bottom:12px">
+      <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:6px">
+        <h3 style="margin:0;font-family:'Barlow Condensed',sans-serif;letter-spacing:1.5px;font-size:15px;color:var(--text)">${(i+1).toString().padStart(2,'0')} · ${s.title.toUpperCase()}</h3>
+        <span style="font-size:9px;color:var(--text3);font-family:'Barlow Condensed',sans-serif;letter-spacing:1.5px">TO EXPAND</span>
+      </div>
+      <div style="font-size:12px;color:var(--text2);line-height:1.55;font-family:'Barlow Condensed',sans-serif;letter-spacing:0.3px">${s.prompt}</div>
+    </div>
+  `).join('');
 }
 
 async function loadOpponents() {
