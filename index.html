@@ -2008,13 +2008,18 @@
     <div style="max-width:880px">
       <div style="margin-bottom:20px">
         <h2 style="margin:0;font-family:'Barlow Condensed',sans-serif;letter-spacing:2px;font-size:24px">METHODOLOGY</h2>
-        <div style="font-size:11px;color:var(--text3);font-family:'Barlow Condensed',sans-serif;letter-spacing:1px;margin-top:2px">Your coaching philosophy + standards · expand each section over time</div>
-        <div style="margin-top:12px;padding:10px 14px;border-left:3px solid var(--accent);background:rgba(0,212,255,0.05);font-size:12px;color:var(--text2);line-height:1.5">
-          📌 <b>Placeholder page.</b> This is a structured prompt — the section headers below are reminders of what a complete methodology document covers. Fill them in as you go. We can later make each section live-editable (saved to Supabase) when you're ready.
-        </div>
+        <div style="font-size:11px;color:var(--text3);font-family:'Barlow Condensed',sans-serif;letter-spacing:1px;margin-top:2px">Personal performance-coaching methodology · drawn from RT Coaching Diary</div>
       </div>
 
-      <!-- Sections rendered from a config array so it's easy to add/remove later -->
+      <!-- Hero quote pulled from the diary -->
+      <div style="margin-bottom:20px;padding:18px 22px;border-left:4px solid var(--accent);background:linear-gradient(90deg,rgba(0,212,255,0.08),rgba(0,212,255,0.01));border-radius:0 var(--radius) var(--radius) 0">
+        <div style="font-style:italic;font-size:15px;color:var(--text);line-height:1.55;font-family:'Barlow Condensed',sans-serif;letter-spacing:0.4px">
+          "Tactical Periodization is a Methodology precisely because it is a concept-methodological orientation, not a method or technique. It is a tailor-made suit, open to the world, understanding training as a combination of art and science, and therefore prepared to address real-world problems."
+        </div>
+        <div style="margin-top:6px;font-size:10px;color:var(--text3);font-family:'Barlow Condensed',sans-serif;letter-spacing:1.5px">— FROM "CONFESSIONS OF A RECOVERING REDUCTIONIST" · RYAN THAMM</div>
+      </div>
+
+      <!-- Methodology sections rendered from rich content -->
       <div id="methodologySections"></div>
     </div>
   </div>
@@ -6614,72 +6619,294 @@ async function saveRosterLogs(rosterEntries, sourceType, sourceId, dateStr) {
   }));
 }
 
-// ── METHODOLOGY (placeholder page) ──
-// Structured prompt of what a full coaching-methodology document should cover.
-// Static for now — wire each section to Supabase later when ready to make it editable.
+// ── METHODOLOGY ──
+// Personal performance-coaching methodology drawn from RT's coaching diary
+// "Confessions of a Recovering Reductionist". Section types: narrative |
+// principles | morphocycle | colors | quote | contrast.
+
 const METHODOLOGY_SECTIONS = [
   {
-    title: 'Playing Philosophy',
-    prompt: 'High-level identity of your team. What is the non-negotiable style? What does a successful match look like (process, not result)? Examples: "Dominate possession in the opposition half · win the ball back within 6 seconds · create overloads through full-back rotations".',
+    type: 'narrative',
+    title: 'Core Identity',
+    body: [
+      'Tactical Periodization (TP) is a <b>theorem in action</b> — born from real practice, continually adjusted. Not a closed system. A conceptual-methodological orientation that merges art and science through continuous reflection and contextual adaptation.',
+      'The Game Model is never finished. It evolves through lived experience and interaction. The Morphocycle is the operational expression of the methodology — an open, rhythmic structure that stabilises performance while allowing adaptation.',
+      'My evolution as a coach has been a journey from <i>intuition → objectivity → synthesis</i> — where data informs but does not dictate. Performance work is the art of shaping evolving contexts, not just managing physical data.',
+    ],
   },
   {
-    title: 'Tactical Principles — In Possession',
-    prompt: 'Build-up structure, midfield rotation, attacking patterns, finishing moments. How do you progress through thirds? What are your reference triangles?',
+    type: 'quote',
+    body: '"You train by doing what you want to do, and you recover by doing what has led you to fatigue. The dosage is what changes."',
+    attribution: 'Vítor Frade',
   },
   {
-    title: 'Tactical Principles — Out of Possession',
-    prompt: 'Defensive shape (high/mid/low block), pressing triggers, defensive structure when overloaded, cover/balance principles, set defending rules.',
+    type: 'principles',
+    title: 'Five Central Guiding Principles',
+    items: [
+      { k: 'Stabilisation', v: 'Rhythm and repetition sustain the collective game model.' },
+      { k: 'Specificity',   v: 'All exercises must express the identity of play — no isolated fitness work.' },
+      { k: 'Integration',   v: 'Tactical, physical, emotional and cognitive systems interact as one.' },
+      { k: 'Adaptability',  v: 'The Morphocycle is a living matrix that evolves, not a prescription to follow.' },
+      { k: 'Communication', v: 'Between players, staff and levels — to sustain coherence and feedback loops.' },
+    ],
   },
   {
-    title: 'Transitions',
-    prompt: 'Attacking transition: first 3 seconds after winning the ball — direct vs build-up rules. Defensive transition: counter-pressing immediacy, who drops, who presses, when to foul.',
+    type: 'principles',
+    title: 'Three Methodological Principles · Articulation of Sense',
+    note: 'These do not operate sequentially. They continuously co-determine each other under the Supra-Principle of Specificity.',
+    items: [
+      { k: 'Propensities',          v: 'Create contexts that generate desired regularities of interaction. Space, time, rules and task design establish the initial state — players co-create meaning through perception-action cycles. Coach\'s role: shape contexts where the game model appears naturally.' },
+      { k: 'Complex Progression',   v: 'Complexity develops within specificity — not from general to specific. Progression is non-linear. Apply the "Divine Proportion": when to add, reduce, stop, or continue. The aim is not total control but to not let the process get out of control.' },
+      { k: 'Horizontal Alternation', v: 'Regulates day-to-day alternation of performance demands across the week. Balances intensity, volume and exercise type (fundamental vs complementary) to ensure systemic integration of performance, fatigue and recovery.' },
+    ],
   },
   {
-    title: 'Periodization Model',
-    prompt: 'Tactical Periodization (Vitor Frade), Block, Polarized, or hybrid? What is your weekly microcycle template (MD-4, MD-3, MD-2, MD-1, MD, MD+1, MD+2)? How do you load-cap each session type?',
+    type: 'morphocycle',
+    title: 'The Pattern Morphocycle · Sunday → Sunday',
+    note: 'Each week is a dynamic cycle between two matches — a correspondence between training and play that continuously deforms and reforms the team\'s identity. The Morphocycle exists to manage rhythm, not fatigue.',
+    days: [
+      { day: 'Sunday',    focus: 'Competition (Game)',        color: 'Medium Green',  logic: 'The maximum expression of the model of play. The week\'s work converges here. Subsequent days reorganise and renew.' },
+      { day: 'Monday',    focus: 'Passive Recovery',          color: 'White',         logic: 'Psychological and emotional recovery prioritised. Allows somatisation of the game experience and CNS restoration.' },
+      { day: 'Tuesday',   focus: 'Active Recovery (+3 / −4)', color: 'Light Green',   logic: 'Recovery and realisation of work — physically and mentally. Short, specific games (3v3 + GK). Stimulate bioenergetic systems used in the match.' },
+      { day: 'Wednesday', focus: 'Maximal Extensibility',     color: 'Blue',          logic: 'Fundamental (analytical, eccentric, max tension) + complementary (game-based meso/micro principles). Develop YAP/TAZ activation and recovery synergy.' },
+      { day: 'Thursday',  focus: 'Macro Principles',          color: 'Dark Green',    logic: 'Collective acquisition day — most complex. Macro principles of the game model. Dense inter-sectoral tactical work with reflective pauses and contextual feedback.' },
+      { day: 'Friday',    focus: 'Maximal Velocity',          color: 'Yellow',        logic: 'Express maximal speed and coordination (> 25–30m). Focus on efficiency and freshness. Complement with small tactical accelerations and System 1 work.' },
+      { day: 'Saturday',  focus: 'Pre-Match Activation',      color: 'Light Yellow',  logic: 'Decision-speed and anticipation. Low-load, high-clarity contexts reinforcing automatisms and collective confidence.' },
+    ],
   },
   {
-    title: 'Set Pieces',
-    prompt: 'Attacking corners (zonal/man/hybrid), attacking free kicks, defensive corners, throw-ins (attacking and defensive), penalty taker order, set piece coach owner.',
+    type: 'colors',
+    title: 'Color Logic of the Morphocycle',
+    intro: 'Blue + Yellow = Green. Blue (tension, fast-twitch) and Yellow (speed of contraction) interact to produce Green — the emergent integrated performance expression.',
+    items: [
+      { color: '#2eb86b', name: 'Medium Green',  meaning: 'Match',                 focus: 'Full expression of the game\'s complexity.' },
+      { color: '#ffffff', name: 'White',         meaning: 'Rest',                  focus: 'Psychological and neural decompression.' },
+      { color: '#7ed957', name: 'Light Green',   meaning: 'Active Recovery',       focus: 'Bioenergetic reactivation; short-duration, low-complexity actions.' },
+      { color: '#4a90e2', name: 'Blue',          meaning: 'Maximal Extensibility', focus: 'Non-game eccentric max-tension tasks activating YAP/TAZ pathways (cell growth / regeneration).' },
+      { color: '#ffd700', name: 'Yellow',        meaning: 'Maximal Velocity',      focus: 'Non-game sprint-based work · activates Velociphin → fast myosin gene.' },
+      { color: '#fff59d', name: 'Light Yellow',  meaning: 'Pre-Match Activation',  focus: 'Low-intensity, habit-based tactical rhythms.' },
+      { color: '#1b5e20', name: 'Dark Green',    meaning: 'Macro Principles',      focus: 'Collective-scale tasks to refine game model coherence.' },
+    ],
   },
   {
-    title: 'Player Development',
-    prompt: 'How do individual development plans get built? Cadence of 1-on-1 reviews. Position-specific KPIs. How U18/B team integration works.',
+    type: 'principles',
+    title: 'Training Principles',
+    items: [
+      { k: 'Biological Individuality', v: 'Unique responses and adaptive mechanisms per player.' },
+      { k: 'Adaptation',                v: 'Ability to assimilate and respond to stimuli — occurs during recovery, guided by prior load.' },
+      { k: 'Overload',                  v: 'Stimulus above habitual levels. Dose too low has no effect; optimal dose drives adaptation; excessive dose causes damage (Roux / Arndt-Schultz).' },
+      { k: 'Volume-Intensity Interdependence', v: 'These move together — cannot be optimised in isolation.' },
+      { k: 'Specificity',               v: 'All work must be justifiable in relation to the game idea and player-context. A Categorical Imperative (Kant).' },
+      { k: 'Variability',               v: 'Required to break patterns and build robust ones. Pair with redundancy.' },
+      { k: 'Reversibility · Health · Safety · Trainability · Maintenance', v: 'Interrelated foundations — none stands above the others.' },
+    ],
   },
   {
-    title: 'Recovery & Wellness',
-    prompt: 'Post-match recovery protocol (cool-down, nutrition window, sleep targets, hydration). Wellness monitoring (sRPE, sleep score, soreness). Travel recovery rules.',
+    type: 'narrative',
+    title: 'Performance–Fatigue–Recovery Trinomial',
+    body: [
+      'Performance, fatigue and recovery are <b>interdependent</b>. Adaptation occurs during recovery, guided by prior load. Both external and internal load must be integrated to avoid chronic maladaptation and sustain long-term availability and performance.',
+      'Recovery is part of performance — not a separate domain. Player autonomy and trust drive it. Sensibility is essential: we respect players\' habits and beliefs.',
+      'In tactical periodization, <b>specificity begins with the game</b>. Physical and tactical fatigue are inseparable. Energy renewal enables players to learn and perform within the game model.',
+    ],
   },
   {
-    title: 'Load Management Rules',
-    prompt: 'TD/HSR/Sprint targets per microcycle type. Acute:Chronic Workload thresholds. Individual deviation rules. When to pull a player from a session.',
+    type: 'narrative',
+    title: 'Team as a Complex Adaptive System',
+    body: [
+      'Football cannot be divided into isolated parts. Everything is interrelated. The game and the player are emergent systems, shaped by continuous interaction between individuals, team and environment.',
+      'Key properties: <b>circular causality</b> (actions change the system, which changes future actions) · <b>co-adaptation</b> (we adapt with opponents, not in isolation) · <b>synergies</b> (functional couplings between players, lines and units emerge to solve game problems) · <b>degeneracy</b> (same outcome can be achieved through different player configurations and action patterns).',
+      'For unpredictability to exist, there must be an opponent striving to anticipate. Internally we want high in-group predictability and shared affordances. Externally we want sufficient diversity and degeneracy to resist opposition prediction.',
+    ],
   },
   {
-    title: 'Standards & Non-Negotiables',
-    prompt: 'Punctuality, dress code, on-pitch behaviour, social media, leadership group expectations. What gets a player benched. What gets a player removed from the squad.',
+    type: 'narrative',
+    title: 'Game Model & Training Design',
+    body: [
+      'Training must <b>express the Game Model</b> — the game idea drives all tactical, technical and physical work. Macro (e.g. constructed attack) → Meso (open and depth / play together) → Micro (mobility / concentration).',
+      'Representative design ensures learning reflects the reality of the game, maintaining the connection between perception, action and meaning.',
+      'Specificity is a continuum: running is low · positional warm-up is low-moderate · rondo 7v2 is general collective · rondo 4v4+3 or constrained games with clear intentions are high. The "capital S" increases as constraints, roles, spaces, intentions and information better reflect our real game.',
+    ],
   },
   {
-    title: 'Communication',
-    prompt: 'Pre-match briefing format. Half-time structure. Post-match review cadence. Weekly tactical meeting format. Coaches-to-leadership reporting.',
+    type: 'narrative',
+    title: 'Player-Centred Approach',
+    body: [
+      'Learning is optimised when players are happy and mentally recovered. <b>Simpler exercises, focused repetitions and attention to preferences often outperform complex, overloaded sessions.</b>',
+      'Avoid over-complicating feedback — players may struggle to process too much information. Consistency in messaging facilitates habit formation. Listen to players — their insights are as valuable as the coach\'s instructions.',
+      'Plan sessions with clear priorities but remain flexible in the moment. Believe in your methods and principles — conviction drives success. Focus on what matters most; be flexible on minor details.',
+    ],
   },
   {
-    title: 'Staff Roles & Responsibilities',
-    prompt: 'Who owns warm-up. Who owns set pieces. Who runs the GPS data review. Who is the analytics lead. Who handles individual development plans.',
+    type: 'narrative',
+    title: 'Data Philosophy',
+    body: [
+      'Football is too complex to be <b>data-driven</b>; practitioners should be <b>data-informed</b>. Data supports but never replaces professional judgement.',
+      'Define the question before collecting data. Use metrics intentionally and selectively. Technology should enhance understanding, not dominate it — critical interpretation is the true advantage.',
+      'Models are guides, not gospel. The map is not the territory. Don\'t reduce performance to one metric or load number — combine objective and lived data.',
+    ],
+  },
+  {
+    type: 'principles',
+    title: 'Amateur / Multi-Competition Adaptations',
+    note: 'Amateur Morphocycles must respect availability and flexibility. Focus on maintaining the logic, not the template. Improvisation and contextual awareness ensure stability even with limited resources.',
+    items: [
+      { k: '6 days available', v: 'Full Morphocycle.' },
+      { k: '5 days available', v: 'Omit Macro Principles day.' },
+      { k: '4 days available', v: 'Omit Maximal Extensibility day.' },
+      { k: '3 days available', v: 'Prioritise Active Recovery and Pre-match Activation.' },
+      { k: 'Multi-comp players (futsal / 7v7 overlap)', v: 'Communication first. Limit max extensibility / velocity exposures near matches. Mixed sessions (partial acquisition + recovery tasks). Preserve coherence individually.' },
+    ],
+  },
+  {
+    type: 'contrast',
+    title: 'Lessons Learned — Two Models Observed',
+    a: {
+      label: 'WHAT DOES NOT WORK',
+      color: '#ff6b6b',
+      items: [
+        'Command-driven, top-down environment. Every decision judged by outcome (<i>resulting</i>) rather than the reasoning behind it.',
+        '45 minutes of warm-up before players touch anything meaningful. Players mentally numb before training starts.',
+        'Physical prep <i>causing</i> the tactics instead of supporting them. The inversion that kills transfer.',
+        'When things go wrong, control tightens. Fear increases. Mistakes are punished, collaboration disappears.',
+        'Excessive constraints in training that strip players of opportunities to dribble, improvise and create — the final third is coached <i>out</i> of them.',
+      ],
+    },
+    b: {
+      label: 'WHAT WORKS',
+      color: '#2eb86b',
+      items: [
+        'Freedom replaces fear. Players make decisions, take risks, problem-solve. Mistakes treated as learning moments.',
+        'Simplicity and clarity in message and environment. Honest communication between staff and coach.',
+        '<i>Via Negativa</i> — improvement through subtraction. Remove what suppresses natural expression rather than adding more constraints.',
+        'Less is more — clarity, communication and connection outweigh complexity.',
+        'Structure as a framework, not a cage. Use guiding principles, not hard scripts. Create environments where players can solve problems, act freely but meaningfully.',
+      ],
+    },
+  },
+  {
+    type: 'narrative',
+    title: 'Evolution of Core Concepts',
+    body: [
+      '<b>Specificity</b> · I now see specificity not as adding more detail but as <i>refining the connection</i> between training and the game. It\'s not about reproducing the game through constraints but about sustaining the intention of the game — its logic and feeling — through each activity. Simpler, purposeful sessions create deeper transfer.',
+      '<b>Intensity</b> · No longer measured by physical output alone. It\'s a <i>state</i> — emotional, cognitive and physical combined. A player\'s ability to stay engaged, attuned and connected defines real intensity. Raising this "full state" is now central to my practice.',
+      '<b>Complexity</b> · Not built by stacking more layers; it emerges from interaction. Allowing players to solve problems, adapt and explore creates complexity naturally. My role is to design environments where this can unfold without excessive interference.',
+    ],
+  },
+  {
+    type: 'quote',
+    body: '"The key to life is to eliminate the unnecessary. The rest will take care of itself."',
+    attribution: 'Nassim Taleb · Antifragile',
+  },
+  {
+    type: 'narrative',
+    title: 'Closing — What This Means For My Work',
+    body: [
+      'My role as a performance coach is to <b>create coherence</b> between environment, identity and training so the team\'s way of playing is recognisable regardless of who plays. The big things — values, style, principles — should remain constant.',
+      'I am moving from controlling variables to shaping evolving contexts. From load numbers to <i>actions, intentions and shared states</i>. From command-driven hierarchy to <b>co-owned</b> adaptation and performance.',
+      'The Morphocycle gives structure, but meaning comes from how I interpret and adapt it. <b>Control the rhythm, not the chaos.</b>',
+    ],
   },
 ];
 
 function renderMethodology() {
   const host = document.getElementById('methodologySections');
   if (!host) return;
-  host.innerHTML = METHODOLOGY_SECTIONS.map((s, i) => `
-    <div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:14px 18px;margin-bottom:12px">
-      <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:6px">
-        <h3 style="margin:0;font-family:'Barlow Condensed',sans-serif;letter-spacing:1.5px;font-size:15px;color:var(--text)">${(i+1).toString().padStart(2,'0')} · ${s.title.toUpperCase()}</h3>
-        <span style="font-size:9px;color:var(--text3);font-family:'Barlow Condensed',sans-serif;letter-spacing:1.5px">TO EXPAND</span>
-      </div>
-      <div style="font-size:12px;color:var(--text2);line-height:1.55;font-family:'Barlow Condensed',sans-serif;letter-spacing:0.3px">${s.prompt}</div>
-    </div>
-  `).join('');
+  host.innerHTML = METHODOLOGY_SECTIONS.map((s, i) => {
+    const idx = (i + 1).toString().padStart(2, '0');
+    if (s.type === 'quote') {
+      return `
+        <div style="background:var(--surface3);border-radius:var(--radius);padding:18px 22px;margin-bottom:14px;text-align:center">
+          <div style="font-style:italic;font-size:15px;color:var(--text);line-height:1.5;font-family:'Barlow Condensed',sans-serif;letter-spacing:0.3px">${s.body}</div>
+          <div style="margin-top:8px;font-size:10px;color:var(--text3);font-family:'Barlow Condensed',sans-serif;letter-spacing:1.5px">— ${s.attribution.toUpperCase()}</div>
+        </div>`;
+    }
+    if (s.type === 'narrative') {
+      return `
+        <div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:16px 20px;margin-bottom:14px">
+          <h3 style="margin:0 0 10px 0;font-family:'Barlow Condensed',sans-serif;letter-spacing:1.5px;font-size:14px;color:var(--accent)">${idx} · ${s.title.toUpperCase()}</h3>
+          ${s.body.map(p => `<p style="margin:0 0 8px 0;font-size:13px;color:var(--text2);line-height:1.6">${p}</p>`).join('')}
+        </div>`;
+    }
+    if (s.type === 'principles') {
+      return `
+        <div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:16px 20px;margin-bottom:14px">
+          <h3 style="margin:0 0 ${s.note ? '6px' : '10px'} 0;font-family:'Barlow Condensed',sans-serif;letter-spacing:1.5px;font-size:14px;color:var(--accent)">${idx} · ${s.title.toUpperCase()}</h3>
+          ${s.note ? `<div style="font-size:11px;color:var(--text3);font-style:italic;margin-bottom:10px;line-height:1.5">${s.note}</div>` : ''}
+          <div style="display:flex;flex-direction:column;gap:8px">
+            ${s.items.map(it => `
+              <div style="display:grid;grid-template-columns:180px 1fr;gap:12px;padding:6px 0;border-bottom:1px solid var(--border)">
+                <div style="font-family:'Barlow Condensed',sans-serif;font-weight:700;letter-spacing:0.5px;font-size:12px;color:var(--text)">${it.k}</div>
+                <div style="font-size:12px;color:var(--text2);line-height:1.5">${it.v}</div>
+              </div>
+            `).join('')}
+          </div>
+        </div>`;
+    }
+    if (s.type === 'morphocycle') {
+      return `
+        <div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:16px 20px;margin-bottom:14px">
+          <h3 style="margin:0 0 6px 0;font-family:'Barlow Condensed',sans-serif;letter-spacing:1.5px;font-size:14px;color:var(--accent)">${idx} · ${s.title.toUpperCase()}</h3>
+          ${s.note ? `<div style="font-size:11px;color:var(--text3);font-style:italic;margin-bottom:12px;line-height:1.5">${s.note}</div>` : ''}
+          <div style="overflow-x:auto">
+            <table style="width:100%;border-collapse:collapse;font-size:11.5px">
+              <thead>
+                <tr style="background:var(--surface3)">
+                  <th style="text-align:left;padding:8px;font-family:'Barlow Condensed',sans-serif;letter-spacing:1.5px;font-size:10px;color:var(--text3);text-transform:uppercase">Day</th>
+                  <th style="text-align:left;padding:8px;font-family:'Barlow Condensed',sans-serif;letter-spacing:1.5px;font-size:10px;color:var(--text3);text-transform:uppercase">Focus</th>
+                  <th style="text-align:left;padding:8px;font-family:'Barlow Condensed',sans-serif;letter-spacing:1.5px;font-size:10px;color:var(--text3);text-transform:uppercase">Color</th>
+                  <th style="text-align:left;padding:8px;font-family:'Barlow Condensed',sans-serif;letter-spacing:1.5px;font-size:10px;color:var(--text3);text-transform:uppercase">Core Logic</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${s.days.map(d => `
+                  <tr style="border-top:1px solid var(--border)">
+                    <td style="padding:8px;font-family:'Barlow Condensed',sans-serif;font-weight:700;letter-spacing:0.5px;color:var(--text);white-space:nowrap;vertical-align:top">${d.day}</td>
+                    <td style="padding:8px;color:var(--text);vertical-align:top">${d.focus}</td>
+                    <td style="padding:8px;color:var(--text2);vertical-align:top;white-space:nowrap">${d.color}</td>
+                    <td style="padding:8px;color:var(--text2);line-height:1.5;vertical-align:top">${d.logic}</td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          </div>
+        </div>`;
+    }
+    if (s.type === 'colors') {
+      return `
+        <div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:16px 20px;margin-bottom:14px">
+          <h3 style="margin:0 0 6px 0;font-family:'Barlow Condensed',sans-serif;letter-spacing:1.5px;font-size:14px;color:var(--accent)">${idx} · ${s.title.toUpperCase()}</h3>
+          ${s.intro ? `<div style="font-size:11px;color:var(--text3);font-style:italic;margin-bottom:12px;line-height:1.5">${s.intro}</div>` : ''}
+          <div style="display:flex;flex-direction:column;gap:6px">
+            ${s.items.map(it => `
+              <div style="display:grid;grid-template-columns:24px 130px 160px 1fr;gap:10px;padding:6px 0;border-bottom:1px solid var(--border);align-items:center">
+                <span style="width:18px;height:18px;border-radius:3px;background:${it.color};border:1px solid var(--border);display:inline-block"></span>
+                <span style="font-family:'Barlow Condensed',sans-serif;font-weight:700;letter-spacing:0.5px;font-size:12px;color:var(--text)">${it.name}</span>
+                <span style="font-size:11px;color:var(--text2);font-style:italic">${it.meaning}</span>
+                <span style="font-size:11.5px;color:var(--text2);line-height:1.5">${it.focus}</span>
+              </div>
+            `).join('')}
+          </div>
+        </div>`;
+    }
+    if (s.type === 'contrast') {
+      return `
+        <div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:16px 20px;margin-bottom:14px">
+          <h3 style="margin:0 0 12px 0;font-family:'Barlow Condensed',sans-serif;letter-spacing:1.5px;font-size:14px;color:var(--accent)">${idx} · ${s.title.toUpperCase()}</h3>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+            ${[s.a, s.b].map(side => `
+              <div style="background:var(--surface3);border-left:3px solid ${side.color};border-radius:var(--radius);padding:12px 14px">
+                <div style="font-family:'Barlow Condensed',sans-serif;letter-spacing:1.5px;font-size:10px;color:${side.color};font-weight:700;margin-bottom:8px">${side.label}</div>
+                <ul style="margin:0;padding-left:18px;font-size:11.5px;color:var(--text2);line-height:1.55">
+                  ${side.items.map(it => `<li style="margin-bottom:6px">${it}</li>`).join('')}
+                </ul>
+              </div>
+            `).join('')}
+          </div>
+        </div>`;
+    }
+    return '';
+  }).join('');
 }
 
 async function loadOpponents() {
