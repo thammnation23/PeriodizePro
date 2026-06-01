@@ -1829,6 +1829,7 @@
   <div class="nav-tab" onclick="switchTab('loading')">📊 Planned Loading</div>
   <div class="nav-tab" onclick="switchTab('month')">🗓 Month</div>
   <div class="nav-tab" onclick="switchTab('week')">⚡ Week</div>
+  <div class="nav-tab" onclick="switchTab('review')">🔁 Week Review</div>
   <div class="nav-tab" onclick="switchTab('matches')">⚽ Matches</div>
   <div class="nav-tab" onclick="switchTab('squad')">👥 Squad</div>
   <div class="nav-tab" onclick="switchTab('library')">📚 Drill Library</div>
@@ -1934,6 +1935,23 @@
       <button class="btn btn-ghost btn-sm" onclick="openWeekSettings()">⚙ Week Settings</button>
     </div>
     <div class="week-days" id="weekDays"></div>
+  </div>
+
+  <!-- ── WEEK REVIEW VIEW ── -->
+  <div id="view-review" class="view">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:10px">
+      <div>
+        <h2 style="margin:0;font-family:'Barlow Condensed',sans-serif;letter-spacing:2px;font-size:24px">WEEK REVIEW</h2>
+        <div style="font-size:11px;color:var(--text3);font-family:'Barlow Condensed',sans-serif;letter-spacing:1px;margin-top:2px">Reflection · competition table · loading plan totals</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px">
+        <button class="btn btn-ghost btn-sm" onclick="reviewPrevWeek()">‹</button>
+        <span id="reviewWeekLabel" style="font-family:'Barlow Condensed',sans-serif;font-weight:700;letter-spacing:1.5px;font-size:14px;min-width:160px;text-align:center">Week —</span>
+        <button class="btn btn-ghost btn-sm" onclick="reviewNextWeek()">›</button>
+      </div>
+    </div>
+
+    <div id="reviewBody"></div>
   </div>
 
   <!-- ── MATCHES VIEW ── -->
@@ -2916,7 +2934,7 @@ const MONTHS = ['January','February','March','April','May','June','July','August
 const MONTHS_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
 function emptyState() {
-  return { sessions: [], games: [], weekSettings: {}, media: [], settings: null, opponents: [], players: [], playerLogs: [] };
+  return { sessions: [], games: [], weekSettings: {}, media: [], settings: null, opponents: [], players: [], playerLogs: [], weekReviews: {} };
 }
 let state = emptyState();
 let currentWeek = getCurrentWeekNum();
@@ -3004,8 +3022,9 @@ async function loadAllData() {
     new Promise(res => setTimeout(() => { console.warn(`${label} timed out`); res(); }, 15000))
   ]);
   await Promise.all([
-    bestEffort(loadOpponents(), 'loadOpponents'),
-    bestEffort(loadPlayers(),   'loadPlayers'),
+    bestEffort(loadOpponents(),    'loadOpponents'),
+    bestEffort(loadPlayers(),      'loadPlayers'),
+    bestEffort(loadWeekReviews(),  'loadWeekReviews'),
   ]);
 
   console.log(`Loaded: ${state.sessions.length} sessions, ${state.games.length} games, ${state.media.length} drills, ${state.opponents.length} opponents, ${(state.players||[]).length} players`);
@@ -3256,7 +3275,7 @@ function switchTab(tab) {
   document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
   document.getElementById('view-' + tab).classList.add('active');
   document.querySelectorAll('.nav-tab').forEach(t => {
-    const match = tab === 'loading' ? 'planned' : tab === 'library' ? 'drill' : tab === 'matches' ? '⚽ matches' : tab === 'squad' ? '👥 squad' : tab === 'methodology' ? '📖 methodology' : tab;
+    const match = tab === 'loading' ? 'planned' : tab === 'library' ? 'drill' : tab === 'matches' ? '⚽ matches' : tab === 'squad' ? '👥 squad' : tab === 'methodology' ? '📖 methodology' : tab === 'review' ? '🔁 week review' : tab;
     if (t.textContent.toLowerCase().includes(match)) t.classList.add('active');
   });
   if (tab === 'year')     renderYear();
@@ -3265,6 +3284,7 @@ function switchTab(tab) {
   if (tab === 'week')     renderWeek();
   if (tab === 'matches')  renderMatches();
   if (tab === 'squad')    renderSquad();
+  if (tab === 'review')   renderWeekReview();
   if (tab === 'methodology') renderMethodology();
   if (tab === 'library')  renderLibrary();
   if (tab === 'settings') renderSettings();
@@ -6617,6 +6637,366 @@ async function saveRosterLogs(rosterEntries, sourceType, sourceId, dateStr) {
     sessionId: r.session_id, gameId: r.game_id,
     status: r.status, plannedMinutes: r.planned_minutes, actualMinutes: r.actual_minutes,
   }));
+}
+
+// ── WEEK REVIEW ──
+
+let reviewCurrentWeek = null; // set on first render to currentWeek
+
+const REVIEW_AWARDS = [
+  { key: 'king',        icon: '👑', label: 'King · Overall Leader' },
+  { key: 'mvp',         icon: '🏆', label: 'MVP · Week Winner' },
+  { key: 'topScorer',   icon: '⚽', label: 'Top Scorer' },
+  { key: 'topAssister', icon: '🎯', label: 'Top Assister' },
+  { key: 'leastGoals',  icon: '🛡', label: 'Least Goals Against' },
+];
+
+async function loadWeekReviews() {
+  if (!sb || !currentUser) return;
+  try {
+    const { data, error } = await sb.from('week_reviews')
+      .select('*')
+      .eq('user_id', currentUser.id);
+    if (error) throw error;
+    state.weekReviews = {};
+    (data || []).forEach(r => {
+      state.weekReviews[r.week_num] = {
+        id:             r.id,
+        weekNum:        r.week_num,
+        trainingRecap:  r.training_recap  || '',
+        gameRecap:      r.game_recap      || '',
+        scoring:        r.scoring         || '',
+        playersContext: r.players_context || '',
+        focuses:        r.focuses         || '',
+        notes:          r.notes           || '',
+        awards:         r.awards || {},
+      };
+    });
+  } catch (e) {
+    console.warn('loadWeekReviews failed (table may not exist yet):', e.message);
+    state.weekReviews = {};
+  }
+}
+
+function getReview(weekNum) {
+  return state.weekReviews[weekNum] || {
+    weekNum, trainingRecap:'', gameRecap:'', scoring:'',
+    playersContext:'', focuses:'', notes:'', awards:{},
+  };
+}
+
+function reviewPrevWeek() {
+  if (reviewCurrentWeek == null) return;
+  reviewCurrentWeek = Math.max(1, reviewCurrentWeek - 1);
+  renderWeekReview();
+}
+function reviewNextWeek() {
+  if (reviewCurrentWeek == null) return;
+  reviewCurrentWeek = Math.min(52, reviewCurrentWeek + 1);
+  renderWeekReview();
+}
+
+// Sum planned load metrics for the given week across sessions + games
+function computeWeekLoadTotals(weekNum) {
+  const start = getWeekStart(weekNum);
+  const dates = [];
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(start); d.setDate(d.getDate() + i);
+    dates.push(formatDate(d));
+  }
+  const days = dates.map(dateStr => {
+    const sess = (state.sessions || []).filter(s => s.date === dateStr);
+    const game = (state.games || []).find(g => g.date === dateStr);
+    const sum = (arr, k) => arr.reduce((a, x) => a + (parseInt(x[k]) || 0), 0);
+    let td = sum(sess, 'td'), hsr = sum(sess, 'hsr'), sd = sum(sess, 'sd');
+    let acc = sum(sess, 'acc'), dec = sum(sess, 'dec');
+    let intensitySum = sess.reduce((a, x) => a + (parseInt(x.intensity) || 0), 0);
+    let intensityCount = sess.filter(x => x.intensity).length;
+    if (game) {
+      td  += parseInt(game.td)     || 0;
+      hsr += parseInt(game.hsr)    || 0;
+      sd  += parseInt(game.sprint) || 0;
+      acc += parseInt(game.acc)    || 0;
+      dec += parseInt(game.dec)    || 0;
+    }
+    return {
+      date: dateStr,
+      sessions: sess,
+      game,
+      td, hsr, sd, acc, dec,
+      avgIntensity: intensityCount ? (intensitySum / intensityCount) : null,
+    };
+  });
+  const totals = days.reduce((t, d) => ({
+    td: t.td + d.td, hsr: t.hsr + d.hsr, sd: t.sd + d.sd, acc: t.acc + d.acc, dec: t.dec + d.dec,
+  }), { td:0, hsr:0, sd:0, acc:0, dec:0 });
+  return { days, totals };
+}
+
+// Build a draft reflection from sessions/games/player_logs that fall in the week
+function autoSeedReview(weekNum) {
+  const start = getWeekStart(weekNum);
+  const startD = new Date(start);
+  const endD   = new Date(start); endD.setDate(endD.getDate() + 6);
+  const weekDates = [];
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(start); d.setDate(d.getDate() + i);
+    weekDates.push(formatDate(d));
+  }
+  const sess = (state.sessions || []).filter(s => weekDates.includes(s.date));
+  const games = (state.games || []).filter(g => weekDates.includes(g.date));
+
+  const trainingRecap = sess.length
+    ? `${sess.length} session${sess.length !== 1 ? 's' : ''} logged across ${[...new Set(sess.map(s => s.date))].length} day${[...new Set(sess.map(s => s.date))].length !== 1 ? 's' : ''}. Types: ${[...new Set(sess.map(s => s.type).filter(Boolean))].join(', ') || '—'}.`
+    : 'No sessions logged for this week.';
+
+  const gameRecap = games.length
+    ? games.map(g => {
+        const score = (g.scoreUs != null && g.scoreThem != null) ? `${g.scoreUs}-${g.scoreThem}` : 'no score yet';
+        const result = g.result ? `${g.result} ${score}` : score;
+        return `${g.date} vs ${g.opponent || 'TBC'} (${g.venue || 'Home'}) — ${result}`;
+      }).join('\n')
+    : 'No matches this week.';
+
+  const playersContext = (() => {
+    const logs = (state.playerLogs || []).filter(l => weekDates.includes(l.date));
+    if (logs.length === 0) return '';
+    const counts = { Full:0, Modified:0, RTP:0, Out:0 };
+    logs.forEach(l => { if (counts[l.status] != null) counts[l.status]++; });
+    return `Player logs this week: ${counts.Full} Full · ${counts.Modified} Modified · ${counts.RTP} RTP · ${counts.Out} Out.`;
+  })();
+
+  const focuses = [...new Set(sess.map(s => s.principle).filter(Boolean))].slice(0, 5).join(' · ');
+
+  return { trainingRecap, gameRecap, playersContext, focuses };
+}
+
+function renderWeekReview() {
+  if (reviewCurrentWeek == null) reviewCurrentWeek = currentWeek || 1;
+  const w = reviewCurrentWeek;
+  const start = getWeekStart(w);
+  const end   = new Date(start); end.setDate(end.getDate() + 6);
+  const fmt = d => d.toLocaleDateString('en', { month: 'short', day: 'numeric' });
+  const yearLabel = start.getFullYear() === end.getFullYear() ? start.getFullYear() : `${start.getFullYear()}-${end.getFullYear()}`;
+  document.getElementById('reviewWeekLabel').textContent = `Week ${w} · ${fmt(start)} – ${fmt(end)}, ${yearLabel}`;
+
+  const r = getReview(w);
+  const { days, totals } = computeWeekLoadTotals(w);
+
+  const reviewBody = document.getElementById('reviewBody');
+  reviewBody.innerHTML = `
+
+    <!-- REFLECTION -->
+    <div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:18px 22px;margin-bottom:14px">
+      <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px">
+        <h3 style="margin:0;font-family:'Barlow Condensed',sans-serif;letter-spacing:1.5px;font-size:15px;color:var(--accent)">REFLECTION</h3>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-ghost btn-sm" onclick="seedCurrentReview()">⬇ Auto-Seed from Data</button>
+          <button class="btn btn-primary btn-sm" onclick="saveCurrentReview()">Save Reflection</button>
+        </div>
+      </div>
+
+      ${[
+        { id: 'rRecap',   label: 'TRAINING RECAP',  v: r.trainingRecap,  rows: 4 },
+        { id: 'rGame',    label: 'GAME RECAP',      v: r.gameRecap,      rows: 4 },
+        { id: 'rScoring', label: 'SCORING',         v: r.scoring,        rows: 2 },
+        { id: 'rPlayers', label: 'PLAYERS CONTEXT', v: r.playersContext, rows: 3 },
+        { id: 'rFocuses', label: 'TRAINING FOCUSES', v: r.focuses,       rows: 2 },
+        { id: 'rNotes',   label: 'OTHER NOTES',     v: r.notes,          rows: 3 },
+      ].map(f => `
+        <div style="margin-bottom:12px">
+          <label style="font-size:10px;color:var(--text3);font-family:'Barlow Condensed',sans-serif;letter-spacing:1.5px;display:block;margin-bottom:4px">${f.label}</label>
+          <textarea id="${f.id}" rows="${f.rows}" style="width:100%;font-family:'Inter',system-ui,sans-serif;font-size:12.5px;line-height:1.5;resize:vertical">${escapeHtml(f.v || '')}</textarea>
+        </div>
+      `).join('')}
+    </div>
+
+    <!-- LOADING PLAN TOTALS -->
+    <div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:18px 22px;margin-bottom:14px">
+      <h3 style="margin:0 0 12px 0;font-family:'Barlow Condensed',sans-serif;letter-spacing:1.5px;font-size:15px;color:var(--accent)">LOADING PLAN · PLANNED TOTALS</h3>
+      <div style="overflow-x:auto">
+        <table style="width:100%;border-collapse:collapse;font-size:11.5px">
+          <thead>
+            <tr style="background:var(--surface3)">
+              <th style="text-align:left;padding:6px 8px;font-family:'Barlow Condensed',sans-serif;letter-spacing:1.5px;font-size:10px;color:var(--text3);text-transform:uppercase">Metric</th>
+              ${days.map(d => {
+                const ds = new Date(d.date + 'T12:00:00');
+                return `<th style="text-align:center;padding:6px 8px;font-family:'Barlow Condensed',sans-serif;letter-spacing:1px;font-size:10px;color:var(--text3);text-transform:uppercase">${ds.toLocaleDateString('en',{weekday:'short'})}<br><span style="font-weight:400;font-size:9px">${ds.toLocaleDateString('en',{month:'short',day:'numeric'})}</span></th>`;
+              }).join('')}
+              <th style="text-align:center;padding:6px 8px;font-family:'Barlow Condensed',sans-serif;letter-spacing:1.5px;font-size:10px;color:var(--accent);text-transform:uppercase">Σ Total</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${[
+              { label: 'Intensity', getter: d => d.avgIntensity != null ? Math.round(d.avgIntensity) : '', total: '—' },
+              { label: 'TD (m)',  getter: d => d.td  || '', total: totals.td },
+              { label: 'HSR (m)', getter: d => d.hsr || '', total: totals.hsr },
+              { label: 'Sprint',  getter: d => d.sd  || '', total: totals.sd },
+              { label: 'Acc (n)', getter: d => d.acc || '', total: totals.acc },
+              { label: 'Dec (n)', getter: d => d.dec || '', total: totals.dec },
+            ].map(row => `
+              <tr style="border-top:1px solid var(--border)">
+                <td style="padding:6px 8px;font-family:'Barlow Condensed',sans-serif;font-weight:700;letter-spacing:0.5px;color:var(--text2)">${row.label}</td>
+                ${days.map(d => `<td style="text-align:center;padding:6px 8px;font-family:'JetBrains Mono',monospace;color:var(--text);font-size:11px">${row.getter(d) === '' ? '<span style="color:var(--text3)">—</span>' : fmtNum(row.getter(d))}</td>`).join('')}
+                <td style="text-align:center;padding:6px 8px;font-family:'JetBrains Mono',monospace;font-weight:700;color:var(--accent)">${typeof row.total === 'number' ? fmtNum(row.total) : row.total}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      </div>
+      <div style="font-size:10px;color:var(--text3);margin-top:8px;font-family:'Barlow Condensed',sans-serif;letter-spacing:1px">Planned values from sessions + match projected load. Add actual columns later when post-session numbers are available.</div>
+    </div>
+
+    <!-- COMPETITION TABLE -->
+    <div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:18px 22px;margin-bottom:14px">
+      <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px">
+        <h3 style="margin:0;font-family:'Barlow Condensed',sans-serif;letter-spacing:1.5px;font-size:15px;color:var(--accent)">COMPETITION TABLE · WEEK ${w}</h3>
+        <button class="btn btn-primary btn-sm" onclick="saveCurrentAwards()">Save Awards</button>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px">
+        ${REVIEW_AWARDS.map(a => `
+          <div style="background:var(--surface3);border-radius:var(--radius);padding:10px 12px">
+            <div style="font-size:10px;color:var(--text3);font-family:'Barlow Condensed',sans-serif;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:4px">${a.icon} ${a.label}</div>
+            <input type="text" id="award_${a.key}" placeholder="—" value="${escapeHtml(r.awards?.[a.key] || '')}" style="width:100%;font-family:'Inter',system-ui,sans-serif;font-size:13px;padding:6px 8px;background:var(--surface);border:1px solid var(--border);color:var(--text)">
+          </div>
+        `).join('')}
+      </div>
+
+      <!-- Season awards trail -->
+      <div style="margin-top:18px">
+        <div style="font-family:'Barlow Condensed',sans-serif;letter-spacing:1.5px;font-size:11px;color:var(--text3);margin-bottom:6px">SEASON AWARDS TRAIL</div>
+        ${renderAwardsTrail()}
+      </div>
+    </div>
+
+    <!-- Quick stats -->
+    <div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:14px 18px;font-size:11px;color:var(--text3);font-family:'Barlow Condensed',sans-serif;letter-spacing:1px">
+      ${days.reduce((c, d) => c + d.sessions.length, 0)} sessions · ${days.filter(d => d.game).length} match${days.filter(d => d.game).length === 1 ? '' : 'es'} · Week starts ${fmt(start)} ${start.getFullYear()}
+    </div>
+  `;
+}
+
+function renderAwardsTrail() {
+  const weeks = Object.keys(state.weekReviews || {})
+    .map(Number).sort((a, b) => a - b)
+    .filter(w => {
+      const aw = state.weekReviews[w]?.awards;
+      return aw && Object.values(aw).some(v => v && v.trim());
+    });
+  if (weeks.length === 0) {
+    return `<div style="font-size:11px;color:var(--text3);font-style:italic;padding:8px 0">No awards recorded yet — fill in this week to start the trail.</div>`;
+  }
+  return `
+    <div style="overflow-x:auto;border:1px solid var(--border);border-radius:var(--radius)">
+      <table style="width:100%;border-collapse:collapse;font-size:11.5px">
+        <thead>
+          <tr style="background:var(--surface3)">
+            <th style="text-align:left;padding:6px 10px;font-family:'Barlow Condensed',sans-serif;letter-spacing:1.5px;font-size:10px;color:var(--text3);text-transform:uppercase">Week</th>
+            ${REVIEW_AWARDS.map(a => `<th style="text-align:left;padding:6px 10px;font-family:'Barlow Condensed',sans-serif;letter-spacing:1.5px;font-size:10px;color:var(--text3);text-transform:uppercase">${a.icon} ${a.label.split(' · ')[0]}</th>`).join('')}
+          </tr>
+        </thead>
+        <tbody>
+          ${weeks.map(w => `
+            <tr style="border-top:1px solid var(--border)">
+              <td style="padding:6px 10px;font-family:'JetBrains Mono',monospace;color:var(--text3)">W${w}</td>
+              ${REVIEW_AWARDS.map(a => `<td style="padding:6px 10px;color:var(--text2)">${escapeHtml(state.weekReviews[w]?.awards?.[a.key] || '—')}</td>`).join('')}
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function seedCurrentReview() {
+  const w = reviewCurrentWeek;
+  if (!w) return;
+  const seed = autoSeedReview(w);
+  if (!document.getElementById('rRecap').value.trim())   document.getElementById('rRecap').value   = seed.trainingRecap;
+  if (!document.getElementById('rGame').value.trim())    document.getElementById('rGame').value    = seed.gameRecap;
+  if (!document.getElementById('rPlayers').value.trim()) document.getElementById('rPlayers').value = seed.playersContext;
+  if (!document.getElementById('rFocuses').value.trim()) document.getElementById('rFocuses').value = seed.focuses;
+}
+
+async function saveCurrentReview() {
+  const w = reviewCurrentWeek;
+  if (!w) return;
+  const existing = state.weekReviews[w];
+  const row = {
+    user_id:         currentUser.id,
+    week_num:        w,
+    season:          state.settings?.season_label || '2025-26',
+    training_recap:  document.getElementById('rRecap').value,
+    game_recap:      document.getElementById('rGame').value,
+    scoring:         document.getElementById('rScoring').value,
+    players_context: document.getElementById('rPlayers').value,
+    focuses:         document.getElementById('rFocuses').value,
+    notes:           document.getElementById('rNotes').value,
+    updated_at:      new Date().toISOString(),
+  };
+  if (existing?.id) row.id = existing.id;
+  setSyncStatus('syncing');
+  const { data, error } = await sb.from('week_reviews').upsert(row, { onConflict: 'user_id,week_num,season' }).select().single();
+  if (error) { setSyncStatus('error'); alert('Save failed: ' + error.message); return; }
+  state.weekReviews[w] = {
+    id: data.id, weekNum: w,
+    trainingRecap: data.training_recap || '',
+    gameRecap:     data.game_recap     || '',
+    scoring:       data.scoring        || '',
+    playersContext:data.players_context|| '',
+    focuses:       data.focuses        || '',
+    notes:         data.notes          || '',
+    awards:        data.awards || existing?.awards || {},
+  };
+  setSyncStatus('ok');
+}
+
+async function saveCurrentAwards() {
+  const w = reviewCurrentWeek;
+  if (!w) return;
+  const existing = state.weekReviews[w];
+  const awards = {};
+  REVIEW_AWARDS.forEach(a => {
+    const v = document.getElementById('award_' + a.key)?.value?.trim();
+    if (v) awards[a.key] = v;
+  });
+  const row = {
+    user_id:  currentUser.id,
+    week_num: w,
+    season:   state.settings?.season_label || '2025-26',
+    awards,
+    updated_at: new Date().toISOString(),
+  };
+  if (existing?.id) row.id = existing.id;
+  // Preserve existing reflection text on partial save
+  if (existing) {
+    row.training_recap  = existing.trainingRecap;
+    row.game_recap      = existing.gameRecap;
+    row.scoring         = existing.scoring;
+    row.players_context = existing.playersContext;
+    row.focuses         = existing.focuses;
+    row.notes           = existing.notes;
+  }
+  setSyncStatus('syncing');
+  const { data, error } = await sb.from('week_reviews').upsert(row, { onConflict: 'user_id,week_num,season' }).select().single();
+  if (error) { setSyncStatus('error'); alert('Save failed: ' + error.message); return; }
+  state.weekReviews[w] = {
+    id: data.id, weekNum: w,
+    trainingRecap: data.training_recap || '',
+    gameRecap:     data.game_recap     || '',
+    scoring:       data.scoring        || '',
+    playersContext:data.players_context|| '',
+    focuses:       data.focuses        || '',
+    notes:         data.notes          || '',
+    awards:        data.awards || {},
+  };
+  setSyncStatus('ok');
+  // Re-render to refresh awards trail
+  renderWeekReview();
 }
 
 // ── METHODOLOGY ──
