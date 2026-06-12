@@ -463,6 +463,24 @@
     color: var(--text);
     font-weight: 500;
   }
+  /* Inline-editable metric input — styled to look identical to .metric-value */
+  input.metric-value {
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 2px;
+    padding: 1px 4px;
+    text-align: center;
+    width: 100%;
+    box-sizing: border-box;
+    min-width: 40px;
+    -moz-appearance: textfield;
+  }
+  input.metric-value:hover { border-color: var(--border2); background: var(--surface2); }
+  input.metric-value:focus {
+    outline: none; border-color: var(--accent); background: var(--surface2); color: var(--accent);
+  }
+  input.metric-value::-webkit-outer-spin-button,
+  input.metric-value::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
 
   .link-row {
     display: flex;
@@ -3728,6 +3746,62 @@ function getIntensityClass(v) {
 // ══════════════════════════════════════════════════════
 let selectedDayDate = null;
 
+// ── INLINE METRIC EDITING ──
+// Called by the editable metric inputs on session/game cards.
+// Updates local state + persists to Supabase without opening the full modal.
+async function updateSessionMetric(sessionId, field, value) {
+  const s = state.sessions.find(x => x.id === sessionId);
+  if (!s) return;
+  const v = value === '' ? null : parseInt(value);
+  // accDec collapses to acc; dec is always written empty on combined entry
+  if (field === 'accDec') {
+    s.acc = v;
+    s.dec = null;
+  } else {
+    s[field] = v;
+  }
+  setSyncStatus('syncing');
+  const dbField = field === 'accDec' ? 'acc' : field;
+  const update = { [dbField]: v };
+  if (field === 'accDec') update.dec_count = null;
+  const { error } = await sb.from('sessions').update(update).eq('id', sessionId);
+  if (error) { setSyncStatus('error'); console.error('Inline session metric save failed:', error); return; }
+  setSyncStatus('ok');
+}
+
+async function updateGameMetric(gameId, field, value) {
+  const g = state.games.find(x => x.id === gameId);
+  if (!g) return;
+  const v = value === '' ? null : parseInt(value);
+  if (field === 'accDec') {
+    g.acc = v;
+    g.dec = null;
+  } else {
+    g[field] = v;
+  }
+  setSyncStatus('syncing');
+  const dbField = field === 'accDec' ? 'acc' : field;
+  const update = { [dbField]: v };
+  if (field === 'accDec') update.dec = null;
+  const { error } = await sb.from('games').update(update).eq('id', gameId);
+  if (error) { setSyncStatus('error'); console.error('Inline game metric save failed:', error); return; }
+  setSyncStatus('ok');
+}
+
+// Editable metric chip — labelled input that stops click propagation so the
+// parent session/game card click handler does not also fire.
+function editableMetricChip(label, value, onChangeJs) {
+  const safe = value == null || value === '' ? '' : value;
+  return `
+    <div class="metric-chip">
+      <div class="metric-label">${label}</div>
+      <input type="number" class="metric-value" value="${safe}" placeholder="—"
+        onclick="event.stopPropagation()"
+        onchange="${onChangeJs}">
+    </div>
+  `;
+}
+
 // Rich session-card HTML — shared by Week view and Month view so both stay in sync.
 function buildSessionCardHTML(s) {
   const typeColor = getTypeColor(s.type);
@@ -3757,10 +3831,10 @@ function buildSessionCardHTML(s) {
       </div>
       ${s.principle ? `<div style="font-size:11px;color:var(--text2);margin-bottom:6px;">${s.principle}</div>` : ''}
       <div class="metrics-grid">
-        ${s.td ? `<div class="metric-chip"><div class="metric-label">TD</div><div class="metric-value">${fmtNum(s.td)}</div></div>` : ''}
-        ${s.hsr ? `<div class="metric-chip"><div class="metric-label">HSR</div><div class="metric-value">${fmtNum(s.hsr)}</div></div>` : ''}
-        ${s.sd ? `<div class="metric-chip"><div class="metric-label">SPR</div><div class="metric-value">${fmtNum(s.sd)}</div></div>` : ''}
-        ${((parseInt(s.acc)||0) + (parseInt(s.dec)||0)) ? `<div class="metric-chip"><div class="metric-label">A/D</div><div class="metric-value">${(parseInt(s.acc)||0) + (parseInt(s.dec)||0)}</div></div>` : ''}
+        ${editableMetricChip('TD',  s.td,  `updateSessionMetric('${s.id}','td',this.value)`)}
+        ${editableMetricChip('HSR', s.hsr, `updateSessionMetric('${s.id}','hsr',this.value)`)}
+        ${editableMetricChip('SPR', s.sd,  `updateSessionMetric('${s.id}','sd',this.value)`)}
+        ${editableMetricChip('A/D', (parseInt(s.acc)||0) + (parseInt(s.dec)||0) || '', `updateSessionMetric('${s.id}','accDec',this.value)`)}
       </div>
       ${gdHtml}
       ${(s.exercises && s.exercises.length) ? `
@@ -3820,13 +3894,12 @@ function buildGameCardHTML(g) {
           ${g.available != null && g.squadSize ? `<span style="font-size:10px;color:var(--text3);margin-left:auto">${g.available}/${g.squadSize}</span>` : ''}
         </div>
       ` : ''}
-      ${hasLoad ? `
       <div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:6px;padding-top:6px;border-top:1px solid var(--border)">
-        ${g.td     ? `<div class="metric-chip"><div class="metric-label">TD</div><div class="metric-value">${fmtNum(g.td)}</div></div>` : ''}
-        ${g.hsr    ? `<div class="metric-chip"><div class="metric-label">HSR</div><div class="metric-value">${fmtNum(g.hsr)}</div></div>` : ''}
-        ${g.sprint ? `<div class="metric-chip"><div class="metric-label">SPR</div><div class="metric-value">${fmtNum(g.sprint)}</div></div>` : ''}
-        ${((parseInt(g.acc)||0) + (parseInt(g.dec)||0)) ? `<div class="metric-chip"><div class="metric-label">A/D</div><div class="metric-value">${fmtNum((parseInt(g.acc)||0) + (parseInt(g.dec)||0))}</div></div>` : ''}
-      </div>` : ''}
+        ${editableMetricChip('TD',  g.td,     `updateGameMetric('${g.id}','td',this.value)`)}
+        ${editableMetricChip('HSR', g.hsr,    `updateGameMetric('${g.id}','hsr',this.value)`)}
+        ${editableMetricChip('SPR', g.sprint, `updateGameMetric('${g.id}','sprint',this.value)`)}
+        ${editableMetricChip('A/D', (parseInt(g.acc)||0) + (parseInt(g.dec)||0) || '', `updateGameMetric('${g.id}','accDec',this.value)`)}
+      </div>
     </div>
   `;
 }
