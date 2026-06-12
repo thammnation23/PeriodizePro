@@ -2275,12 +2275,8 @@
           <input type="number" id="metricSD" placeholder="200">
         </div>
         <div class="form-group">
-          <label>Acc (n)</label>
-          <input type="number" id="metricAcc" placeholder="25">
-        </div>
-        <div class="form-group">
-          <label>Dec (n)</label>
-          <input type="number" id="metricDec" placeholder="25">
+          <label>Acc/Dec (n) <span style="color:var(--text3);font-size:10px">— combined efforts</span></label>
+          <input type="number" id="metricAccDec" placeholder="50">
         </div>
       </div>
 
@@ -2459,7 +2455,7 @@
       <hr class="section-divider">
       <div class="form-group" style="margin-bottom:16px">
         <label style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:1px">Projected Match Load</label>
-        <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-top:6px">
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:6px">
           <div>
             <label style="font-size:10px">TD (m)</label>
             <input type="number" id="gameTD" placeholder="11000">
@@ -2473,12 +2469,8 @@
             <input type="number" id="gameSprint" placeholder="300">
           </div>
           <div>
-            <label style="font-size:10px">Acc (n)</label>
-            <input type="number" id="gameAcc" placeholder="35">
-          </div>
-          <div>
-            <label style="font-size:10px">Dec (n)</label>
-            <input type="number" id="gameDec" placeholder="35">
+            <label style="font-size:10px">Acc/Dec (n)</label>
+            <input type="number" id="gameAccDec" placeholder="70">
           </div>
         </div>
       </div>
@@ -3843,8 +3835,7 @@ function renderWeek() {
             ${s.td ? `<div class="metric-chip"><div class="metric-label">TD</div><div class="metric-value">${fmtNum(s.td)}</div></div>` : ''}
             ${s.hsr ? `<div class="metric-chip"><div class="metric-label">HSR</div><div class="metric-value">${fmtNum(s.hsr)}</div></div>` : ''}
             ${s.sd ? `<div class="metric-chip"><div class="metric-label">SPR</div><div class="metric-value">${fmtNum(s.sd)}</div></div>` : ''}
-            ${s.acc ? `<div class="metric-chip"><div class="metric-label">ACC</div><div class="metric-value">${s.acc}</div></div>` : ''}
-            ${s.dec ? `<div class="metric-chip"><div class="metric-label">DEC</div><div class="metric-value">${s.dec}</div></div>` : ''}
+            ${((parseInt(s.acc)||0) + (parseInt(s.dec)||0)) ? `<div class="metric-chip"><div class="metric-label">A/D</div><div class="metric-value">${(parseInt(s.acc)||0) + (parseInt(s.dec)||0)}</div></div>` : ''}
           </div>
           ${gdHtml}
           ${(s.exercises && s.exercises.length) ? `
@@ -3912,8 +3903,7 @@ function renderWeek() {
             ${g.td     ? `<div class="metric-chip"><div class="metric-label">TD</div><div class="metric-value">${fmtNum(g.td)}</div></div>` : ''}
             ${g.hsr    ? `<div class="metric-chip"><div class="metric-label">HSR</div><div class="metric-value">${fmtNum(g.hsr)}</div></div>` : ''}
             ${g.sprint ? `<div class="metric-chip"><div class="metric-label">SPR</div><div class="metric-value">${fmtNum(g.sprint)}</div></div>` : ''}
-            ${g.acc    ? `<div class="metric-chip"><div class="metric-label">ACC</div><div class="metric-value">${fmtNum(g.acc)}</div></div>` : ''}
-            ${g.dec    ? `<div class="metric-chip"><div class="metric-label">DEC</div><div class="metric-value">${fmtNum(g.dec)}</div></div>` : ''}
+            ${((parseInt(g.acc)||0) + (parseInt(g.dec)||0)) ? `<div class="metric-chip"><div class="metric-label">A/D</div><div class="metric-value">${fmtNum((parseInt(g.acc)||0) + (parseInt(g.dec)||0))}</div></div>` : ''}
           </div>` : ''}
         </div>
       ` + sessionsHTML;
@@ -4016,8 +4006,8 @@ function editSession(id) {
   document.getElementById('metricTD').value = s.td || '';
   document.getElementById('metricHSR').value = s.hsr || '';
   document.getElementById('metricSD').value = s.sd || '';
-  document.getElementById('metricAcc').value = s.acc || '';
-  document.getElementById('metricDec').value = s.dec || '';
+  // Combined Acc/Dec field — sum legacy acc + dec values for display
+  document.getElementById('metricAccDec').value = ((parseInt(s.acc)||0) + (parseInt(s.dec)||0)) || '';
   document.getElementById('gdMinus').value = s.gdMinus || '';
   document.getElementById('gdPlus').value  = s.gdPlus  || '';
   document.getElementById('sessionActivation').value = s.activation || '';
@@ -4042,7 +4032,7 @@ function editSession(id) {
 }
 
 function clearSessionForm() {
-  ['sessionDate','sessionDuration','sessionPrinciple','metricTD','metricHSR','metricSD','metricAcc','metricDec','sessionNotes','gdMinus','gdPlus','sessionActivation'].forEach(id => {
+  ['sessionDate','sessionDuration','sessionPrinciple','metricTD','metricHSR','metricSD','metricAccDec','sessionNotes','gdMinus','gdPlus','sessionActivation'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.value = '';
   });
@@ -4075,8 +4065,9 @@ async function saveSession() {
     td: document.getElementById('metricTD').value,
     hsr: document.getElementById('metricHSR').value,
     sd: document.getElementById('metricSD').value,
-    acc: document.getElementById('metricAcc').value,
-    dec: document.getElementById('metricDec').value,
+    // Acc/Dec combined into a single field — store in `acc` column, zero `dec` so legacy renders sum cleanly
+    acc: document.getElementById('metricAccDec').value,
+    dec: '',
     warmupMedia: sessionAttachments.warmup.map(m => m.id),
     sessionMedia: sessionAttachments.session.map(m => m.id),
     exercises: currentExercises
@@ -4121,7 +4112,7 @@ let editingGameId = null;
 
 function clearGameForm() {
   ['gameDate','gameOpponent','gameCompetition','gameNotes',
-   'gameTD','gameHSR','gameSprint','gameAcc','gameDec',
+   'gameTD','gameHSR','gameSprint','gameAccDec',
    'gameScoreUs','gameScoreThem','gameSquadSize','gameAvailable',
    'gameTravelKm','gameTzHours','gameDaysRest','gameForm'
   ].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
@@ -4186,8 +4177,8 @@ function editGame(id) {
   document.getElementById('gameTD').value          = g.td || '';
   document.getElementById('gameHSR').value         = g.hsr || '';
   document.getElementById('gameSprint').value      = g.sprint || '';
-  document.getElementById('gameAcc').value         = g.acc || '';
-  document.getElementById('gameDec').value         = g.dec || '';
+  // Combined Acc/Dec — sum legacy values for display
+  document.getElementById('gameAccDec').value = ((parseInt(g.acc)||0) + (parseInt(g.dec)||0)) || '';
   document.getElementById('gameScoreUs').value     = g.scoreUs ?? '';
   document.getElementById('gameScoreThem').value   = g.scoreThem ?? '';
   document.getElementById('gameSquadSize').value   = g.squadSize ?? '';
@@ -4368,8 +4359,9 @@ async function saveGame() {
     td:     document.getElementById('gameTD').value,
     hsr:    document.getElementById('gameHSR').value,
     sprint: document.getElementById('gameSprint').value,
-    acc:    document.getElementById('gameAcc').value,
-    dec:    document.getElementById('gameDec').value,
+    // Combined Acc/Dec stored in `acc`; `dec` left blank so sums stay clean
+    acc:    document.getElementById('gameAccDec').value,
+    dec:    '',
     scoreUs:   scoreUs   === '' ? null : parseInt(scoreUs),
     scoreThem: scoreThem === '' ? null : parseInt(scoreThem),
     result,
@@ -4649,8 +4641,7 @@ function openDayPanel(dateStr) {
           ${s.td  ? `<div class="metric-chip"><div class="metric-label">TD</div><div class="metric-value">${fmtNum(s.td)}</div></div>` : ''}
           ${s.hsr ? `<div class="metric-chip"><div class="metric-label">HSR</div><div class="metric-value">${fmtNum(s.hsr)}</div></div>` : ''}
           ${s.sd  ? `<div class="metric-chip"><div class="metric-label">SPR</div><div class="metric-value">${fmtNum(s.sd)}</div></div>` : ''}
-          ${s.acc ? `<div class="metric-chip"><div class="metric-label">ACC</div><div class="metric-value">${s.acc}</div></div>` : ''}
-          ${s.dec ? `<div class="metric-chip"><div class="metric-label">DEC</div><div class="metric-value">${s.dec}</div></div>` : ''}
+          ${((parseInt(s.acc)||0) + (parseInt(s.dec)||0)) ? `<div class="metric-chip"><div class="metric-label">A/D</div><div class="metric-value">${(parseInt(s.acc)||0) + (parseInt(s.dec)||0)}</div></div>` : ''}
         </div>
         ${gdHtml}
         ${(s.exercises && s.exercises.length) ? `
@@ -6832,8 +6823,7 @@ function renderWeekReview() {
               { label: 'TD (m)',  getter: d => d.td  || '', total: totals.td },
               { label: 'HSR (m)', getter: d => d.hsr || '', total: totals.hsr },
               { label: 'Sprint',  getter: d => d.sd  || '', total: totals.sd },
-              { label: 'Acc (n)', getter: d => d.acc || '', total: totals.acc },
-              { label: 'Dec (n)', getter: d => d.dec || '', total: totals.dec },
+              { label: 'Acc/Dec (n)', getter: d => (d.acc + d.dec) || '', total: totals.acc + totals.dec },
             ].map(row => `
               <tr style="border-top:1px solid var(--border)">
                 <td style="padding:6px 8px;font-family:'Barlow Condensed',sans-serif;font-weight:700;letter-spacing:0.5px;color:var(--text2)">${row.label}</td>
