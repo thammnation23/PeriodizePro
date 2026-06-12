@@ -932,17 +932,51 @@
   /* Month day cell updated */
   .month-day {
     background: var(--surface);
-    min-height: 80px;
+    min-height: 180px;
     padding: 8px;
     cursor: pointer;
     transition: background 0.12s;
     position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    overflow: hidden;
   }
   .month-day:hover { background: var(--surface2); }
   .month-day.other-month { opacity: 0.3; }
   .month-day.game { border-left: 3px solid var(--game); }
   .month-day.today .month-day-num { color: var(--accent); }
   .month-day.selected { background: var(--surface3); outline: 2px solid var(--accent); outline-offset: -2px; }
+  .month-day-header-row { display: flex; justify-content: space-between; align-items: center; }
+  .month-day-body {
+    display: flex; flex-direction: column; gap: 6px;
+    overflow: hidden;
+    flex: 1;
+  }
+  .month-day-body .session-card {
+    margin: 0;
+    padding: 6px 8px;
+    font-size: 11px;
+  }
+  .month-day-body .session-card-header { gap: 4px; }
+  .month-day-body .session-type { font-size: 11px; }
+  .month-day-body .session-duration { font-size: 10px; }
+  .month-day-body .metrics-grid { gap: 3px; }
+  .month-day-body .metric-chip { padding: 2px 4px; }
+  .month-day-body .metric-label { font-size: 8px; }
+  .month-day-body .metric-value { font-size: 10px; }
+  .month-day-body .ex-summary-row { font-size: 10px; }
+  .month-day-empty {
+    text-align: center;
+    color: var(--text3);
+    font-size: 14px;
+    opacity: 0.4;
+    padding: 8px;
+  }
+  /* On wider screens give cells a bit more room so rich cards breathe */
+  @media (min-width: 1400px) {
+    .month-day { min-height: 220px; }
+  }
 
   @media (max-width: 800px) {
     .day-panel { width: 100%; min-width: 0; border-left: none; border-top: 1px solid var(--border); }
@@ -3694,6 +3728,109 @@ function getIntensityClass(v) {
 // ══════════════════════════════════════════════════════
 let selectedDayDate = null;
 
+// Rich session-card HTML — shared by Week view and Month view so both stay in sync.
+function buildSessionCardHTML(s) {
+  const typeColor = getTypeColor(s.type);
+  const typeColor2 = s.type2 ? getTypeColor(s.type2) : null;
+  const typeClass = getTypeClass(s.type);
+  const swatchHtml = typeColor2
+    ? `<span style="display:inline-block;width:12px;height:12px;border-radius:2px;position:relative;overflow:hidden;vertical-align:middle;margin-right:4px;background:${typeColor}">
+         <span style="position:absolute;bottom:0;right:0;width:0;height:0;border-style:solid;border-width:0 0 12px 12px;border-color:transparent transparent ${typeColor2} transparent"></span>
+       </span>`
+    : `<span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:${typeColor};vertical-align:middle;margin-right:4px"></span>`;
+  const typeLabel = s.type2
+    ? `${s.type} <span style="color:var(--text3)">+</span> <span style="color:${typeColor2}">${s.type2}</span>`
+    : s.type || 'Session';
+  const gdHtml = (s.gdMinus || s.gdPlus)
+    ? `<div style="display:flex;align-items:center;gap:6px;margin-top:5px;font-family:'JetBrains Mono',monospace;font-size:11px;">
+         <span style="color:var(--text3)">GD</span>
+         ${s.gdMinus ? `<span style="color:var(--game);font-weight:600">−${s.gdMinus}</span>` : ''}
+         ${s.gdMinus && s.gdPlus ? `<span style="color:var(--text3)">/</span>` : ''}
+         ${s.gdPlus ? `<span style="color:var(--green);font-weight:600">+${s.gdPlus}</span>` : ''}
+       </div>`
+    : '';
+  return `
+    <div class="session-card int-${typeClass} ${s.type === 'Game' ? 'game-card' : ''}" style="border-left-color:${typeColor}" onclick="event.stopPropagation();editSession('${s.id}')">
+      <div class="session-card-header">
+        <span class="session-type">${swatchHtml}<span style="color:${typeColor}">${typeLabel}</span></span>
+        <span class="session-duration">${s.duration ? s.duration + 'm' : '—'}</span>
+      </div>
+      ${s.principle ? `<div style="font-size:11px;color:var(--text2);margin-bottom:6px;">${s.principle}</div>` : ''}
+      <div class="metrics-grid">
+        ${s.td ? `<div class="metric-chip"><div class="metric-label">TD</div><div class="metric-value">${fmtNum(s.td)}</div></div>` : ''}
+        ${s.hsr ? `<div class="metric-chip"><div class="metric-label">HSR</div><div class="metric-value">${fmtNum(s.hsr)}</div></div>` : ''}
+        ${s.sd ? `<div class="metric-chip"><div class="metric-label">SPR</div><div class="metric-value">${fmtNum(s.sd)}</div></div>` : ''}
+        ${((parseInt(s.acc)||0) + (parseInt(s.dec)||0)) ? `<div class="metric-chip"><div class="metric-label">A/D</div><div class="metric-value">${(parseInt(s.acc)||0) + (parseInt(s.dec)||0)}</div></div>` : ''}
+      </div>
+      ${gdHtml}
+      ${(s.exercises && s.exercises.length) ? `
+      <div class="ex-summary" onclick="event.stopPropagation()">
+        ${s.exercises.map((ex, i) => {
+          const drill = ex.mediaId ? state.media.find(m => m.id === ex.mediaId) : null;
+          const linkUrl = drill ? (drill.url || drill.dataUrl) : ex.url;
+          const linkLabel = drill?.title || ex.urlTitle || (linkUrl ? '🔗' : '');
+          const meta = [ex.duration ? ex.duration + 'm' : '', ex.setsReps].filter(Boolean).join(' · ');
+          return `
+            <div class="ex-summary-row">
+              <span class="ex-summary-num">${i + 1}.</span>
+              <span class="ex-summary-name">${ex.name || drill?.title || 'Exercise'}</span>
+              ${meta ? `<span class="ex-summary-meta">${meta}</span>` : ''}
+              ${linkUrl ? `<a class="ex-summary-link" href="${linkUrl}" target="_blank" title="${linkLabel}">▶</a>` : ''}
+            </div>
+          `;
+        }).join('')}
+      </div>` : ''}
+      ${(s.warmupMedia?.length || s.sessionMedia?.length) ? `
+      <div class="link-row">
+        ${(s.warmupMedia||[]).map(mid => { const m = state.media.find(x=>x.id===mid); if(!m) return ''; return `<a class="link-chip link-warmup" href="${m.url||m.dataUrl||'#'}" target="_blank">${m.mediaType==='youtube'?'▶':m.mediaType==='upload'?'🖼':'🔗'} ${m.title||'W/U'}</a>`; }).join('')}
+        ${(s.sessionMedia||[]).map(mid => { const m = state.media.find(x=>x.id===mid); if(!m) return ''; return `<a class="link-chip link-session" href="${m.url||m.dataUrl||'#'}" target="_blank">${m.mediaType==='youtube'?'▶':m.mediaType==='upload'?'🖼':'🔗'} ${m.title||'Session'}</a>`; }).join('')}
+      </div>` : ''}
+    </div>
+  `;
+}
+
+function buildGameCardHTML(g) {
+  if (!g) return '';
+  const hasLoad = g.td || g.hsr || g.sprint || g.acc || g.dec;
+  const oppRecord = g.opponent_id
+    ? state.opponents.find(o => o.id === g.opponent_id)
+    : state.opponents.find(o => o.name?.toLowerCase() === g.opponent?.toLowerCase());
+  const yourElo = state.settings?.team_elo || ELO_DEFAULT;
+  const mdi = oppRecord ? calculateMDI(yourElo, oppRecord.current_elo, buildMatchContext(g, state.games)) : null;
+  const resultColor = g.result === 'W' ? '#2eb86b' : g.result === 'L' ? '#ff6b6b' : g.result === 'D' ? '#c5d12b' : null;
+  const scoreText = (g.scoreUs != null && g.scoreThem != null) ? `${g.scoreUs}–${g.scoreThem}` : null;
+  return `
+    <div class="session-card game-card" style="cursor:pointer" onclick="event.stopPropagation();editGame('${g.id || ''}')">
+      <div class="session-card-header">
+        <span class="session-type" style="color:var(--game)">⚽ Match</span>
+        <div style="display:flex;align-items:center;gap:6px">
+          ${mdi != null ? `<span style="font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:700;color:${mdiColor(mdi)};background:${mdiColor(mdi)}22;padding:2px 5px;border-radius:3px" title="Match Difficulty Index">MDI ${mdi.toFixed(1)}</span>` : ''}
+          <span class="session-duration">${g.venue || ''}</span>
+        </div>
+      </div>
+      <div style="font-size:12px;color:var(--text2);margin-bottom:4px;display:flex;align-items:center;gap:6px">
+        <span>${g.opponent || 'Opponent TBC'}</span>
+        ${oppRecord ? `<span style="font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--text3)">·  ELO ${oppRecord.current_elo}</span>` : ''}
+      </div>
+      ${g.competition ? `<div style="font-size:11px;color:var(--text3);margin-bottom:6px">${g.competition}</div>` : ''}
+      ${(scoreText || g.result) ? `
+        <div style="display:flex;align-items:center;gap:8px;margin-top:4px;padding:4px 6px;background:var(--surface3);border-radius:3px">
+          ${g.result ? `<span style="font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:13px;color:${resultColor}">${g.result}</span>` : ''}
+          ${scoreText ? `<span style="font-family:'JetBrains Mono',monospace;font-size:13px;color:var(--text)">${scoreText}</span>` : ''}
+          ${g.available != null && g.squadSize ? `<span style="font-size:10px;color:var(--text3);margin-left:auto">${g.available}/${g.squadSize}</span>` : ''}
+        </div>
+      ` : ''}
+      ${hasLoad ? `
+      <div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:6px;padding-top:6px;border-top:1px solid var(--border)">
+        ${g.td     ? `<div class="metric-chip"><div class="metric-label">TD</div><div class="metric-value">${fmtNum(g.td)}</div></div>` : ''}
+        ${g.hsr    ? `<div class="metric-chip"><div class="metric-label">HSR</div><div class="metric-value">${fmtNum(g.hsr)}</div></div>` : ''}
+        ${g.sprint ? `<div class="metric-chip"><div class="metric-label">SPR</div><div class="metric-value">${fmtNum(g.sprint)}</div></div>` : ''}
+        ${((parseInt(g.acc)||0) + (parseInt(g.dec)||0)) ? `<div class="metric-chip"><div class="metric-label">A/D</div><div class="metric-value">${fmtNum((parseInt(g.acc)||0) + (parseInt(g.dec)||0))}</div></div>` : ''}
+      </div>` : ''}
+    </div>
+  `;
+}
+
 function renderMonth() {
   const title = document.getElementById('monthTitle');
   title.textContent = MONTHS[currentMonth] + ' ' + currentMonthYear;
@@ -3728,15 +3865,17 @@ function renderMonth() {
       + (dateStr === today ? ' today' : '')
       + (dateStr === selectedDayDate ? ' selected' : '');
 
+    const game = isGame ? state.games.find(gg => gg.date === dateStr) : null;
     cell.innerHTML = `
-      <div class="month-day-num">${d.getDate()}</div>
-      <div class="week-badge">W${weekNum}</div>
-      ${isGame ? (() => { const g = state.games.find(gg => gg.date === dateStr); return `<span class="month-session-tag tag-game">⚽ ${g?.opponent || 'Match'}</span>`; })() : ''}
-      ${sessions.map(s => `
-        <div>
-          <span class="month-session-tag" style="background:${getTypeColor(s.type)}22;color:${getTypeColor(s.type)}">${s.type || 'Session'}</span>
-          <div class="month-session-name">${s.duration ? s.duration + 'min' : ''} ${s.principle || ''}</div>
-        </div>`).join('')}
+      <div class="month-day-header-row">
+        <div class="month-day-num">${d.getDate()}</div>
+        <div class="week-badge">W${weekNum}</div>
+      </div>
+      <div class="month-day-body">
+        ${game ? buildGameCardHTML(game) : ''}
+        ${sessions.map(s => buildSessionCardHTML(s)).join('')}
+        ${(!game && sessions.length === 0 && isCurrentMonth) ? '<div class="month-day-empty">＋</div>' : ''}
+      </div>
     `;
     cell.onclick = () => openDayPanel(dateStr);
     grid.appendChild(cell);
@@ -3799,115 +3938,12 @@ function renderWeek() {
     const card = document.createElement('div');
     card.className = 'week-day-card' + (isGame ? ' game' : '') + (today ? ' active' : '');
 
-    let sessionsHTML = '';
-    sessions.forEach(s => {
-      const typeColor = getTypeColor(s.type);
-      const typeColor2 = s.type2 ? getTypeColor(s.type2) : null;
-      const typeClass = getTypeClass(s.type);
-
-      // Mini diagonal swatch for the card border
-      const swatchHtml = typeColor2
-        ? `<span style="display:inline-block;width:12px;height:12px;border-radius:2px;position:relative;overflow:hidden;vertical-align:middle;margin-right:4px;background:${typeColor}">
-             <span style="position:absolute;bottom:0;right:0;width:0;height:0;border-style:solid;border-width:0 0 12px 12px;border-color:transparent transparent ${typeColor2} transparent"></span>
-           </span>`
-        : `<span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:${typeColor};vertical-align:middle;margin-right:4px"></span>`;
-
-      const typeLabel = s.type2
-        ? `${s.type} <span style="color:var(--text3)">+</span> <span style="color:${typeColor2}">${s.type2}</span>`
-        : s.type || 'Session';
-
-      const gdHtml = (s.gdMinus || s.gdPlus)
-        ? `<div style="display:flex;align-items:center;gap:6px;margin-top:5px;font-family:'JetBrains Mono',monospace;font-size:11px;">
-             <span style="color:var(--text3)">GD</span>
-             ${s.gdMinus ? `<span style="color:var(--game);font-weight:600">−${s.gdMinus}</span>` : ''}
-             ${s.gdMinus && s.gdPlus ? `<span style="color:var(--text3)">/</span>` : ''}
-             ${s.gdPlus ? `<span style="color:var(--green);font-weight:600">+${s.gdPlus}</span>` : ''}
-           </div>`
-        : '';
-      sessionsHTML += `
-        <div class="session-card int-${typeClass} ${s.type === 'Game' ? 'game-card' : ''}" style="border-left-color:${typeColor}" onclick="editSession('${s.id}')">
-          <div class="session-card-header">
-            <span class="session-type">${swatchHtml}<span style="color:${typeColor}">${typeLabel}</span></span>
-            <span class="session-duration">${s.duration ? s.duration + 'm' : '—'}</span>
-          </div>
-          ${s.principle ? `<div style="font-size:11px;color:var(--text2);margin-bottom:6px;">${s.principle}</div>` : ''}
-          <div class="metrics-grid">
-            ${s.td ? `<div class="metric-chip"><div class="metric-label">TD</div><div class="metric-value">${fmtNum(s.td)}</div></div>` : ''}
-            ${s.hsr ? `<div class="metric-chip"><div class="metric-label">HSR</div><div class="metric-value">${fmtNum(s.hsr)}</div></div>` : ''}
-            ${s.sd ? `<div class="metric-chip"><div class="metric-label">SPR</div><div class="metric-value">${fmtNum(s.sd)}</div></div>` : ''}
-            ${((parseInt(s.acc)||0) + (parseInt(s.dec)||0)) ? `<div class="metric-chip"><div class="metric-label">A/D</div><div class="metric-value">${(parseInt(s.acc)||0) + (parseInt(s.dec)||0)}</div></div>` : ''}
-          </div>
-          ${gdHtml}
-          ${(s.exercises && s.exercises.length) ? `
-          <div class="ex-summary" onclick="event.stopPropagation()">
-            ${s.exercises.map((ex, i) => {
-              const drill = ex.mediaId ? state.media.find(m => m.id === ex.mediaId) : null;
-              const linkUrl = drill ? (drill.url || drill.dataUrl) : ex.url;
-              const linkLabel = drill?.title || ex.urlTitle || (linkUrl ? '🔗' : '');
-              const meta = [ex.duration ? ex.duration + 'm' : '', ex.setsReps].filter(Boolean).join(' · ');
-              return `
-                <div class="ex-summary-row">
-                  <span class="ex-summary-num">${i + 1}.</span>
-                  <span class="ex-summary-name">${ex.name || drill?.title || 'Exercise'}</span>
-                  ${meta ? `<span class="ex-summary-meta">${meta}</span>` : ''}
-                  ${linkUrl ? `<a class="ex-summary-link" href="${linkUrl}" target="_blank" title="${linkLabel}">▶</a>` : ''}
-                </div>
-              `;
-            }).join('')}
-          </div>` : ''}
-          ${(s.warmupMedia?.length || s.sessionMedia?.length) ? `
-          <div class="link-row">
-            ${(s.warmupMedia||[]).map(mid => { const m = state.media.find(x=>x.id===mid); if(!m) return ''; return `<a class="link-chip link-warmup" href="${m.url||m.dataUrl||'#'}" target="_blank">${m.mediaType==='youtube'?'▶':m.mediaType==='upload'?'🖼':'🔗'} ${m.title||'W/U'}</a>`; }).join('')}
-            ${(s.sessionMedia||[]).map(mid => { const m = state.media.find(x=>x.id===mid); if(!m) return ''; return `<a class="link-chip link-session" href="${m.url||m.dataUrl||'#'}" target="_blank">${m.mediaType==='youtube'?'▶':m.mediaType==='upload'?'🖼':'🔗'} ${m.title||'Session'}</a>`; }).join('')}
-          </div>` : ''}
-        </div>
-      `;
-    });
-
+    let sessionsHTML = sessions.map(s => buildSessionCardHTML(s)).join('');
     if (isGame) {
       const g = state.games.find(gg => gg.date === dateStr);
-      const hasLoad = g && (g.td || g.hsr || g.sprint || g.acc || g.dec);
-      // MDI lookup (full context)
-      const oppRecord = g?.opponent_id
-        ? state.opponents.find(o => o.id === g.opponent_id)
-        : state.opponents.find(o => o.name?.toLowerCase() === g?.opponent?.toLowerCase());
-      const yourElo = state.settings?.team_elo || ELO_DEFAULT;
-      const mdi = (oppRecord && g) ? calculateMDI(yourElo, oppRecord.current_elo, buildMatchContext(g, state.games)) : null;
-      // Result chip
-      const resultColor = g?.result === 'W' ? '#2eb86b' : g?.result === 'L' ? '#ff6b6b' : g?.result === 'D' ? '#c5d12b' : null;
-      const scoreText = (g?.scoreUs != null && g?.scoreThem != null) ? `${g.scoreUs}–${g.scoreThem}` : null;
-
-      sessionsHTML = `
-        <div class="session-card game-card" style="cursor:pointer" onclick="editGame('${g?.id || ''}')">
-          <div class="session-card-header">
-            <span class="session-type" style="color:var(--game)">⚽ Match</span>
-            <div style="display:flex;align-items:center;gap:6px">
-              ${mdi != null ? `<span style="font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:700;color:${mdiColor(mdi)};background:${mdiColor(mdi)}22;padding:2px 5px;border-radius:3px" title="Match Difficulty Index">MDI ${mdi.toFixed(1)}</span>` : ''}
-              <span class="session-duration">${g?.venue || ''}</span>
-            </div>
-          </div>
-          <div style="font-size:12px;color:var(--text2);margin-bottom:4px;display:flex;align-items:center;gap:6px">
-            <span>${g?.opponent || 'Opponent TBC'}</span>
-            ${oppRecord ? `<span style="font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--text3)">·  ELO ${oppRecord.current_elo}</span>` : ''}
-          </div>
-          ${g?.competition ? `<div style="font-size:11px;color:var(--text3);margin-bottom:6px">${g.competition}</div>` : ''}
-          ${(scoreText || g?.result) ? `
-            <div style="display:flex;align-items:center;gap:8px;margin-top:4px;padding:4px 6px;background:var(--surface3);border-radius:3px">
-              ${g.result ? `<span style="font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:13px;color:${resultColor}">${g.result}</span>` : ''}
-              ${scoreText ? `<span style="font-family:'JetBrains Mono',monospace;font-size:13px;color:var(--text)">${scoreText}</span>` : ''}
-              ${g.available != null && g.squadSize ? `<span style="font-size:10px;color:var(--text3);margin-left:auto">${g.available}/${g.squadSize}</span>` : ''}
-            </div>
-          ` : ''}
-          ${hasLoad ? `
-          <div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:6px;padding-top:6px;border-top:1px solid var(--border)">
-            ${g.td     ? `<div class="metric-chip"><div class="metric-label">TD</div><div class="metric-value">${fmtNum(g.td)}</div></div>` : ''}
-            ${g.hsr    ? `<div class="metric-chip"><div class="metric-label">HSR</div><div class="metric-value">${fmtNum(g.hsr)}</div></div>` : ''}
-            ${g.sprint ? `<div class="metric-chip"><div class="metric-label">SPR</div><div class="metric-value">${fmtNum(g.sprint)}</div></div>` : ''}
-            ${((parseInt(g.acc)||0) + (parseInt(g.dec)||0)) ? `<div class="metric-chip"><div class="metric-label">A/D</div><div class="metric-value">${fmtNum((parseInt(g.acc)||0) + (parseInt(g.dec)||0))}</div></div>` : ''}
-          </div>` : ''}
-        </div>
-      ` + sessionsHTML;
+      sessionsHTML = buildGameCardHTML(g) + sessionsHTML;
     }
+
 
     card.innerHTML = `
       <div class="week-day-header">
