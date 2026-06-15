@@ -2384,8 +2384,13 @@
         <div style="font-size:11px;color:var(--text3);margin-top:5px;font-family:'Barlow Condensed',sans-serif;letter-spacing:0.5px">e.g. GD −2 / +3 → session designed for teams losing by 2 to winning by 3</div>
       </div>
 
-      <div class="form-group" style="margin-bottom:14px">
-        <label>Activation Theme <span style="color:var(--text3);font-size:10px;font-weight:400;letter-spacing:0">— optional</span></label>
+      <hr class="section-divider">
+      <div class="subsection-label">Pre / Post Training <span style="color:var(--text3);font-size:10px;font-weight:400;letter-spacing:0;text-transform:none">— gym, activation, recovery, etc.</span></div>
+      <div id="prePostList"></div>
+      <button class="btn btn-ghost btn-sm" style="margin-top:8px" onclick="addPrePostEntry()">＋ Add Pre/Post Entry</button>
+
+      <div class="form-group" style="margin-top:14px;margin-bottom:14px">
+        <label>Activation Theme <span style="color:var(--text3);font-size:10px;font-weight:400;letter-spacing:0">— legacy free text</span></label>
         <input type="text" id="sessionActivation" placeholder="e.g. Hip activation, Ankle prep, Glute circuit...">
       </div>
 
@@ -2395,7 +2400,7 @@
       </div>
 
       <hr class="section-divider">
-      <div class="subsection-label">Squad Availability <span style="color:var(--text3);font-size:10px;font-weight:400;letter-spacing:0;text-transform:none">— Full · Modified · RTP · Out</span></div>
+      <div class="subsection-label">Squad Availability <span style="color:var(--text3);font-size:10px;font-weight:400;letter-spacing:0;text-transform:none">— Full · Modified · Recovery · RTP · Out</span></div>
       <div id="sessionRoster"></div>
 
     </div>
@@ -3099,6 +3104,7 @@ function dbToSession(r) {
     warmupMedia:  r.warmup_drills  || [],
     sessionMedia: r.session_drills || [],
     exercises:    r.exercises      || [],
+    prePost:      r.pre_post        || [],
     gdMinus: r.gd_minus || '',
     gdPlus:  r.gd_plus  || '',
     activation: r.activation || '',
@@ -3120,6 +3126,7 @@ function sessionToDB(s) {
     warmup_drills:  s.warmupMedia  || [],
     session_drills: s.sessionMedia || [],
     exercises:      s.exercises    || [],
+    pre_post:       s.prePost      || [],
     gd_minus: s.gdMinus ? parseInt(s.gdMinus) : null,
     gd_plus:  s.gdPlus  ? parseInt(s.gdPlus)  : null,
     activation: s.activation || null,
@@ -3913,6 +3920,16 @@ function buildSessionCardHTML(s) {
         ${(s.warmupMedia||[]).map(mid => { const m = state.media.find(x=>x.id===mid); if(!m) return ''; return `<a class="link-chip link-warmup" href="${m.url||m.dataUrl||'#'}" target="_blank">${m.mediaType==='youtube'?'▶':m.mediaType==='upload'?'🖼':'🔗'} ${m.title||'W/U'}</a>`; }).join('')}
         ${(s.sessionMedia||[]).map(mid => { const m = state.media.find(x=>x.id===mid); if(!m) return ''; return `<a class="link-chip link-session" href="${m.url||m.dataUrl||'#'}" target="_blank">${m.mediaType==='youtube'?'▶':m.mediaType==='upload'?'🖼':'🔗'} ${m.title||'Session'}</a>`; }).join('')}
       </div>` : ''}
+      ${(s.prePost && s.prePost.length) ? `
+      <div style="margin-top:6px;display:flex;flex-direction:column;gap:3px">
+        ${s.prePost.map(p => {
+          const c = prePostTypeColor(p.type);
+          return `<div style="display:flex;align-items:flex-start;gap:6px;font-size:10.5px;line-height:1.4">
+            <span style="background:${c}22;color:${c};font-family:'Barlow Condensed',sans-serif;font-weight:700;letter-spacing:1px;padding:1px 5px;border-radius:2px;white-space:nowrap;font-size:9px">${p.phase ? p.phase.toUpperCase() + ' · ' : ''}${(p.type || '').toUpperCase()}</span>
+            ${p.description ? `<span style="color:var(--text2);flex:1">${p.description}</span>` : ''}
+          </div>`;
+        }).join('')}
+      </div>` : ''}
     </div>
   `;
 }
@@ -4184,6 +4201,9 @@ function editSession(id) {
   // Load exercises (deep copy so edits don't mutate state directly)
   currentExercises = (s.exercises || []).map(ex => ({ ...ex }));
   renderExercises();
+  // Load pre/post entries
+  currentPrePost = (s.prePost || []).map(p => ({ ...p }));
+  renderPrePost();
   document.getElementById('sessionNotes').value = s.notes || '';
 
   // Roster matrix with existing logs for this session
@@ -4212,6 +4232,8 @@ function clearSessionForm() {
   renderAttachedMedia('session');
   currentExercises = [];
   renderExercises();
+  currentPrePost = [];
+  renderPrePost();
 }
 
 async function saveSession() {
@@ -4238,6 +4260,9 @@ async function saveSession() {
     exercises: currentExercises
       .filter(ex => ex.name || ex.duration || ex.setsReps || ex.mediaId || ex.url)
       .map(ex => ({ ...ex })),
+    prePost: currentPrePost
+      .filter(p => p.description?.trim() || p.type)
+      .map(p => ({ ...p })),
     gdMinus: document.getElementById('gdMinus').value,
     gdPlus:  document.getElementById('gdPlus').value,
     activation: document.getElementById('sessionActivation').value,
@@ -5321,6 +5346,70 @@ function openMediaDetail(id) {
 let sessionAttachments = { warmup: [], session: [] };
 let pickerSlot = null; // 'warmup' or 'session' or 'exercise:<idx>'
 let pickerSelections = new Set();
+
+// ── PRE / POST TRAINING ──
+const PRE_POST_TYPES = ['Gym', 'Activation', 'Recovery', 'Mobility', 'Cool Down', 'Other'];
+let currentPrePost = []; // [{ type, phase, description }]
+
+function prePostTypeColor(t) {
+  switch (t) {
+    case 'Gym':       return '#9c27b0';
+    case 'Activation': return '#c5d12b';
+    case 'Recovery':  return '#4dd0e1';
+    case 'Mobility':  return '#7ed957';
+    case 'Cool Down': return '#5d9cec';
+    default:          return 'var(--text3)';
+  }
+}
+
+function renderPrePost() {
+  const list = document.getElementById('prePostList');
+  if (!list) return;
+  if (currentPrePost.length === 0) {
+    list.innerHTML = '<div class="exercise-empty">Nothing logged. Click ＋ Add Pre/Post Entry to start.</div>';
+    return;
+  }
+  list.innerHTML = currentPrePost.map((p, i) => {
+    const typeColor = prePostTypeColor(p.type);
+    return `
+      <div style="background:var(--surface2);border:1px solid var(--border);border-left:3px solid ${typeColor};border-radius:var(--radius);padding:8px 10px;margin-bottom:6px">
+        <div style="display:flex;gap:6px;align-items:center;margin-bottom:6px;flex-wrap:wrap">
+          <select onchange="updatePrePostField(${i},'type',this.value)" style="background:${typeColor}22;color:${typeColor};border:1px solid ${typeColor}55;border-radius:3px;padding:2px 8px;font-family:'Barlow Condensed',sans-serif;font-weight:700;letter-spacing:1px;font-size:11px">
+            ${PRE_POST_TYPES.map(t => `<option value="${t}" ${t === p.type ? 'selected' : ''}>${t.toUpperCase()}</option>`).join('')}
+          </select>
+          <div style="display:flex;gap:2px">
+            ${['Pre','Post'].map(ph => `
+              <button type="button" onclick="updatePrePostField(${i},'phase','${ph}')"
+                style="padding:2px 8px;border:1px solid ${p.phase === ph ? 'var(--accent)' : 'var(--border)'};background:${p.phase === ph ? 'var(--accent)22' : 'transparent'};color:${p.phase === ph ? 'var(--accent)' : 'var(--text3)'};border-radius:3px;font-family:'Barlow Condensed',sans-serif;font-weight:700;letter-spacing:1px;font-size:11px;cursor:pointer">${ph.toUpperCase()}</button>
+            `).join('')}
+          </div>
+          <span style="flex:1"></span>
+          <span style="cursor:pointer;color:var(--text3);font-size:14px;padding:2px 6px" onclick="removePrePostEntry(${i})" title="Remove">✕</span>
+        </div>
+        <textarea rows="2" placeholder="What did this involve? (sets/reps, focus areas, notes...)"
+          oninput="updatePrePostField(${i},'description',this.value)"
+          style="width:100%;font-family:'Inter',system-ui,sans-serif;font-size:12px;line-height:1.4;resize:vertical">${escapeAttr(p.description || '')}</textarea>
+      </div>
+    `;
+  }).join('');
+}
+
+function addPrePostEntry() {
+  currentPrePost.push({ type: 'Gym', phase: 'Pre', description: '' });
+  renderPrePost();
+}
+
+function removePrePostEntry(idx) {
+  currentPrePost.splice(idx, 1);
+  renderPrePost();
+}
+
+function updatePrePostField(idx, field, value) {
+  if (currentPrePost[idx]) {
+    currentPrePost[idx][field] = value;
+    if (field === 'type' || field === 'phase') renderPrePost(); // re-render for chip styling
+  }
+}
 
 // ── EXERCISES ──
 let currentExercises = []; // [{name, duration, setsReps, mediaId, url, urlTitle}]
@@ -7015,6 +7104,9 @@ function renderWeekReview() {
     <!-- AVAILABILITY REVIEW (past days only) -->
     ${renderAvailabilityReview(w)}
 
+    <!-- PRE/POST TRAINING ROLLUP -->
+    ${renderPrePostRollup(w)}
+
     <!-- COMPETITION TABLE -->
     <div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:18px 22px;margin-bottom:14px">
       <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px">
@@ -7105,6 +7197,79 @@ function getDayAvailability(dateStr) {
 function statusBadge(status, count) {
   const c = statusColor(status);
   return `<span style="display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:3px;font-family:'Barlow Condensed',sans-serif;font-weight:700;letter-spacing:1px;font-size:10px;background:${c}22;color:${c}">${count} ${status.toUpperCase()}</span>`;
+}
+
+// Aggregate pre/post training entries from all sessions in the selected week.
+function renderPrePostRollup(weekNum) {
+  const start = getWeekStart(weekNum);
+  const weekDates = [];
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(start); d.setDate(d.getDate() + i);
+    weekDates.push(formatDate(d));
+  }
+  const sessionsThisWeek = (state.sessions || []).filter(s => weekDates.includes(s.date));
+  // Flatten pre/post entries with the date attached
+  const entries = [];
+  sessionsThisWeek.forEach(s => {
+    (s.prePost || []).forEach(p => {
+      if (p.description?.trim() || p.type) entries.push({ ...p, date: s.date });
+    });
+  });
+
+  if (entries.length === 0) {
+    return `
+      <div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:18px 22px;margin-bottom:14px">
+        <h3 style="margin:0 0 8px 0;font-family:'Barlow Condensed',sans-serif;letter-spacing:1.5px;font-size:15px;color:var(--accent)">PRE / POST TRAINING</h3>
+        <div style="font-size:11.5px;color:var(--text3);font-style:italic">No pre/post entries logged this week. Add them on the session form to see a rollup here.</div>
+      </div>
+    `;
+  }
+
+  // Group by date, then phase
+  const byDate = {};
+  entries.forEach(e => { (byDate[e.date] = byDate[e.date] || []).push(e); });
+  const sortedDates = Object.keys(byDate).sort();
+
+  // Quick stats: count by type
+  const typeCounts = {};
+  entries.forEach(e => { typeCounts[e.type || 'Other'] = (typeCounts[e.type || 'Other'] || 0) + 1; });
+
+  const typeChips = Object.entries(typeCounts)
+    .sort((a, b) => b[1] - a[1])
+    .map(([t, n]) => {
+      const c = prePostTypeColor(t);
+      return `<span style="background:${c}22;color:${c};font-family:'Barlow Condensed',sans-serif;font-weight:700;letter-spacing:1px;padding:2px 8px;border-radius:3px;font-size:11px">${n} ${t.toUpperCase()}</span>`;
+    }).join('');
+
+  return `
+    <div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:18px 22px;margin-bottom:14px">
+      <h3 style="margin:0 0 6px 0;font-family:'Barlow Condensed',sans-serif;letter-spacing:1.5px;font-size:15px;color:var(--accent)">PRE / POST TRAINING</h3>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px">${typeChips}</div>
+      <div style="display:flex;flex-direction:column;gap:10px">
+        ${sortedDates.map(date => {
+          const dt = new Date(date + 'T12:00:00');
+          const dayLabel = dt.toLocaleDateString('en', { weekday: 'short', month: 'short', day: 'numeric' });
+          const dayEntries = byDate[date].slice().sort((a, b) => (a.phase === 'Pre' ? 0 : 1) - (b.phase === 'Pre' ? 0 : 1));
+          return `
+            <div style="border:1px solid var(--border);border-radius:var(--radius);padding:10px 14px;background:var(--surface3)">
+              <div style="font-family:'Barlow Condensed',sans-serif;font-weight:700;letter-spacing:1.5px;font-size:11.5px;color:var(--text2);margin-bottom:6px">${dayLabel.toUpperCase()}</div>
+              <div style="display:flex;flex-direction:column;gap:5px">
+                ${dayEntries.map(e => {
+                  const c = prePostTypeColor(e.type);
+                  return `
+                    <div style="display:flex;align-items:flex-start;gap:8px;font-size:12px;line-height:1.45">
+                      <span style="background:${c}22;color:${c};font-family:'Barlow Condensed',sans-serif;font-weight:700;letter-spacing:1px;padding:2px 7px;border-radius:3px;white-space:nowrap;font-size:10px">${e.phase ? e.phase.toUpperCase() + ' · ' : ''}${(e.type || 'OTHER').toUpperCase()}</span>
+                      <span style="color:var(--text2);flex:1">${escapeHtml(e.description || '—')}</span>
+                    </div>
+                  `;
+                }).join('')}
+              </div>
+            </div>
+          `;
+        }).join('')}
+      </div>
+    </div>
+  `;
 }
 
 function renderAvailabilityReview(weekNum) {
