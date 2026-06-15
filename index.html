@@ -966,6 +966,20 @@
   .month-day.today .month-day-num { color: var(--accent); }
   .month-day.selected { background: var(--surface3); outline: 2px solid var(--accent); outline-offset: -2px; }
   .month-day-header-row { display: flex; justify-content: space-between; align-items: center; }
+  .squad-badge {
+    display: inline-flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0;
+    padding: 3px 8px;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    line-height: 1.2;
+    cursor: help;
+  }
+  .month-day-body .squad-badge { padding: 2px 6px; }
+  .month-day-body .squad-badge span:first-child { font-size: 11px !important; }
+  .month-day-body .squad-badge span:last-child  { font-size: 8px !important; }
   .month-day-body {
     display: flex; flex-direction: column; gap: 6px;
     overflow: hidden;
@@ -3802,6 +3816,38 @@ function editableMetricChip(label, value, onChangeJs) {
   `;
 }
 
+// Squad availability badge for a given day. Returns a small card showing
+// available/total + percent, or empty string when there's no roster or no logs.
+function buildSquadBadgeHTML(dateStr) {
+  const roster = state.players || [];
+  if (roster.length === 0) return '';
+  const logs = (state.playerLogs || []).filter(l => l.date === dateStr);
+  if (logs.length === 0) return '';
+
+  // Most-restrictive status wins per player on that day
+  const priority = { Out: 5, RTP: 4, Modified: 3, Recovery: 2, Full: 1 };
+  const perPlayer = new Map();
+  logs.forEach(l => {
+    const prev = perPlayer.get(l.playerId);
+    if (!prev || priority[l.status] > priority[prev]) perPlayer.set(l.playerId, l.status);
+  });
+  const counts = { Full: 0, Modified: 0, Recovery: 0, RTP: 0, Out: 0 };
+  perPlayer.forEach(st => { if (counts[st] != null) counts[st]++; });
+  const available = counts.Full + counts.Modified + counts.Recovery;
+  const total = roster.length;
+  const pct = total ? Math.round((available / total) * 100) : 0;
+  const color = pct >= 85 ? '#2eb86b' : pct >= 70 ? '#c5d12b' : pct >= 50 ? '#f5a623' : '#ff6b6b';
+
+  const tooltip = `Available: ${available}/${total} (${pct}%)\nFull ${counts.Full} · Modified ${counts.Modified} · Recovery ${counts.Recovery} · RTP ${counts.RTP} · Out ${counts.Out}`;
+
+  return `
+    <div class="squad-badge" title="${tooltip.replace(/"/g,'&quot;')}" style="border-color:${color}55;background:${color}11">
+      <span style="color:${color};font-family:'JetBrains Mono',monospace;font-weight:700;font-size:12px">${available}/${total}</span>
+      <span style="font-size:9px;color:var(--text3);font-family:'Barlow Condensed',sans-serif;letter-spacing:1px">SQUAD · ${pct}%</span>
+    </div>
+  `;
+}
+
 // Rich session-card HTML — shared by Week view and Month view so both stay in sync.
 function buildSessionCardHTML(s) {
   const typeColor = getTypeColor(s.type);
@@ -3945,6 +3991,7 @@ function renderMonth() {
     cell.innerHTML = `
       <div class="month-day-header-row">
         <div class="month-day-num">${d.getDate()}</div>
+        ${buildSquadBadgeHTML(dateStr)}
         <div class="week-badge">W${weekNum}</div>
       </div>
       <div class="month-day-body">
@@ -4024,6 +4071,7 @@ function renderWeek() {
     card.innerHTML = `
       <div class="week-day-header">
         <span class="week-day-name">${DAYS[di]}</span>
+        ${buildSquadBadgeHTML(dateStr)}
         <span class="week-day-date">${d.getDate()} ${MONTHS_SHORT[d.getMonth()]}</span>
       </div>
       <div class="week-day-body">
