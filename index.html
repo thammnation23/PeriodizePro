@@ -3817,7 +3817,8 @@ function editableMetricChip(label, value, onChangeJs) {
 }
 
 // Squad availability badge for a given day. Returns a small card showing
-// available/total + percent, or empty string when there's no roster or no logs.
+// available/total + percent. Players without a log that day are ASSUMED
+// available — coaches typically only log exceptions (Modified/Recovery/RTP/Out).
 function buildSquadBadgeHTML(dateStr) {
   const roster = state.players || [];
   if (roster.length === 0) return '';
@@ -3833,12 +3834,16 @@ function buildSquadBadgeHTML(dateStr) {
   });
   const counts = { Full: 0, Modified: 0, Recovery: 0, RTP: 0, Out: 0 };
   perPlayer.forEach(st => { if (counts[st] != null) counts[st]++; });
-  const available = counts.Full + counts.Modified + counts.Recovery;
+
   const total = roster.length;
+  const loggedCount = perPlayer.size;
+  const assumedAvailable = total - loggedCount; // unlogged players assumed Full
+  const unavailable = counts.RTP + counts.Out;
+  const available = total - unavailable;
   const pct = total ? Math.round((available / total) * 100) : 0;
   const color = pct >= 85 ? '#2eb86b' : pct >= 70 ? '#c5d12b' : pct >= 50 ? '#f5a623' : '#ff6b6b';
 
-  const tooltip = `Available: ${available}/${total} (${pct}%)\nFull ${counts.Full} · Modified ${counts.Modified} · Recovery ${counts.Recovery} · RTP ${counts.RTP} · Out ${counts.Out}`;
+  const tooltip = `Available: ${available}/${total} (${pct}%)\nFull ${counts.Full} · Modified ${counts.Modified} · Recovery ${counts.Recovery} · RTP ${counts.RTP} · Out ${counts.Out}\nNot logged (assumed available): ${assumedAvailable}`;
 
   return `
     <div class="squad-badge" title="${tooltip.replace(/"/g,'&quot;')}" style="border-color:${color}55;background:${color}11">
@@ -7138,7 +7143,7 @@ function renderAvailabilityReview(weekNum) {
     if (avail.hasSessions) {
       const c = avail.sessionCounts;
       const total = c.Full + c.Modified + c.Recovery + c.RTP + c.Out;
-      const availablePct = total > 0 ? Math.round(((c.Full + c.Modified + c.Recovery) / avail.rosterSize) * 100) : 0;
+      const availablePct = avail.rosterSize > 0 ? Math.round(((avail.rosterSize - c.RTP - c.Out) / avail.rosterSize) * 100) : 0;
       blocks.push(`
         <div style="border-left:3px solid var(--accent);padding:8px 12px;background:var(--surface3);border-radius:0 var(--radius) var(--radius) 0">
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
@@ -7170,7 +7175,7 @@ function renderAvailabilityReview(weekNum) {
     if (avail.hasGame) {
       const c = avail.gameCounts;
       const total = c.Full + c.Modified + c.Recovery + c.RTP + c.Out;
-      const availablePct = total > 0 ? Math.round(((c.Full + c.Modified + c.Recovery) / avail.rosterSize) * 100) : 0;
+      const availablePct = avail.rosterSize > 0 ? Math.round(((avail.rosterSize - c.RTP - c.Out) / avail.rosterSize) * 100) : 0;
       const oppName = gameOnDay?.opponent || 'TBC';
       blocks.push(`
         <div style="border-left:3px solid var(--game);padding:8px 12px;background:var(--surface3);border-radius:0 var(--radius) var(--radius) 0">
