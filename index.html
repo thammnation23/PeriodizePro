@@ -3843,7 +3843,10 @@ function buildSessionCardHTML(s) {
           const drill = ex.mediaId ? state.media.find(m => m.id === ex.mediaId) : null;
           const linkUrl = drill ? (drill.url || drill.dataUrl) : ex.url;
           const linkLabel = drill?.title || ex.urlTitle || (linkUrl ? '🔗' : '');
-          const meta = [ex.duration ? ex.duration + 'm' : '', ex.setsReps].filter(Boolean).join(' · ');
+          // Display: sets × duration with apostrophe for minutes (e.g. "3 × 2'")
+          const meta = (ex.setsReps && ex.duration)
+            ? `${ex.setsReps} × ${ex.duration}'`
+            : (ex.setsReps || (ex.duration ? `${ex.duration}'` : ''));
           return `
             <div class="ex-summary-row">
               <span class="ex-summary-num">${i + 1}.</span>
@@ -4760,7 +4763,10 @@ function openDayPanel(dateStr) {
               const drill = ex.mediaId ? state.media.find(m => m.id === ex.mediaId) : null;
               const linkUrl = drill ? (drill.url || drill.dataUrl) : ex.url;
               const linkLabel = drill?.title || ex.urlTitle || 'Open';
-              const meta = [ex.duration ? ex.duration + 'm' : '', ex.setsReps].filter(Boolean).join(' · ');
+              // Display: sets × duration with apostrophe for minutes (e.g. "3 × 2'")
+          const meta = (ex.setsReps && ex.duration)
+            ? `${ex.setsReps} × ${ex.duration}'`
+            : (ex.setsReps || (ex.duration ? `${ex.duration}'` : ''));
               return `
                 <div class="ex-summary-row">
                   <span class="ex-summary-num">${i + 1}.</span>
@@ -6359,9 +6365,14 @@ async function importMyTeamSchedule() {
 
 // ── PLAYER ROSTER ──
 
-const STATUS_OPTIONS = ['Full', 'Modified', 'RTP', 'Out'];
+const STATUS_OPTIONS = ['Full', 'Modified', 'Recovery', 'RTP', 'Out'];
 function statusColor(s) {
-  return s === 'Full' ? '#2eb86b' : s === 'Modified' ? '#c5d12b' : s === 'RTP' ? '#f5a623' : s === 'Out' ? '#ff6b6b' : 'var(--text3)';
+  return s === 'Full'     ? '#2eb86b'
+       : s === 'Modified' ? '#c5d12b'
+       : s === 'Recovery' ? '#4dd0e1'
+       : s === 'RTP'      ? '#f5a623'
+       : s === 'Out'      ? '#ff6b6b'
+       : 'var(--text3)';
 }
 
 let editingPlayerId = null;
@@ -6408,7 +6419,7 @@ function renderSquadStats() {
   const el = document.getElementById('squadStats');
   if (!el) return;
   const players = state.players || [];
-  const counts = { Full: 0, Modified: 0, RTP: 0, Out: 0 };
+  const counts = { Full: 0, Modified: 0, Recovery: 0, RTP: 0, Out: 0 };
   players.forEach(p => {
     const s = currentPlayerStatus(p.id);
     if (counts[s] != null) counts[s]++;
@@ -6423,6 +6434,7 @@ function renderSquadStats() {
     stat('Roster', total),
     stat('Full', counts.Full, statusColor('Full')),
     stat('Modified', counts.Modified, statusColor('Modified')),
+    stat('Recovery', counts.Recovery, statusColor('Recovery')),
     stat('RTP', counts.RTP, statusColor('RTP')),
     stat('Out', counts.Out, statusColor('Out')),
   ].join('');
@@ -6535,7 +6547,7 @@ function openPlayerHistory(playerId) {
   // Stats
   const totalLogs = logs.length;
   const totalMinutes = logs.reduce((s, l) => s + (l.actualMinutes || 0), 0);
-  const counts = { Full: 0, Modified: 0, RTP: 0, Out: 0 };
+  const counts = { Full: 0, Modified: 0, Recovery: 0, RTP: 0, Out: 0 };
   logs.forEach(l => { if (counts[l.status] != null) counts[l.status]++; });
   const stat = (label, value, color) => `
     <div style="background:var(--surface3);border-radius:var(--radius);padding:8px 10px">
@@ -6548,6 +6560,7 @@ function openPlayerHistory(playerId) {
       ${stat('Minutes', totalMinutes)}
       ${stat('Full', counts.Full, statusColor('Full'))}
       ${stat('Modified', counts.Modified, statusColor('Modified'))}
+      ${stat('Recovery', counts.Recovery, statusColor('Recovery'))}
       ${stat('RTP', counts.RTP, statusColor('RTP'))}
       ${stat('Out', counts.Out, statusColor('Out'))}
     </div>
@@ -6861,7 +6874,7 @@ function autoSeedReview(weekNum) {
   const playersContext = (() => {
     const logs = (state.playerLogs || []).filter(l => weekDates.includes(l.date));
     if (logs.length === 0) return '';
-    const counts = { Full:0, Modified:0, RTP:0, Out:0 };
+    const counts = { Full:0, Modified:0, Recovery:0, RTP:0, Out:0 };
     logs.forEach(l => { if (counts[l.status] != null) counts[l.status]++; });
     return `Player logs this week: ${counts.Full} Full · ${counts.Modified} Modified · ${counts.RTP} RTP · ${counts.Out} Out.`;
   })();
@@ -6989,7 +7002,7 @@ function getDayAvailability(dateStr) {
   const gameLogs    = logs.filter(l => l.gameId);
 
   const countStatus = (entries) => {
-    const counts = { Full: 0, Modified: 0, RTP: 0, Out: 0 };
+    const counts = { Full: 0, Modified: 0, Recovery: 0, RTP: 0, Out: 0 };
     entries.forEach(e => {
       // Unique by player_id for the day so two sessions don't double-count
       counts[e.status] = (counts[e.status] || 0) + 1;
@@ -7000,7 +7013,7 @@ function getDayAvailability(dateStr) {
   // Unique player view across all sessions that day (highest concern wins)
   const sessionUnique = new Map();
   sessionLogs.forEach(l => {
-    const priority = { Out: 4, RTP: 3, Modified: 2, Full: 1 };
+    const priority = { Out: 5, RTP: 4, Modified: 3, Recovery: 2, Full: 1 };
     const prev = sessionUnique.get(l.playerId);
     if (!prev || priority[l.status] > priority[prev.status]) {
       sessionUnique.set(l.playerId, l);
@@ -7076,8 +7089,8 @@ function renderAvailabilityReview(weekNum) {
     const blocks = [];
     if (avail.hasSessions) {
       const c = avail.sessionCounts;
-      const total = c.Full + c.Modified + c.RTP + c.Out;
-      const availablePct = total > 0 ? Math.round(((c.Full + c.Modified) / avail.rosterSize) * 100) : 0;
+      const total = c.Full + c.Modified + c.Recovery + c.RTP + c.Out;
+      const availablePct = total > 0 ? Math.round(((c.Full + c.Modified + c.Recovery) / avail.rosterSize) * 100) : 0;
       blocks.push(`
         <div style="border-left:3px solid var(--accent);padding:8px 12px;background:var(--surface3);border-radius:0 var(--radius) var(--radius) 0">
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
@@ -7087,6 +7100,7 @@ function renderAvailabilityReview(weekNum) {
           <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px">
             ${statusBadge('Full',     c.Full)}
             ${statusBadge('Modified', c.Modified)}
+            ${statusBadge('Recovery', c.Recovery)}
             ${statusBadge('RTP',      c.RTP)}
             ${statusBadge('Out',      c.Out)}
           </div>
@@ -7107,8 +7121,8 @@ function renderAvailabilityReview(weekNum) {
     }
     if (avail.hasGame) {
       const c = avail.gameCounts;
-      const total = c.Full + c.Modified + c.RTP + c.Out;
-      const availablePct = total > 0 ? Math.round(((c.Full + c.Modified) / avail.rosterSize) * 100) : 0;
+      const total = c.Full + c.Modified + c.Recovery + c.RTP + c.Out;
+      const availablePct = total > 0 ? Math.round(((c.Full + c.Modified + c.Recovery) / avail.rosterSize) * 100) : 0;
       const oppName = gameOnDay?.opponent || 'TBC';
       blocks.push(`
         <div style="border-left:3px solid var(--game);padding:8px 12px;background:var(--surface3);border-radius:0 var(--radius) var(--radius) 0">
@@ -7119,6 +7133,7 @@ function renderAvailabilityReview(weekNum) {
           <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px">
             ${statusBadge('Full',     c.Full)}
             ${statusBadge('Modified', c.Modified)}
+            ${statusBadge('Recovery', c.Recovery)}
             ${statusBadge('RTP',      c.RTP)}
             ${statusBadge('Out',      c.Out)}
           </div>
@@ -7157,16 +7172,17 @@ function renderAvailabilityReview(weekNum) {
   });
   let summary = '';
   if (weekLogs.length > 0) {
-    const c = { Full:0, Modified:0, RTP:0, Out:0 };
+    const c = { Full:0, Modified:0, Recovery:0, RTP:0, Out:0 };
     weekLogs.forEach(l => { if (c[l.status] != null) c[l.status]++; });
-    const totalLogs = c.Full + c.Modified + c.RTP + c.Out;
-    const availPct = totalLogs ? Math.round(((c.Full + c.Modified) / totalLogs) * 100) : 0;
+    const totalLogs = c.Full + c.Modified + c.Recovery + c.RTP + c.Out;
+    const availPct = totalLogs ? Math.round(((c.Full + c.Modified + c.Recovery) / totalLogs) * 100) : 0;
     summary = `
       <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px;padding:10px 14px;background:var(--surface3);border-radius:var(--radius)">
         <span style="font-family:'Barlow Condensed',sans-serif;letter-spacing:1.5px;font-size:10px;color:var(--text3)">WEEK ROLLUP:</span>
         <span style="font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:700;color:var(--accent)">${availPct}% available</span>
         ${statusBadge('Full',     c.Full)}
         ${statusBadge('Modified', c.Modified)}
+        ${statusBadge('Recovery', c.Recovery)}
         ${statusBadge('RTP',      c.RTP)}
         ${statusBadge('Out',      c.Out)}
         <span style="font-size:10px;color:var(--text3);margin-left:auto">${weekLogs.length} total logs</span>
