@@ -7244,6 +7244,9 @@ function renderWeekReview() {
             <h3 style="margin:0;font-family:'Barlow Condensed',sans-serif;letter-spacing:1.5px;font-size:15px;color:var(--accent)">LOADING PLAN · PLANNED vs ACTUAL</h3>
             <div style="display:flex;align-items:center;gap:10px">
               ${syncBadge}
+              <label style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--text3);font-family:'Barlow Condensed',sans-serif;letter-spacing:1px;cursor:pointer" title="When off, the chosen activity already scopes the group. Turn on only if an activity mixes squads and you want to keep just your roster names.">
+                <input type="checkbox" ${state.amsRosterOnly ? 'checked' : ''} onchange="toggleAmsRosterOnly(this.checked)"> SQUAD ONLY
+              </label>
               <button class="btn btn-ghost btn-sm" onclick="syncAmsForCurrentWeek()" ${syncStatus?.state === 'loading' ? 'disabled' : ''}>⬇ Sync Actuals from AMS</button>
             </div>
           </div>
@@ -7270,7 +7273,7 @@ function renderWeekReview() {
                     if (acts.length === 0) {
                       return `<th style="padding:2px 4px 6px;text-align:center;font-size:8px;color:var(--text3)">—</th>`;
                     }
-                    const opts = acts.map(a => `<option value="${escapeHtml(a.name)}" ${a.name === sel ? 'selected' : ''}>${escapeHtml(a.name.length > 18 ? a.name.slice(0,17)+'…' : a.name)} (${a.rosterCount || a.total})</option>`).join('');
+                    const opts = acts.map(a => `<option value="${escapeHtml(a.name)}" ${a.name === sel ? 'selected' : ''}>${escapeHtml(a.name.length > 18 ? a.name.slice(0,17)+'…' : a.name)} (${a.total})</option>`).join('');
                     return `<th style="padding:2px 3px 6px;text-align:center">
                       <select onchange="setAmsActivity(${w}, '${d.date}', this.value)" style="max-width:100%;font-size:9px;padding:2px;background:var(--surface);border:1px solid var(--border);color:var(--text2)" title="Choose which Catapult activity to use for ${d.date}">${opts}</select>
                       ${used != null ? `<div style="font-size:8px;color:var(--text3);margin-top:1px">${used} used</div>` : ''}
@@ -7313,7 +7316,7 @@ function renderWeekReview() {
             </table>
           </div>
           <div style="font-size:10px;color:var(--text3);margin-top:8px;font-family:'Barlow Condensed',sans-serif;letter-spacing:1px;line-height:1.5">
-            Planned from sessions + match projected load. Actuals pulled live from the AMS Catapult view. For each day the <b>Activity</b> dropdown picks which Catapult session to use (defaults to the one with the most of your squad; the number in parentheses is how many roster players it contains). The average uses <b>only players on your PeriodizePro squad</b>, excluding goalkeepers and anyone logged Modified · Recovery · RTP · Out that date. "N used" shows how many athletes fed the average. Hot/cold scale: <span style="color:#1565c0">●</span> <span style="color:#1565c0">very cold</span> (&lt;80% of planned) · <span style="color:#42a5f5">●</span> <span style="color:#42a5f5">cold</span> · <span style="color:#9e9e9e">●</span> <span style="color:#9e9e9e">on target</span> (±8%) · <span style="color:#ff8a4c">●</span> <span style="color:#ff8a4c">hot</span> · <span style="color:#d32f2f">●</span> <span style="color:#d32f2f">very hot</span> (&gt;120%). Once synced, actuals also appear under planned numbers on every session/match card across Week and Month views.
+            Planned from sessions + match projected load. Actuals pulled live from the AMS Catapult view. For each day the <b>Activity</b> dropdown picks which Catapult session to use (number in parentheses = athletes in that activity). The average uses everyone in the chosen activity except goalkeepers and anyone logged Modified · Recovery · RTP · Out that date — selecting the right activity already scopes to the correct group. Tick <b>SQUAD ONLY</b> to additionally keep just players whose names match your roster (use only if an activity mixes squads). "N used" = athletes that fed the average. Hot/cold scale: <span style="color:#1565c0">●</span> <span style="color:#1565c0">very cold</span> (&lt;80% of planned) · <span style="color:#42a5f5">●</span> <span style="color:#42a5f5">cold</span> · <span style="color:#9e9e9e">●</span> <span style="color:#9e9e9e">on target</span> (±8%) · <span style="color:#ff8a4c">●</span> <span style="color:#ff8a4c">hot</span> · <span style="color:#d32f2f">●</span> <span style="color:#d32f2f">very hot</span> (&gt;120%). Once synced, actuals also appear under planned numbers on every session/match card across Week and Month views.
           </div>
         </div>
       `;
@@ -7494,7 +7497,11 @@ function recomputeAmsActuals(weekNum) {
   const endStr = formatDate(endD);
 
   const rosterNames = new Set((state.players || []).map(p => normalizeAthleteName(p.name)));
-  const enforceRoster = rosterNames.size > 0;
+  // Roster name-matching is OPTIONAL now. The selected activity already scopes
+  // the group, so by default we average everyone in it (minus GK + status).
+  // Turning "squad only" on additionally requires a roster name match — useful
+  // only if an activity mixes squads.
+  const enforceRoster = !!state.amsRosterOnly && rosterNames.size > 0;
 
   const EXCLUDE_STATUSES = new Set(['Modified', 'Recovery', 'RTP', 'Out']);
   const excludedByDate = {};
@@ -7526,8 +7533,8 @@ function recomputeAmsActuals(weekNum) {
     const agg = { td:0, hsr:0, sd:0, accDec:0, duration:0, count:0 };
     chosenRows.forEach(r => {
       const nameKey = normalizeAthleteName(r.athlete_name);
-      if (enforceRoster && !rosterNames.has(nameKey)) { excluded.notOnRoster++; return; }
       if (isGoalkeeperPosition(r.position_name))      { excluded.gk++; return; }
+      if (enforceRoster && !rosterNames.has(nameKey)) { excluded.notOnRoster++; return; }
       if (excludedByDate[date]?.has(nameKey))         { excluded.status++; return; }
       agg.td += (r.total_distance_m||0); agg.hsr += (r.hsr_m||0); agg.sd += (r.sprint_m||0);
       agg.accDec += (r.acc_b2_3_efforts||0) + (r.dec_b2_3_efforts||0);
@@ -7548,6 +7555,16 @@ function recomputeAmsActuals(weekNum) {
   state.amsSyncStatus[weekNum] = {
     ...prev, state: 'ok', includedRows, excluded, enforcedRoster: enforceRoster,
   };
+}
+
+// Toggle the optional "squad roster only" name filter and recompute every
+// week that has already been synced this session.
+function toggleAmsRosterOnly(on) {
+  state.amsRosterOnly = on;
+  Object.keys(state.amsRaw || {}).forEach(w => recomputeAmsActuals(Number(w)));
+  renderWeekReview();
+  if (typeof renderWeek  === 'function') try { renderWeek();  } catch(e){}
+  if (typeof renderMonth === 'function') try { renderMonth(); } catch(e){}
 }
 
 // User picks a different activity for a given date
