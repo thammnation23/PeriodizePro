@@ -7107,28 +7107,6 @@ function renderWeekReview() {
     <!-- PRE/POST TRAINING ROLLUP -->
     ${renderPrePostRollup(w)}
 
-    <!-- COMPETITION TABLE -->
-    <div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:18px 22px;margin-bottom:14px">
-      <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px">
-        <h3 style="margin:0;font-family:'Barlow Condensed',sans-serif;letter-spacing:1.5px;font-size:15px;color:var(--accent)">COMPETITION TABLE · WEEK ${w}</h3>
-        <button class="btn btn-primary btn-sm" onclick="saveCurrentAwards()">Save Awards</button>
-      </div>
-      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px">
-        ${REVIEW_AWARDS.map(a => `
-          <div style="background:var(--surface3);border-radius:var(--radius);padding:10px 12px">
-            <div style="font-size:10px;color:var(--text3);font-family:'Barlow Condensed',sans-serif;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:4px">${a.icon} ${a.label}</div>
-            <input type="text" id="award_${a.key}" placeholder="—" value="${escapeHtml(r.awards?.[a.key] || '')}" style="width:100%;font-family:'Inter',system-ui,sans-serif;font-size:13px;padding:6px 8px;background:var(--surface);border:1px solid var(--border);color:var(--text)">
-          </div>
-        `).join('')}
-      </div>
-
-      <!-- Season awards trail -->
-      <div style="margin-top:18px">
-        <div style="font-family:'Barlow Condensed',sans-serif;letter-spacing:1.5px;font-size:11px;color:var(--text3);margin-bottom:6px">SEASON AWARDS TRAIL</div>
-        ${renderAwardsTrail()}
-      </div>
-    </div>
-
     <!-- Quick stats -->
     <div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:14px 18px;font-size:11px;color:var(--text3);font-family:'Barlow Condensed',sans-serif;letter-spacing:1px">
       ${days.reduce((c, d) => c + d.sessions.length, 0)} sessions · ${days.filter(d => d.game).length} match${days.filter(d => d.game).length === 1 ? '' : 'es'} · Week starts ${fmt(start)} ${start.getFullYear()}
