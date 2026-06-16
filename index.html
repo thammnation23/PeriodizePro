@@ -7665,19 +7665,44 @@ function renderAvailabilityReview(weekNum) {
     `;
   }).filter(Boolean).join('');
 
-  // Week-level rollup
-  const weekLogs = (state.playerLogs || []).filter(l => {
-    const startStr = formatDate(start);
-    const endD = new Date(start); endD.setDate(endD.getDate() + 6);
-    const endStr = formatDate(endD);
-    return l.date >= startStr && l.date <= endStr && l.date <= today;
-  });
+  // Week-level rollup — mirror the per-day "unlogged = Full" math so coaches
+  // who only log exceptions see correct availability. Iterate the dates in
+  // the week that had a session or match, count statuses per-player-per-day
+  // (most-restrictive wins), and fold the unlogged remainder into Full.
+  const startStr = formatDate(start);
+  const endD = new Date(start); endD.setDate(endD.getDate() + 6);
+  const endStr = formatDate(endD);
+
+  const weekLogs = (state.playerLogs || []).filter(l =>
+    l.date >= startStr && l.date <= endStr && l.date <= today
+  );
+
+  const activeDates = (() => {
+    const out = new Set();
+    (state.sessions || []).forEach(s => { if (s.date >= startStr && s.date <= endStr && s.date <= today) out.add(s.date); });
+    (state.games    || []).forEach(g => { if (g.date >= startStr && g.date <= endStr && g.date <= today) out.add(g.date); });
+    return [...out].sort();
+  })();
+
+  const rosterSize = (state.players || []).length;
   let summary = '';
-  if (weekLogs.length > 0) {
-    const c = { Full:0, Modified:0, Recovery:0, RTP:0, Out:0 };
-    weekLogs.forEach(l => { if (c[l.status] != null) c[l.status]++; });
-    const totalLogs = c.Full + c.Modified + c.Recovery + c.RTP + c.Out;
-    const availPct = totalLogs ? Math.round(((c.Full + c.Modified + c.Recovery) / totalLogs) * 100) : 0;
+  if (activeDates.length > 0 && rosterSize > 0) {
+    const priority = { Out: 5, RTP: 4, Modified: 3, Recovery: 2, Full: 1 };
+    const c = { Full: 0, Modified: 0, Recovery: 0, RTP: 0, Out: 0 };
+    activeDates.forEach(date => {
+      const dayLogs = weekLogs.filter(l => l.date === date);
+      const perPlayer = new Map();
+      dayLogs.forEach(l => {
+        const prev = perPlayer.get(l.playerId);
+        if (!prev || priority[l.status] > priority[prev]) perPlayer.set(l.playerId, l.status);
+      });
+      perPlayer.forEach(st => { if (c[st] != null) c[st]++; });
+      // Unlogged players that day are assumed Full
+      c.Full += Math.max(0, rosterSize - perPlayer.size);
+    });
+    const totalSlots = rosterSize * activeDates.length;
+    const unavailable = c.RTP + c.Out;
+    const availPct = totalSlots > 0 ? Math.round(((totalSlots - unavailable) / totalSlots) * 100) : 0;
     summary = `
       <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px;padding:10px 14px;background:var(--surface3);border-radius:var(--radius)">
         <span style="font-family:'Barlow Condensed',sans-serif;letter-spacing:1.5px;font-size:10px;color:var(--text3)">WEEK ROLLUP:</span>
@@ -7687,7 +7712,7 @@ function renderAvailabilityReview(weekNum) {
         ${statusBadge('Recovery', c.Recovery)}
         ${statusBadge('RTP',      c.RTP)}
         ${statusBadge('Out',      c.Out)}
-        <span style="font-size:10px;color:var(--text3);margin-left:auto">${weekLogs.length} total logs</span>
+        <span style="font-size:10px;color:var(--text3);margin-left:auto" title="Roster ${rosterSize} × ${activeDates.length} day(s)">${totalSlots} player-days</span>
       </div>
     `;
   }
