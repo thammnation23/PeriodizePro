@@ -3324,9 +3324,29 @@ function getIntensityLabel(v) {
   if (n >= 5) return 'Medium';
   return 'Low';
 }
-// Colour by session TYPE — uses custom settings if saved
+// Colour by session TYPE — uses custom settings if saved.
+// Intensive and Extensive are pinned to specific green tones because
+// they pair with striped backgrounds (see getTypeBackground).
 function getTypeColor(type) {
+  if (type === 'Extensive') return '#2eb86b';   // green base, pairs with yellow stripes
+  if (type === 'Intensive') return '#81c784';   // light green base, pairs with blue stripes
   return getTypeColorFromSettings(type) || '#888780';
+}
+
+// Background for a session type — striped for Intensive/Extensive, solid otherwise.
+// Use this wherever a swatch or filled cell shows the type (annual plan cells,
+// small swatches next to type labels). Border-left lines and text colour keep
+// using getTypeColor so a single hex always works.
+function getTypeBackground(type) {
+  if (type === 'Extensive') {
+    // green base with thin yellow horizontal stripes
+    return 'repeating-linear-gradient(0deg, #2eb86b 0 3px, #fdd835 3px 4px)';
+  }
+  if (type === 'Intensive') {
+    // light green base with thin blue horizontal stripes
+    return 'repeating-linear-gradient(0deg, #81c784 0 3px, #1976d2 3px 4px)';
+  }
+  return getTypeColor(type);
 }
 function getTypeClass(type) {
   const color = getTypeColor(type);
@@ -3479,14 +3499,14 @@ function renderYear() {
         }
       } else if (sessions.length > 0) {
         const s = sessions[0];
-        const c1 = getTypeColorFromSettings(s.type);
-        const c2 = s.type2 ? getTypeColorFromSettings(s.type2) : null;
+        const bg1 = getTypeBackground(s.type);
+        const c2  = s.type2 ? getTypeColor(s.type2) : null;
 
         cell.style.cssText = 'position:relative;overflow:hidden;height:28px;border-radius:3px;cursor:pointer;';
 
         if (c2) {
-          // Diagonal split — SVG triangle approach via CSS clip-path
-          cell.style.background = c1;
+          // Diagonal split — base background (may be striped) plus a solid triangle for type2
+          cell.style.background = bg1;
           const tri = document.createElement('div');
           tri.style.cssText = `
             position:absolute;bottom:0;right:0;width:0;height:0;
@@ -3495,8 +3515,8 @@ function renderYear() {
           `;
           cell.appendChild(tri);
         } else {
-          // Solid colour
-          cell.style.background = c1;
+          // Solid colour or striped background depending on type
+          cell.style.background = bg1;
         }
       } else {
         cell.style.cssText = 'background:var(--surface2);height:28px;border-radius:3px;cursor:pointer;';
@@ -3878,10 +3898,10 @@ function buildSessionCardHTML(s) {
   const typeColor2 = s.type2 ? getTypeColor(s.type2) : null;
   const typeClass = getTypeClass(s.type);
   const swatchHtml = typeColor2
-    ? `<span style="display:inline-block;width:12px;height:12px;border-radius:2px;position:relative;overflow:hidden;vertical-align:middle;margin-right:4px;background:${typeColor}">
+    ? `<span style="display:inline-block;width:12px;height:12px;border-radius:2px;position:relative;overflow:hidden;vertical-align:middle;margin-right:4px;background:${getTypeBackground(s.type)}">
          <span style="position:absolute;bottom:0;right:0;width:0;height:0;border-style:solid;border-width:0 0 12px 12px;border-color:transparent transparent ${typeColor2} transparent"></span>
        </span>`
-    : `<span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:${typeColor};vertical-align:middle;margin-right:4px"></span>`;
+    : `<span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:${getTypeBackground(s.type)};vertical-align:middle;margin-right:4px"></span>`;
   const typeLabel = s.type2
     ? `${s.type} <span style="color:var(--text3)">+</span> <span style="color:${typeColor2}">${s.type2}</span>`
     : s.type || 'Session';
