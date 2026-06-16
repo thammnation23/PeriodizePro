@@ -7446,7 +7446,7 @@ async function fetchAmsWeekActuals(weekNum) {
 
   const { data, error } = await sbAms
     .from('v_athlete_session_stats')
-    .select('session_date,activity_name,athlete_name,position_name,total_distance_m,hsr_m,sprint_m,acc_b2_3_efforts,dec_b2_3_efforts,duration_minutes')
+    .select('session_date,activity_name,athlete_name,position_name,total_distance_m,hsr_m,sprint_abs_m,acc_b2_3_efforts,dec_b2_3_efforts,duration_minutes')
     .gte('session_date', startStr)
     .lte('session_date', endStr);
   if (error) throw error;
@@ -7536,7 +7536,7 @@ function recomputeAmsActuals(weekNum) {
       if (isGoalkeeperPosition(r.position_name))      { excluded.gk++; return; }
       if (enforceRoster && !rosterNames.has(nameKey)) { excluded.notOnRoster++; return; }
       if (excludedByDate[date]?.has(nameKey))         { excluded.status++; return; }
-      agg.td += (r.total_distance_m||0); agg.hsr += (r.hsr_m||0); agg.sd += (r.sprint_m||0);
+      agg.td += (r.total_distance_m||0); agg.hsr += (r.hsr_m||0); agg.sd += (r.sprint_abs_m||0);
       agg.accDec += (r.acc_b2_3_efforts||0) + (r.dec_b2_3_efforts||0);
       agg.duration += (r.duration_minutes||0); agg.count++;
     });
