@@ -7105,15 +7105,9 @@ function renderWeekReview() {
         td: t.td + (d.td||0), hsr: t.hsr + (d.hsr||0), sd: t.sd + (d.sd||0), accDec: t.accDec + (d.accDec||0),
       }), { td:0, hsr:0, sd:0, accDec:0 });
 
-      // Colour helper: actual vs planned ratio
-      const ratioColor = (actual, planned) => {
-        if (!planned || !actual) return 'var(--text)';
-        const r = actual / planned;
-        if (r >= 0.95 && r <= 1.05) return '#2eb86b';   // on target
-        if (r >= 0.85 && r <= 1.15) return '#c5d12b';   // close
-        if (r >= 0.75 && r <= 1.25) return '#f5a623';   // off
-        return '#ff6b6b';                                // significant deviation
-      };
+      // Share the hot/cold scale with the inline chips so the whole app
+      // tells the same story.
+      const ratioColor = (actual, planned) => actualVsPlannedColor(actual, planned);
 
       const rowDefs = [
         { label: 'Intensity',   plannedGetter: d => d.avgIntensity != null ? Math.round(d.avgIntensity) : '', plannedTotal: '—', actualKey: null },
@@ -7199,7 +7193,7 @@ function renderWeekReview() {
             </table>
           </div>
           <div style="font-size:10px;color:var(--text3);margin-top:8px;font-family:'Barlow Condensed',sans-serif;letter-spacing:1px;line-height:1.5">
-            Planned from sessions + match projected load. Actuals pulled live from the AMS Catapult view — per-day average restricted to <b>players on your PeriodizePro squad</b>, excluding goalkeepers and anyone logged Modified · Recovery · RTP · Out on that date. Colour codes: <span style="color:#2eb86b">on target</span> · <span style="color:#c5d12b">close</span> · <span style="color:#f5a623">off</span> · <span style="color:#ff6b6b">significant deviation</span>. Once synced, the actual value also appears under the planned number on every session/match card across the Week and Month views.
+            Planned from sessions + match projected load. Actuals pulled live from the AMS Catapult view — per-day average restricted to <b>players on your PeriodizePro squad</b>, excluding goalkeepers and anyone logged Modified · Recovery · RTP · Out on that date. Hot/cold scale: <span style="color:#1565c0">●</span> <span style="color:#1565c0">very cold</span> (&lt;80% of planned) · <span style="color:#42a5f5">●</span> <span style="color:#42a5f5">cold</span> · <span style="color:#9e9e9e">●</span> <span style="color:#9e9e9e">on target</span> (±8%) · <span style="color:#ff8a4c">●</span> <span style="color:#ff8a4c">hot</span> · <span style="color:#d32f2f">●</span> <span style="color:#d32f2f">very hot</span> (&gt;120%). Once synced, actuals also appear under planned numbers on every session/match card across Week and Month views.
           </div>
         </div>
       `;
@@ -7415,16 +7409,19 @@ function getAmsActualForDate(dateStr) {
   return null;
 }
 
-// Colour-grade for a single actual vs its planned counterpart.
+// Hot/cold scale: under-load is cold (blue tones), on-target is neutral,
+// over-load is hot (orange/red). Direction is informative — coaches care
+// whether players did MORE or LESS than planned, not just deviation magnitude.
 function actualVsPlannedColor(actual, planned) {
   if (actual == null || actual === '' || !planned) return 'var(--text3)';
   const a = Number(actual), p = Number(planned);
   if (!a || !p) return 'var(--text3)';
   const r = a / p;
-  if (r >= 0.95 && r <= 1.05) return '#2eb86b';
-  if (r >= 0.85 && r <= 1.15) return '#c5d12b';
-  if (r >= 0.75 && r <= 1.25) return '#f5a623';
-  return '#ff6b6b';
+  if (r < 0.80) return '#1565c0';  // very cold — well under planned
+  if (r < 0.92) return '#42a5f5';  // cold — under planned
+  if (r <= 1.08) return '#9e9e9e'; // neutral — on target
+  if (r <= 1.20) return '#ff8a4c'; // hot — over planned
+  return '#d32f2f';                // very hot — significant overload
 }
 
 // Aggregate session notes from all sessions in the selected week,
