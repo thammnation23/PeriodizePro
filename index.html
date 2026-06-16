@@ -3916,15 +3916,19 @@ function buildSessionCardHTML(s) {
               <span class="ex-summary-num">${i + 1}.</span>
               <span class="ex-summary-name">${ex.name || drill?.title || 'Exercise'}</span>
               ${meta ? `<span class="ex-summary-meta">${meta}</span>` : ''}
-              ${linkUrl ? `<a class="ex-summary-link" href="${linkUrl}" target="_blank" title="${linkLabel}">▶</a>` : ''}
+              ${linkUrl ? (
+                drill
+                  ? `<span class="ex-summary-link" style="cursor:pointer" onclick="event.stopPropagation();openMediaDetail('${drill.id}')" title="${escapeAttr(linkLabel)}">▶</span>`
+                  : `<a class="ex-summary-link" href="${linkUrl}" target="_blank" title="${escapeAttr(linkLabel)}">▶</a>`
+              ) : ''}
             </div>
           `;
         }).join('')}
       </div>` : ''}
       ${(s.warmupMedia?.length || s.sessionMedia?.length) ? `
       <div class="link-row">
-        ${(s.warmupMedia||[]).map(mid => { const m = state.media.find(x=>x.id===mid); if(!m) return ''; return `<a class="link-chip link-warmup" href="${m.url||m.dataUrl||'#'}" target="_blank">${m.mediaType==='youtube'?'▶':m.mediaType==='upload'?'🖼':'🔗'} ${m.title||'W/U'}</a>`; }).join('')}
-        ${(s.sessionMedia||[]).map(mid => { const m = state.media.find(x=>x.id===mid); if(!m) return ''; return `<a class="link-chip link-session" href="${m.url||m.dataUrl||'#'}" target="_blank">${m.mediaType==='youtube'?'▶':m.mediaType==='upload'?'🖼':'🔗'} ${m.title||'Session'}</a>`; }).join('')}
+        ${(s.warmupMedia||[]).map(mid => { const m = state.media.find(x=>x.id===mid); if(!m) return ''; return `<span class="link-chip link-warmup" style="cursor:pointer" onclick="event.stopPropagation();openMediaDetail('${m.id}')" title="Open inline player">${m.mediaType==='youtube'?'▶':m.mediaType==='upload'?'🖼':'🔗'} ${m.title||'W/U'}</span>`; }).join('')}
+        ${(s.sessionMedia||[]).map(mid => { const m = state.media.find(x=>x.id===mid); if(!m) return ''; return `<span class="link-chip link-session" style="cursor:pointer" onclick="event.stopPropagation();openMediaDetail('${m.id}')" title="Open inline player">${m.mediaType==='youtube'?'▶':m.mediaType==='upload'?'🖼':'🔗'} ${m.title||'Session'}</span>`; }).join('')}
       </div>` : ''}
       ${(s.prePost && s.prePost.length) ? `
       <div style="margin-top:6px;display:flex;flex-direction:column;gap:3px">
@@ -4856,7 +4860,11 @@ function openDayPanel(dateStr) {
                   <span class="ex-summary-num">${i + 1}.</span>
                   <span class="ex-summary-name">${ex.name || drill?.title || 'Exercise'}</span>
                   ${meta ? `<span class="ex-summary-meta">${meta}</span>` : ''}
-                  ${linkUrl ? `<a class="ex-summary-link" href="${linkUrl}" target="_blank" title="${linkLabel}">▶ Watch</a>` : ''}
+                  ${linkUrl ? (
+                    drill
+                      ? `<span class="ex-summary-link" style="cursor:pointer" onclick="event.stopPropagation();openMediaDetail('${drill.id}')" title="${escapeAttr(linkLabel)}">▶ Watch</span>`
+                      : `<a class="ex-summary-link" href="${linkUrl}" target="_blank" title="${escapeAttr(linkLabel)}">▶ Watch</a>`
+                  ) : ''}
                 </div>
               `;
             }).join('')}
