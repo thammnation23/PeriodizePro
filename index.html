@@ -1565,8 +1565,26 @@
     border-radius: var(--radius);
     margin-bottom: 6px;
     transition: border-color 0.15s;
+    flex-wrap: wrap;
   }
   .settings-type-row:hover { border-color: var(--border2); }
+  .stripe-controls {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-basis: 100%;
+    padding: 6px 0 0 42px;
+    margin-top: 4px;
+    border-top: 1px dashed var(--border);
+    font-size: 10px;
+    font-family: 'Barlow Condensed', sans-serif;
+    letter-spacing: 1px;
+    color: var(--text3);
+    text-transform: uppercase;
+  }
+  .stripe-controls input[type="number"] { width: 46px; padding: 3px 6px; font-size: 11px; }
+  .stripe-controls .settings-swatch { width: 22px; height: 22px; }
+  .stripe-controls input[type="checkbox"] { cursor: pointer; }
   .settings-swatch {
     width: 32px; height: 32px;
     border-radius: var(--radius);
@@ -3325,11 +3343,7 @@ function getIntensityLabel(v) {
   return 'Low';
 }
 // Colour by session TYPE — uses custom settings if saved.
-// Intensive and Extensive are pinned to specific green tones because
-// they pair with striped backgrounds (see getTypeBackground).
 function getTypeColor(type) {
-  if (type === 'Extensive') return '#2eb86b';   // green base, pairs with yellow stripes
-  if (type === 'Intensive') return '#81c784';   // light green base, pairs with blue stripes
   return getTypeColorFromSettings(type) || '#888780';
 }
 
@@ -3337,15 +3351,24 @@ function getTypeColor(type) {
 // Use this wherever a swatch or filled cell shows the type (annual plan cells,
 // small swatches next to type labels). Border-left lines and text colour keep
 // using getTypeColor so a single hex always works.
+// Background CSS for a type OBJECT { color, stripeColor, stripeBase, stripeAccent }
+function typeObjBackground(t) {
+  if (t && t.stripeColor) {
+    const base = t.color || '#888780';
+    const bw   = parseInt(t.stripeBase)   || 3;
+    const aw   = parseInt(t.stripeAccent) || 1;
+    return `repeating-linear-gradient(0deg, ${base} 0 ${bw}px, ${t.stripeColor} ${bw}px ${bw + aw}px)`;
+  }
+  return t?.color || '#888780';
+}
+
 function getTypeBackground(type) {
-  if (type === 'Extensive') {
-    // green base with thin yellow horizontal stripes
-    return 'repeating-linear-gradient(0deg, #2eb86b 0 3px, #fdd835 3px 4px)';
-  }
-  if (type === 'Intensive') {
-    // light green base with thin blue horizontal stripes
-    return 'repeating-linear-gradient(0deg, #81c784 0 3px, #1976d2 3px 4px)';
-  }
+  // First preference: explicit stripe config saved in settings
+  const config = (getSessionTypes() || []).find(t => t.name === type);
+  if (config?.stripeColor) return typeObjBackground(config);
+  // Hardcoded fallback for Intensive / Extensive when settings have no stripe info
+  if (type === 'Extensive') return 'repeating-linear-gradient(0deg, #2eb86b 0 3px, #fdd835 3px 4px)';
+  if (type === 'Intensive') return 'repeating-linear-gradient(0deg, #81c784 0 3px, #1976d2 3px 4px)';
   return getTypeColor(type);
 }
 function getTypeClass(type) {
@@ -5708,8 +5731,8 @@ async function saveQuickAdd() {
 
 // Default session types and gym phases — used when no custom settings saved
 const DEFAULT_SESSION_TYPES = [
-  { name: 'Intensive',  color: '#e24b4a' },
-  { name: 'Extensive',  color: '#1d9e75' },
+  { name: 'Intensive',  color: '#81c784', stripeColor: '#1976d2', stripeBase: 3, stripeAccent: 1 },
+  { name: 'Extensive',  color: '#2eb86b', stripeColor: '#fdd835', stripeBase: 3, stripeAccent: 1 },
   { name: 'Hybrid',     color: '#ba7517' },
   { name: 'Tactical',   color: '#378add' },
   { name: 'Recovery',   color: '#888780' },
@@ -5791,9 +5814,53 @@ function renderSettingsRows(key, items) {
         ${item.name}
       </div>
       <button class="settings-del-btn" onclick="deleteSettingsRow('${key}',${idx})" title="Remove">✕</button>
+      ${key === 'sessionTypes' ? buildStripeControlsHTML(item, idx) : ''}
     `;
     container.appendChild(row);
   });
+}
+
+// Stripe controls — only relevant for session types (not gym phases)
+function buildStripeControlsHTML(item, idx) {
+  const on          = !!item.stripeColor;
+  const stripeColor = item.stripeColor  || '#fdd835';
+  const stripeBase  = item.stripeBase   || 3;
+  const stripeAccent = item.stripeAccent || 1;
+  return `
+    <div class="stripe-controls" data-stripe-row="${idx}">
+      <label style="display:flex;align-items:center;gap:5px;cursor:pointer">
+        <input type="checkbox" data-stripe-on ${on ? 'checked' : ''} onchange="onStripeToggle(${idx})">
+        STRIPES
+      </label>
+      <span data-stripe-fields style="display:${on ? 'flex' : 'none'};align-items:center;gap:8px">
+        <span>COLOR</span>
+        <div class="settings-swatch" style="background:${stripeColor}" id="stripe-swatch-sessionTypes-${idx}">
+          <input type="color" value="${stripeColor}" data-stripe-color
+            oninput="onStripeColorChange(this, ${idx})">
+        </div>
+        <span>BASE</span>
+        <input type="number" min="1" max="20" value="${stripeBase}" data-stripe-base
+          oninput="renderSettingsPreview()" title="Base band thickness (px)">
+        <span>LINE</span>
+        <input type="number" min="1" max="20" value="${stripeAccent}" data-stripe-accent
+          oninput="renderSettingsPreview()" title="Stripe line thickness (px)">
+      </span>
+    </div>
+  `;
+}
+
+function onStripeToggle(idx) {
+  const row = document.querySelector(`#sessionTypesRows .settings-type-row[data-idx="${idx}"]`);
+  if (!row) return;
+  const on = row.querySelector('[data-stripe-on]').checked;
+  const fields = row.querySelector('[data-stripe-fields]');
+  if (fields) fields.style.display = on ? 'flex' : 'none';
+  renderSettingsPreview();
+}
+function onStripeColorChange(input, idx) {
+  const swatch = document.getElementById(`stripe-swatch-sessionTypes-${idx}`);
+  if (swatch) swatch.style.background = input.value;
+  renderSettingsPreview();
 }
 
 function onSwatchChange(input, key, idx) {
@@ -5817,7 +5884,6 @@ function onNameChange(input, key, idx) {
 function addSettingsRow(key) {
   const container = document.getElementById(key + 'Rows');
   const idx = container.children.length;
-  const newItem = { name: 'New Type', color: '#888780' };
   const row = document.createElement('div');
   row.className = 'settings-type-row';
   row.dataset.idx = idx;
@@ -5833,6 +5899,7 @@ function addSettingsRow(key) {
       New Type
     </div>
     <button class="settings-del-btn" onclick="this.closest('.settings-type-row').remove();renderSettingsPreview()" title="Remove">✕</button>
+    ${key === 'sessionTypes' ? buildStripeControlsHTML({}, idx) : ''}
   `;
   container.appendChild(row);
   row.querySelector('.settings-name-input').focus();
@@ -5847,10 +5914,22 @@ function deleteSettingsRow(key, idx) {
 
 function readSettingsRows(key) {
   const rows = document.querySelectorAll(`#${key}Rows .settings-type-row`);
-  return Array.from(rows).map(row => ({
-    name:  row.querySelector('.settings-name-input').value.trim() || 'Unnamed',
-    color: row.querySelector('input[type="color"]').value,
-  })).filter(t => t.name);
+  return Array.from(rows).map(row => {
+    // Base colour = the first colour input that is NOT the stripe colour input
+    const baseColorInput = row.querySelector('input[type="color"]:not([data-stripe-color])');
+    const out = {
+      name:  row.querySelector('.settings-name-input').value.trim() || 'Unnamed',
+      color: baseColorInput ? baseColorInput.value : '#888780',
+    };
+    // Stripe fields (session types only) — keyed off the explicit checkbox
+    const stripeOn = row.querySelector('[data-stripe-on]');
+    if (stripeOn && stripeOn.checked) {
+      out.stripeColor  = row.querySelector('[data-stripe-color]')?.value || '#fdd835';
+      out.stripeBase   = parseInt(row.querySelector('[data-stripe-base]')?.value)   || 3;
+      out.stripeAccent = parseInt(row.querySelector('[data-stripe-accent]')?.value) || 1;
+    }
+    return out;
+  }).filter(t => t.name);
 }
 
 function renderSettingsPreview() {
@@ -5864,8 +5943,9 @@ function renderSettingsPreview() {
     const t = types[i % types.length];
     const g = phases[i % phases.length];
     const hasAct = i % 4 === 0;
+    const tBg = typeObjBackground(t);
     html += `<div class="sp-col">
-      ${['','','','','','',''].map(() => `<div class="sp-field" style="background:${t.color}"></div>`).join('')}
+      ${['','','','','','',''].map(() => `<div class="sp-field" style="background:${tBg}"></div>`).join('')}
       <div class="sp-gym" style="background:${g.color}"></div>
       <div class="sp-act" style="background:${hasAct ? '#b388ff' : 'transparent'}"></div>
     </div>`;
