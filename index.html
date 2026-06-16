@@ -3021,7 +3021,7 @@ const MONTHS = ['January','February','March','April','May','June','July','August
 const MONTHS_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
 function emptyState() {
-  return { sessions: [], games: [], weekSettings: {}, media: [], settings: null, opponents: [], players: [], playerLogs: [], weekReviews: {}, amsActuals: {}, amsSyncStatus: {} };
+  return { sessions: [], games: [], weekSettings: {}, media: [], settings: null, opponents: [], players: [], playerLogs: [], weekReviews: {}, amsActuals: {}, amsSyncStatus: {}, amsRaw: {}, amsActivities: {}, amsSelectedActivity: {} };
 }
 let state = emptyState();
 let currentWeek = getCurrentWeekNum();
@@ -7259,6 +7259,25 @@ function renderWeekReview() {
                   }).join('')}
                   <th style="text-align:center;padding:6px 8px;font-family:'Barlow Condensed',sans-serif;letter-spacing:1.5px;font-size:10px;color:var(--accent);text-transform:uppercase">Σ Total</th>
                 </tr>
+                ${hasActuals ? `
+                <tr style="background:var(--surface3)">
+                  <th></th>
+                  <th style="text-align:left;padding:2px 8px 6px;font-family:'Barlow Condensed',sans-serif;letter-spacing:1px;font-size:8px;color:var(--text3);text-transform:uppercase">Activity</th>
+                  ${days.map(d => {
+                    const acts = state.amsActivities?.[w]?.[d.date] || [];
+                    const sel  = state.amsSelectedActivity?.[w]?.[d.date] || '';
+                    const used = actuals[d.date]?.count;
+                    if (acts.length === 0) {
+                      return `<th style="padding:2px 4px 6px;text-align:center;font-size:8px;color:var(--text3)">—</th>`;
+                    }
+                    const opts = acts.map(a => `<option value="${escapeHtml(a.name)}" ${a.name === sel ? 'selected' : ''}>${escapeHtml(a.name.length > 18 ? a.name.slice(0,17)+'…' : a.name)} (${a.rosterCount || a.total})</option>`).join('');
+                    return `<th style="padding:2px 3px 6px;text-align:center">
+                      <select onchange="setAmsActivity(${w}, '${d.date}', this.value)" style="max-width:100%;font-size:9px;padding:2px;background:var(--surface);border:1px solid var(--border);color:var(--text2)" title="Choose which Catapult activity to use for ${d.date}">${opts}</select>
+                      ${used != null ? `<div style="font-size:8px;color:var(--text3);margin-top:1px">${used} used</div>` : ''}
+                    </th>`;
+                  }).join('')}
+                  <th></th>
+                </tr>` : ''}
               </thead>
               <tbody>
                 ${rowDefs.flatMap(row => {
@@ -7294,7 +7313,7 @@ function renderWeekReview() {
             </table>
           </div>
           <div style="font-size:10px;color:var(--text3);margin-top:8px;font-family:'Barlow Condensed',sans-serif;letter-spacing:1px;line-height:1.5">
-            Planned from sessions + match projected load. Actuals pulled live from the AMS Catapult view — for each day only the <b>main session</b> is used (the activity with the most athletes; separate RTP / individual / second-group files are ignored). Average is further restricted to <b>players on your PeriodizePro squad</b>, excluding goalkeepers and anyone logged Modified · Recovery · RTP · Out on that date. Hot/cold scale: <span style="color:#1565c0">●</span> <span style="color:#1565c0">very cold</span> (&lt;80% of planned) · <span style="color:#42a5f5">●</span> <span style="color:#42a5f5">cold</span> · <span style="color:#9e9e9e">●</span> <span style="color:#9e9e9e">on target</span> (±8%) · <span style="color:#ff8a4c">●</span> <span style="color:#ff8a4c">hot</span> · <span style="color:#d32f2f">●</span> <span style="color:#d32f2f">very hot</span> (&gt;120%). Once synced, actuals also appear under planned numbers on every session/match card across Week and Month views.
+            Planned from sessions + match projected load. Actuals pulled live from the AMS Catapult view. For each day the <b>Activity</b> dropdown picks which Catapult session to use (defaults to the one with the most of your squad; the number in parentheses is how many roster players it contains). The average uses <b>only players on your PeriodizePro squad</b>, excluding goalkeepers and anyone logged Modified · Recovery · RTP · Out that date. "N used" shows how many athletes fed the average. Hot/cold scale: <span style="color:#1565c0">●</span> <span style="color:#1565c0">very cold</span> (&lt;80% of planned) · <span style="color:#42a5f5">●</span> <span style="color:#42a5f5">cold</span> · <span style="color:#9e9e9e">●</span> <span style="color:#9e9e9e">on target</span> (±8%) · <span style="color:#ff8a4c">●</span> <span style="color:#ff8a4c">hot</span> · <span style="color:#d32f2f">●</span> <span style="color:#d32f2f">very hot</span> (&gt;120%). Once synced, actuals also appear under planned numbers on every session/match card across Week and Month views.
           </div>
         </div>
       `;
@@ -7394,9 +7413,24 @@ function isGoalkeeperPosition(positionName) {
   return GK_POSITION_PATTERNS.some(pat => p === pat || p.includes('goalkeep') || p.includes('goalie'));
 }
 function normalizeAthleteName(n) {
-  return (n || '').trim().toLowerCase().replace(/\s+/g, ' ');
+  return (n || '')
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '') // strip accents
+    .trim().toLowerCase()
+    .replace(/[.\-']/g, ' ')   // punctuation → space
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+// A second key that ignores ordering (so "Last First" matches "First Last")
+// and drops middle names — used as a fallback when exact match fails.
+function nameTokenKey(n) {
+  const toks = normalizeAthleteName(n).split(' ').filter(Boolean);
+  if (toks.length <= 1) return toks.join(' ');
+  // first + last token only, sorted so order doesn't matter
+  return [toks[0], toks[toks.length - 1]].sort().join(' ');
 }
 
+// Thin fetch — pulls raw rows for the week, stores them, builds the per-date
+// activity list, and seeds the auto-selected primary activity per date.
 async function fetchAmsWeekActuals(weekNum) {
   const start = getWeekStart(weekNum);
   const dates = [];
@@ -7414,100 +7448,116 @@ async function fetchAmsWeekActuals(weekNum) {
     .lte('session_date', endStr);
   if (error) throw error;
 
-  // Roster filter — only include athletes whose name matches a player on the
-  // PeriodizePro squad. If the squad is empty, skip this filter (no point
-  // narrowing to zero).
+  const rows = data || [];
+  state.amsRaw[weekNum] = rows;
+
+  // Roster set for primary-activity selection
+  const rosterNames = new Set((state.players || []).map(p => normalizeAthleteName(p.name)));
+  const enforceRoster = rosterNames.size > 0;
+  const rosterMatchCount = (rs) => enforceRoster
+    ? rs.filter(r => rosterNames.has(normalizeAthleteName(r.athlete_name))).length
+    : rs.length;
+
+  // Group by date → activity, build the activities list + auto-primary
+  const byDateActivity = {};
+  rows.forEach(r => {
+    const k = r.session_date, a = r.activity_name || '(unnamed)';
+    (byDateActivity[k] = byDateActivity[k] || {});
+    (byDateActivity[k][a] = byDateActivity[k][a] || []).push(r);
+  });
+
+  const activities = {};            // { date: [{name, total, rosterCount}] }
+  const selected = state.amsSelectedActivity[weekNum] || {};
+  Object.entries(byDateActivity).forEach(([date, acts]) => {
+    const list = Object.entries(acts)
+      .map(([name, rs]) => ({ name, total: rs.length, rosterCount: rosterMatchCount(rs) }))
+      .sort((a, b) => (b.rosterCount - a.rosterCount) || (b.total - a.total));
+    activities[date] = list;
+    // Seed selection only if not already chosen by the user this session
+    if (!selected[date]) selected[date] = list[0]?.name || null;
+  });
+  state.amsActivities[weekNum]       = activities;
+  state.amsSelectedActivity[weekNum] = selected;
+
+  return { totalRows: rows.length, fetchedAt: new Date().toISOString(), enforcedRoster: enforceRoster };
+}
+
+// Pure recompute — builds the per-date averages from stored raw rows using the
+// currently-selected activity per date, applying roster / GK / status filters.
+function recomputeAmsActuals(weekNum) {
+  const rows = state.amsRaw[weekNum] || [];
+  const selected = state.amsSelectedActivity[weekNum] || {};
+
+  const start = getWeekStart(weekNum);
+  const startStr = formatDate(start);
+  const endD = new Date(start); endD.setDate(endD.getDate() + 6);
+  const endStr = formatDate(endD);
+
   const rosterNames = new Set((state.players || []).map(p => normalizeAthleteName(p.name)));
   const enforceRoster = rosterNames.size > 0;
 
-  // Build a lookup of names-to-exclude per date from PeriodizePro player_logs.
-  // Any player flagged Modified / Recovery / RTP / Out on a given date is excluded
-  // from that date's average.
   const EXCLUDE_STATUSES = new Set(['Modified', 'Recovery', 'RTP', 'Out']);
-  const excludedByDate = {}; // { date: Set<normalizedName> }
+  const excludedByDate = {};
   (state.playerLogs || []).forEach(l => {
     if (l.date < startStr || l.date > endStr) return;
     if (!EXCLUDE_STATUSES.has(l.status)) return;
     const player = (state.players || []).find(p => p.id === l.playerId);
     if (!player) return;
-    if (!excludedByDate[l.date]) excludedByDate[l.date] = new Set();
-    excludedByDate[l.date].add(normalizeAthleteName(player.name));
+    (excludedByDate[l.date] = excludedByDate[l.date] || new Set()).add(normalizeAthleteName(player.name));
   });
 
-  // ── Step 1: group rows by date → activity ──
-  // A single date can contain several activities (the main team session plus
-  // separate RTP / individual / second-group files). Blending them produces a
-  // meaningless average, so we pick ONE primary activity per date: the one with
-  // the most participating athletes (the main team session).
-  const byDateActivity = {}; // { date: { activity: rows[] } }
-  (data || []).forEach(r => {
-    const k = r.session_date;
-    const a = r.activity_name || '(unnamed)';
-    if (!byDateActivity[k]) byDateActivity[k] = {};
-    if (!byDateActivity[k][a]) byDateActivity[k][a] = [];
-    byDateActivity[k][a].push(r);
-  });
-
-  // ── Step 2: for each date, pick primary activity + average the included athletes ──
   const byDate = {};
   const excluded = { gk: 0, status: 0, notOnRoster: 0, secondaryActivity: 0 };
-  const primaryActivityByDate = {};
 
-  // How many of THIS activity's athletes are on the PeriodizePro squad.
-  // When a roster is set, the "main session" is the activity with the most of
-  // OUR players — not just the most bodies — so a larger academy/other-team
-  // file on the same day can't hijack the day.
-  const rosterMatchCount = (rows) => enforceRoster
-    ? rows.filter(r => rosterNames.has(normalizeAthleteName(r.athlete_name))).length
-    : rows.length;
+  // Group rows by date → activity
+  const byDateActivity = {};
+  rows.forEach(r => {
+    const k = r.session_date, a = r.activity_name || '(unnamed)';
+    (byDateActivity[k] = byDateActivity[k] || {});
+    (byDateActivity[k][a] = byDateActivity[k][a] || []).push(r);
+  });
 
-  Object.entries(byDateActivity).forEach(([date, activities]) => {
-    // Primary = activity with the most roster athletes (ties broken by total size)
-    const sorted = Object.entries(activities).sort((a, b) => {
-      const diff = rosterMatchCount(b[1]) - rosterMatchCount(a[1]);
-      return diff !== 0 ? diff : b[1].length - a[1].length;
-    });
-    const [primaryName, primaryRows] = sorted[0];
-    primaryActivityByDate[date] = primaryName;
-    // Count rows in the dropped secondary activities for transparency
-    sorted.slice(1).forEach(([, rows]) => { excluded.secondaryActivity += rows.length; });
+  Object.entries(byDateActivity).forEach(([date, acts]) => {
+    const chosen = selected[date] || Object.keys(acts)[0];
+    const chosenRows = acts[chosen] || [];
+    // Count dropped rows from non-chosen activities
+    Object.entries(acts).forEach(([name, rs]) => { if (name !== chosen) excluded.secondaryActivity += rs.length; });
 
     const agg = { td:0, hsr:0, sd:0, accDec:0, duration:0, count:0 };
-    primaryRows.forEach(r => {
+    chosenRows.forEach(r => {
       const nameKey = normalizeAthleteName(r.athlete_name);
       if (enforceRoster && !rosterNames.has(nameKey)) { excluded.notOnRoster++; return; }
       if (isGoalkeeperPosition(r.position_name))      { excluded.gk++; return; }
       if (excludedByDate[date]?.has(nameKey))         { excluded.status++; return; }
-      agg.td       += (r.total_distance_m   || 0);
-      agg.hsr      += (r.hsr_m              || 0);
-      agg.sd       += (r.sprint_m           || 0);
-      agg.accDec   += (r.acc_b2_3_efforts   || 0) + (r.dec_b2_3_efforts || 0);
-      agg.duration += (r.duration_minutes   || 0);
-      agg.count++;
+      agg.td += (r.total_distance_m||0); agg.hsr += (r.hsr_m||0); agg.sd += (r.sprint_m||0);
+      agg.accDec += (r.acc_b2_3_efforts||0) + (r.dec_b2_3_efforts||0);
+      agg.duration += (r.duration_minutes||0); agg.count++;
     });
     if (agg.count > 0) {
       byDate[date] = {
-        td:       Math.round(agg.td       / agg.count),
-        hsr:      Math.round(agg.hsr      / agg.count),
-        sd:       Math.round(agg.sd       / agg.count),
-        accDec:   Math.round(agg.accDec   / agg.count),
-        duration: Math.round(agg.duration / agg.count),
-        count:    agg.count,
-        activity: primaryName,
+        td: Math.round(agg.td/agg.count), hsr: Math.round(agg.hsr/agg.count),
+        sd: Math.round(agg.sd/agg.count), accDec: Math.round(agg.accDec/agg.count),
+        duration: Math.round(agg.duration/agg.count), count: agg.count, activity: chosen,
       };
     }
   });
 
+  state.amsActuals[weekNum] = byDate;
   const includedRows = Object.values(byDate).reduce((n, d) => n + d.count, 0);
-  return {
-    byDate,
-    fetchedAt: new Date().toISOString(),
-    totalRows: (data || []).length,
-    includedRows,
-    excluded,
-    enforcedRoster: enforceRoster,
-    primaryActivityByDate,
+  const prev = state.amsSyncStatus[weekNum] || {};
+  state.amsSyncStatus[weekNum] = {
+    ...prev, state: 'ok', includedRows, excluded, enforcedRoster: enforceRoster,
   };
+}
+
+// User picks a different activity for a given date
+function setAmsActivity(weekNum, date, activityName) {
+  if (!state.amsSelectedActivity[weekNum]) state.amsSelectedActivity[weekNum] = {};
+  state.amsSelectedActivity[weekNum][date] = activityName;
+  recomputeAmsActuals(weekNum);
+  renderWeekReview();
+  if (typeof renderWeek  === 'function') try { renderWeek();  } catch(e){}
+  if (typeof renderMonth === 'function') try { renderMonth(); } catch(e){}
 }
 
 async function syncAmsForCurrentWeek() {
@@ -7517,13 +7567,12 @@ async function syncAmsForCurrentWeek() {
   renderWeekReview();
   try {
     const result = await fetchAmsWeekActuals(w);
-    state.amsActuals[w]    = result.byDate;
+    recomputeAmsActuals(w);
     state.amsSyncStatus[w] = {
+      ...state.amsSyncStatus[w],
       state: 'ok',
       fetchedAt:      result.fetchedAt,
       totalRows:      result.totalRows,
-      includedRows:   result.includedRows,
-      excluded:       result.excluded,
       enforcedRoster: result.enforcedRoster,
     };
   } catch (e) {
