@@ -2911,6 +2911,12 @@ const SUPABASE_URL = 'https://fmfrlczmsukdjphiiueo.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZtZnJsY3ptc3VrZGpwaGlpdWVvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU3NTEzNjMsImV4cCI6MjA5MTMyNzM2M30.nkMGxVlgbWaCt7NHFBkN-_BJMpnpkc0Pp5fS5Sd-ra8';
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
+// AMS — separate Supabase project (Athlete Management System).
+// Read-only here; PeriodizePro pulls actual Catapult load to compare vs planned.
+const AMS_URL = 'https://ybcdcwrendycsrzfrjnu.supabase.co';
+const AMS_KEY = 'sb_publishable_iln5gxI16TX6ivVcF-QKbg_pKbeaIRB';
+const sbAms = supabase.createClient(AMS_URL, AMS_KEY);
+
 let currentUser = null;
 
 // ── AUTH HELPERS ──
@@ -2997,7 +3003,7 @@ const MONTHS = ['January','February','March','April','May','June','July','August
 const MONTHS_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
 function emptyState() {
-  return { sessions: [], games: [], weekSettings: {}, media: [], settings: null, opponents: [], players: [], playerLogs: [], weekReviews: {} };
+  return { sessions: [], games: [], weekSettings: {}, media: [], settings: null, opponents: [], players: [], playerLogs: [], weekReviews: {}, amsActuals: {}, amsSyncStatus: {} };
 }
 let state = emptyState();
 let currentWeek = getCurrentWeekNum();
@@ -7067,39 +7073,103 @@ function renderWeekReview() {
     </div>
 
     <!-- LOADING PLAN TOTALS -->
-    <div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:18px 22px;margin-bottom:14px">
-      <h3 style="margin:0 0 12px 0;font-family:'Barlow Condensed',sans-serif;letter-spacing:1.5px;font-size:15px;color:var(--accent)">LOADING PLAN · PLANNED TOTALS</h3>
-      <div style="overflow-x:auto">
-        <table style="width:100%;border-collapse:collapse;font-size:11.5px">
-          <thead>
-            <tr style="background:var(--surface3)">
-              <th style="text-align:left;padding:6px 8px;font-family:'Barlow Condensed',sans-serif;letter-spacing:1.5px;font-size:10px;color:var(--text3);text-transform:uppercase">Metric</th>
-              ${days.map(d => {
-                const ds = new Date(d.date + 'T12:00:00');
-                return `<th style="text-align:center;padding:6px 8px;font-family:'Barlow Condensed',sans-serif;letter-spacing:1px;font-size:10px;color:var(--text3);text-transform:uppercase">${ds.toLocaleDateString('en',{weekday:'short'})}<br><span style="font-weight:400;font-size:9px">${ds.toLocaleDateString('en',{month:'short',day:'numeric'})}</span></th>`;
-              }).join('')}
-              <th style="text-align:center;padding:6px 8px;font-family:'Barlow Condensed',sans-serif;letter-spacing:1.5px;font-size:10px;color:var(--accent);text-transform:uppercase">Σ Total</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${[
-              { label: 'Intensity', getter: d => d.avgIntensity != null ? Math.round(d.avgIntensity) : '', total: '—' },
-              { label: 'TD (m)',  getter: d => d.td  || '', total: totals.td },
-              { label: 'HSR (m)', getter: d => d.hsr || '', total: totals.hsr },
-              { label: 'Sprint',  getter: d => d.sd  || '', total: totals.sd },
-              { label: 'Acc/Dec (n)', getter: d => (d.acc + d.dec) || '', total: totals.acc + totals.dec },
-            ].map(row => `
-              <tr style="border-top:1px solid var(--border)">
-                <td style="padding:6px 8px;font-family:'Barlow Condensed',sans-serif;font-weight:700;letter-spacing:0.5px;color:var(--text2)">${row.label}</td>
-                ${days.map(d => `<td style="text-align:center;padding:6px 8px;font-family:'JetBrains Mono',monospace;color:var(--text);font-size:11px">${row.getter(d) === '' ? '<span style="color:var(--text3)">—</span>' : fmtNum(row.getter(d))}</td>`).join('')}
-                <td style="text-align:center;padding:6px 8px;font-family:'JetBrains Mono',monospace;font-weight:700;color:var(--accent)">${typeof row.total === 'number' ? fmtNum(row.total) : row.total}</td>
-              </tr>
-            `).join('')}
-          </tbody>
-        </table>
-      </div>
-      <div style="font-size:10px;color:var(--text3);margin-top:8px;font-family:'Barlow Condensed',sans-serif;letter-spacing:1px">Planned values from sessions + match projected load. Add actual columns later when post-session numbers are available.</div>
-    </div>
+    ${(() => {
+      const actuals = state.amsActuals?.[w] || {};
+      const syncStatus = state.amsSyncStatus?.[w];
+      const hasActuals = Object.keys(actuals).length > 0;
+
+      // Compute actual totals across the week (Σ column)
+      const actualTotals = Object.values(actuals).reduce((t, d) => ({
+        td: t.td + (d.td||0), hsr: t.hsr + (d.hsr||0), sd: t.sd + (d.sd||0), accDec: t.accDec + (d.accDec||0),
+      }), { td:0, hsr:0, sd:0, accDec:0 });
+
+      // Colour helper: actual vs planned ratio
+      const ratioColor = (actual, planned) => {
+        if (!planned || !actual) return 'var(--text)';
+        const r = actual / planned;
+        if (r >= 0.95 && r <= 1.05) return '#2eb86b';   // on target
+        if (r >= 0.85 && r <= 1.15) return '#c5d12b';   // close
+        if (r >= 0.75 && r <= 1.25) return '#f5a623';   // off
+        return '#ff6b6b';                                // significant deviation
+      };
+
+      const rowDefs = [
+        { label: 'Intensity',   plannedGetter: d => d.avgIntensity != null ? Math.round(d.avgIntensity) : '', plannedTotal: '—', actualKey: null },
+        { label: 'TD (m)',      plannedGetter: d => d.td,           plannedTotal: totals.td,             actualKey: 'td' },
+        { label: 'HSR (m)',     plannedGetter: d => d.hsr,          plannedTotal: totals.hsr,            actualKey: 'hsr' },
+        { label: 'Sprint',      plannedGetter: d => d.sd,           plannedTotal: totals.sd,             actualKey: 'sd' },
+        { label: 'Acc/Dec (n)', plannedGetter: d => d.acc + d.dec,  plannedTotal: totals.acc + totals.dec, actualKey: 'accDec' },
+      ];
+
+      const syncBadge = syncStatus?.state === 'loading'
+        ? `<span style="font-size:10px;color:var(--accent);font-family:'Barlow Condensed',sans-serif;letter-spacing:1px">SYNCING…</span>`
+        : syncStatus?.state === 'error'
+          ? `<span style="font-size:10px;color:#ff6b6b;font-family:'Barlow Condensed',sans-serif;letter-spacing:1px" title="${escapeHtml(syncStatus.message||'')}">SYNC FAILED</span>`
+          : syncStatus?.state === 'ok'
+            ? `<span style="font-size:10px;color:var(--text3);font-family:'Barlow Condensed',sans-serif;letter-spacing:1px">${syncStatus.totalRows} ROWS · ${new Date(syncStatus.fetchedAt).toLocaleTimeString('en',{hour:'numeric',minute:'2-digit'})}</span>`
+            : '';
+
+      return `
+        <div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:18px 22px;margin-bottom:14px">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;gap:10px;flex-wrap:wrap">
+            <h3 style="margin:0;font-family:'Barlow Condensed',sans-serif;letter-spacing:1.5px;font-size:15px;color:var(--accent)">LOADING PLAN · PLANNED vs ACTUAL</h3>
+            <div style="display:flex;align-items:center;gap:10px">
+              ${syncBadge}
+              <button class="btn btn-ghost btn-sm" onclick="syncAmsForCurrentWeek()" ${syncStatus?.state === 'loading' ? 'disabled' : ''}>⬇ Sync Actuals from AMS</button>
+            </div>
+          </div>
+          <div style="overflow-x:auto">
+            <table style="width:100%;border-collapse:collapse;font-size:11.5px">
+              <thead>
+                <tr style="background:var(--surface3)">
+                  <th style="text-align:left;padding:6px 8px;font-family:'Barlow Condensed',sans-serif;letter-spacing:1.5px;font-size:10px;color:var(--text3);text-transform:uppercase">Metric</th>
+                  <th style="text-align:left;padding:6px 8px;font-family:'Barlow Condensed',sans-serif;letter-spacing:1.5px;font-size:10px;color:var(--text3);text-transform:uppercase">Source</th>
+                  ${days.map(d => {
+                    const ds = new Date(d.date + 'T12:00:00');
+                    return `<th style="text-align:center;padding:6px 8px;font-family:'Barlow Condensed',sans-serif;letter-spacing:1px;font-size:10px;color:var(--text3);text-transform:uppercase">${ds.toLocaleDateString('en',{weekday:'short'})}<br><span style="font-weight:400;font-size:9px">${ds.toLocaleDateString('en',{month:'short',day:'numeric'})}</span></th>`;
+                  }).join('')}
+                  <th style="text-align:center;padding:6px 8px;font-family:'Barlow Condensed',sans-serif;letter-spacing:1.5px;font-size:10px;color:var(--accent);text-transform:uppercase">Σ Total</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${rowDefs.flatMap(row => {
+                  const plannedRow = `
+                    <tr style="border-top:1px solid var(--border)">
+                      <td rowspan="${(hasActuals && row.actualKey) ? 2 : 1}" style="padding:6px 8px;font-family:'Barlow Condensed',sans-serif;font-weight:700;letter-spacing:0.5px;color:var(--text2);vertical-align:middle">${row.label}</td>
+                      <td style="padding:4px 8px;font-family:'Barlow Condensed',sans-serif;letter-spacing:1px;font-size:9px;color:var(--text3)">PLANNED</td>
+                      ${days.map(d => {
+                        const v = row.plannedGetter(d);
+                        const display = v === '' || v == null || v === 0 ? '<span style="color:var(--text3)">—</span>' : fmtNum(v);
+                        return `<td style="text-align:center;padding:4px 8px;font-family:'JetBrains Mono',monospace;color:var(--text);font-size:11px">${display}</td>`;
+                      }).join('')}
+                      <td style="text-align:center;padding:4px 8px;font-family:'JetBrains Mono',monospace;font-weight:700;color:var(--accent)">${typeof row.plannedTotal === 'number' ? fmtNum(row.plannedTotal) : row.plannedTotal}</td>
+                    </tr>
+                  `;
+                  if (!hasActuals || !row.actualKey) return [plannedRow];
+                  const actualRow = `
+                    <tr style="background:rgba(0,212,255,0.03)">
+                      <td style="padding:4px 8px;font-family:'Barlow Condensed',sans-serif;letter-spacing:1px;font-size:9px;color:var(--accent)">ACTUAL</td>
+                      ${days.map(d => {
+                        const a = actuals[d.date]?.[row.actualKey];
+                        const p = row.plannedGetter(d);
+                        if (a == null) return `<td style="text-align:center;padding:4px 8px;font-family:'JetBrains Mono',monospace;color:var(--text3);font-size:11px">—</td>`;
+                        const color = ratioColor(a, p);
+                        return `<td style="text-align:center;padding:4px 8px;font-family:'JetBrains Mono',monospace;color:${color};font-size:11px;font-weight:600">${fmtNum(a)}</td>`;
+                      }).join('')}
+                      <td style="text-align:center;padding:4px 8px;font-family:'JetBrains Mono',monospace;font-weight:700;color:${ratioColor(actualTotals[row.actualKey], row.plannedTotal)}">${actualTotals[row.actualKey] ? fmtNum(actualTotals[row.actualKey]) : '—'}</td>
+                    </tr>
+                  `;
+                  return [plannedRow, actualRow];
+                }).join('')}
+              </tbody>
+            </table>
+          </div>
+          <div style="font-size:10px;color:var(--text3);margin-top:8px;font-family:'Barlow Condensed',sans-serif;letter-spacing:1px">
+            Planned from sessions + match projected load. Actuals pulled live from the AMS Catapult view — per-day team average across athletes. Colour codes: <span style="color:#2eb86b">on target</span> · <span style="color:#c5d12b">close</span> · <span style="color:#f5a623">off</span> · <span style="color:#ff6b6b">significant deviation</span>.
+          </div>
+        </div>
+      `;
+    })()}
 
     <!-- AVAILABILITY REVIEW (past days only) -->
     ${renderAvailabilityReview(w)}
@@ -7177,6 +7247,67 @@ function getDayAvailability(dateStr) {
 function statusBadge(status, count) {
   const c = statusColor(status);
   return `<span style="display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:3px;font-family:'Barlow Condensed',sans-serif;font-weight:700;letter-spacing:1px;font-size:10px;background:${c}22;color:${c}">${count} ${status.toUpperCase()}</span>`;
+}
+
+// ── AMS (Athlete Management System) — actuals integration ──
+// Pulls per-athlete Catapult metrics from the AMS Supabase project for the week
+// and aggregates them to per-day team averages so we can compare against planned.
+async function fetchAmsWeekActuals(weekNum) {
+  const start = getWeekStart(weekNum);
+  const dates = [];
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(start); d.setDate(d.getDate() + i);
+    dates.push(formatDate(d));
+  }
+  const startStr = dates[0];
+  const endStr   = dates[dates.length - 1];
+
+  const { data, error } = await sbAms
+    .from('v_athlete_session_stats')
+    .select('session_date,total_distance_m,hsr_m,sprint_m,acc_b2_3_efforts,dec_b2_3_efforts,duration_minutes')
+    .gte('session_date', startStr)
+    .lte('session_date', endStr);
+  if (error) throw error;
+
+  // Aggregate per date → team average across athletes
+  const byDate = {};
+  (data || []).forEach(r => {
+    const k = r.session_date;
+    if (!byDate[k]) byDate[k] = { td:0, hsr:0, sd:0, accDec:0, duration:0, count:0, athletes:new Set() };
+    byDate[k].td       += (r.total_distance_m   || 0);
+    byDate[k].hsr      += (r.hsr_m              || 0);
+    byDate[k].sd       += (r.sprint_m           || 0);
+    byDate[k].accDec   += (r.acc_b2_3_efforts   || 0) + (r.dec_b2_3_efforts || 0);
+    byDate[k].duration += (r.duration_minutes   || 0);
+    byDate[k].count++;
+  });
+  // Convert sums to per-athlete averages so they compare like-for-like with planned (per-player targets)
+  Object.values(byDate).forEach(d => {
+    if (d.count > 0) {
+      d.td       = Math.round(d.td       / d.count);
+      d.hsr      = Math.round(d.hsr      / d.count);
+      d.sd       = Math.round(d.sd       / d.count);
+      d.accDec   = Math.round(d.accDec   / d.count);
+      d.duration = Math.round(d.duration / d.count);
+    }
+  });
+  return { byDate, fetchedAt: new Date().toISOString(), totalRows: (data || []).length };
+}
+
+async function syncAmsForCurrentWeek() {
+  const w = reviewCurrentWeek;
+  if (!w) return;
+  state.amsSyncStatus[w] = { state: 'loading' };
+  renderWeekReview();
+  try {
+    const result = await fetchAmsWeekActuals(w);
+    state.amsActuals[w]    = result.byDate;
+    state.amsSyncStatus[w] = { state: 'ok', fetchedAt: result.fetchedAt, totalRows: result.totalRows };
+  } catch (e) {
+    console.error('AMS sync failed:', e);
+    state.amsSyncStatus[w] = { state: 'error', message: e.message };
+  }
+  renderWeekReview();
 }
 
 // Aggregate session notes from all sessions in the selected week,
