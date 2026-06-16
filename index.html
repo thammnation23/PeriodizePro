@@ -3817,14 +3817,20 @@ async function updateGameMetric(gameId, field, value) {
 
 // Editable metric chip — labelled input that stops click propagation so the
 // parent session/game card click handler does not also fire.
-function editableMetricChip(label, value, onChangeJs) {
+// Optional `actualValue` renders a read-only sub-line under the planned input,
+// colour-graded by ratio vs planned.
+function editableMetricChip(label, value, onChangeJs, actualValue) {
   const safe = value == null || value === '' ? '' : value;
+  const actualLine = (actualValue != null && actualValue !== '' && actualValue !== 0)
+    ? `<div style="font-family:'JetBrains Mono',monospace;font-size:9px;font-weight:600;margin-top:1px;color:${actualVsPlannedColor(actualValue, value)}" title="Catapult actual">${fmtNum(actualValue)}</div>`
+    : '';
   return `
     <div class="metric-chip">
       <div class="metric-label">${label}</div>
       <input type="number" class="metric-value" value="${safe}" placeholder="—"
         onclick="event.stopPropagation()"
         onchange="${onChangeJs}">
+      ${actualLine}
     </div>
   `;
 }
@@ -3894,12 +3900,16 @@ function buildSessionCardHTML(s) {
         <span class="session-duration">${s.duration ? s.duration + 'm' : '—'}</span>
       </div>
       ${s.principle ? `<div style="font-size:11px;color:var(--text2);margin-bottom:6px;">${s.principle}</div>` : ''}
+      ${(() => {
+        const a = getAmsActualForDate(s.date);
+        return `
       <div class="metrics-grid">
-        ${editableMetricChip('TD',  s.td,  `updateSessionMetric('${s.id}','td',this.value)`)}
-        ${editableMetricChip('HSR', s.hsr, `updateSessionMetric('${s.id}','hsr',this.value)`)}
-        ${editableMetricChip('SPR', s.sd,  `updateSessionMetric('${s.id}','sd',this.value)`)}
-        ${editableMetricChip('A/D', (parseInt(s.acc)||0) + (parseInt(s.dec)||0) || '', `updateSessionMetric('${s.id}','accDec',this.value)`)}
-      </div>
+        ${editableMetricChip('TD',  s.td,  `updateSessionMetric('${s.id}','td',this.value)`,  a?.td)}
+        ${editableMetricChip('HSR', s.hsr, `updateSessionMetric('${s.id}','hsr',this.value)`, a?.hsr)}
+        ${editableMetricChip('SPR', s.sd,  `updateSessionMetric('${s.id}','sd',this.value)`,  a?.sd)}
+        ${editableMetricChip('A/D', (parseInt(s.acc)||0) + (parseInt(s.dec)||0) || '', `updateSessionMetric('${s.id}','accDec',this.value)`, a?.accDec)}
+      </div>`;
+      })()}
       ${gdHtml}
       ${(s.exercises && s.exercises.length) ? `
       <div class="ex-summary" onclick="event.stopPropagation()">
@@ -3975,12 +3985,16 @@ function buildGameCardHTML(g) {
           ${g.available != null && g.squadSize ? `<span style="font-size:10px;color:var(--text3);margin-left:auto">${g.available}/${g.squadSize}</span>` : ''}
         </div>
       ` : ''}
+      ${(() => {
+        const a = getAmsActualForDate(g.date);
+        return `
       <div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:6px;padding-top:6px;border-top:1px solid var(--border)">
-        ${editableMetricChip('TD',  g.td,     `updateGameMetric('${g.id}','td',this.value)`)}
-        ${editableMetricChip('HSR', g.hsr,    `updateGameMetric('${g.id}','hsr',this.value)`)}
-        ${editableMetricChip('SPR', g.sprint, `updateGameMetric('${g.id}','sprint',this.value)`)}
-        ${editableMetricChip('A/D', (parseInt(g.acc)||0) + (parseInt(g.dec)||0) || '', `updateGameMetric('${g.id}','accDec',this.value)`)}
-      </div>
+        ${editableMetricChip('TD',  g.td,     `updateGameMetric('${g.id}','td',this.value)`,     a?.td)}
+        ${editableMetricChip('HSR', g.hsr,    `updateGameMetric('${g.id}','hsr',this.value)`,    a?.hsr)}
+        ${editableMetricChip('SPR', g.sprint, `updateGameMetric('${g.id}','sprint',this.value)`, a?.sd)}
+        ${editableMetricChip('A/D', (parseInt(g.acc)||0) + (parseInt(g.dec)||0) || '', `updateGameMetric('${g.id}','accDec',this.value)`, a?.accDec)}
+      </div>`;
+      })()}
     </div>
   `;
 }
@@ -7116,13 +7130,16 @@ function renderWeekReview() {
           : syncStatus?.state === 'ok'
             ? (() => {
                 const inc = syncStatus.includedRows ?? syncStatus.totalRows;
-                const ex = syncStatus.excluded || { gk: 0, status: 0 };
+                const ex = syncStatus.excluded || { gk: 0, status: 0, notOnRoster: 0 };
                 const exParts = [];
-                if (ex.gk)     exParts.push(`${ex.gk} GK`);
-                if (ex.status) exParts.push(`${ex.status} status`);
+                if (ex.notOnRoster) exParts.push(`${ex.notOnRoster} off-roster`);
+                if (ex.gk)          exParts.push(`${ex.gk} GK`);
+                if (ex.status)      exParts.push(`${ex.status} status`);
                 const exTxt = exParts.length ? ` · −${exParts.join(' · ')}` : '';
                 const t = new Date(syncStatus.fetchedAt).toLocaleTimeString('en',{hour:'numeric',minute:'2-digit'});
-                return `<span style="font-size:10px;color:var(--text3);font-family:'Barlow Condensed',sans-serif;letter-spacing:1px" title="${syncStatus.totalRows} total rows · ${ex.gk} goalkeeper rows excluded · ${ex.status} status-flagged player rows excluded">${inc} ROWS${exTxt} · ${t}</span>`;
+                const rosterTag = syncStatus.enforcedRoster ? ' · ROSTER-FILTERED' : '';
+                const tip = `${syncStatus.totalRows} total rows\n${ex.notOnRoster||0} not on PeriodizePro squad\n${ex.gk||0} goalkeeper rows\n${ex.status||0} status-flagged (Modified/Recovery/RTP/Out) rows\nRoster filter ${syncStatus.enforcedRoster ? 'enforced' : 'skipped (squad empty)'}`;
+                return `<span style="font-size:10px;color:var(--text3);font-family:'Barlow Condensed',sans-serif;letter-spacing:1px" title="${escapeHtml(tip)}">${inc} ROWS${exTxt}${rosterTag} · ${t}</span>`;
               })()
             : '';
 
@@ -7182,7 +7199,7 @@ function renderWeekReview() {
             </table>
           </div>
           <div style="font-size:10px;color:var(--text3);margin-top:8px;font-family:'Barlow Condensed',sans-serif;letter-spacing:1px;line-height:1.5">
-            Planned from sessions + match projected load. Actuals pulled live from the AMS Catapult view — per-day average across <b>outfield players in full training</b> (goalkeepers and any player logged Modified · Recovery · RTP · Out on that date are excluded so the average reflects the full-load group). Colour codes: <span style="color:#2eb86b">on target</span> · <span style="color:#c5d12b">close</span> · <span style="color:#f5a623">off</span> · <span style="color:#ff6b6b">significant deviation</span>.
+            Planned from sessions + match projected load. Actuals pulled live from the AMS Catapult view — per-day average restricted to <b>players on your PeriodizePro squad</b>, excluding goalkeepers and anyone logged Modified · Recovery · RTP · Out on that date. Colour codes: <span style="color:#2eb86b">on target</span> · <span style="color:#c5d12b">close</span> · <span style="color:#f5a623">off</span> · <span style="color:#ff6b6b">significant deviation</span>. Once synced, the actual value also appears under the planned number on every session/match card across the Week and Month views.
           </div>
         </div>
       `;
@@ -7302,6 +7319,12 @@ async function fetchAmsWeekActuals(weekNum) {
     .lte('session_date', endStr);
   if (error) throw error;
 
+  // Roster filter — only include athletes whose name matches a player on the
+  // PeriodizePro squad. If the squad is empty, skip this filter (no point
+  // narrowing to zero).
+  const rosterNames = new Set((state.players || []).map(p => normalizeAthleteName(p.name)));
+  const enforceRoster = rosterNames.size > 0;
+
   // Build a lookup of names-to-exclude per date from PeriodizePro player_logs.
   // Any player flagged Modified / Recovery / RTP / Out on a given date is excluded
   // from that date's average.
@@ -7318,10 +7341,11 @@ async function fetchAmsWeekActuals(weekNum) {
 
   // Aggregate per date → team average across included athletes
   const byDate = {};
-  const excluded = { gk: 0, status: 0 };
+  const excluded = { gk: 0, status: 0, notOnRoster: 0 };
   (data || []).forEach(r => {
-    if (isGoalkeeperPosition(r.position_name)) { excluded.gk++; return; }
     const nameKey = normalizeAthleteName(r.athlete_name);
+    if (enforceRoster && !rosterNames.has(nameKey)) { excluded.notOnRoster++; return; }
+    if (isGoalkeeperPosition(r.position_name))     { excluded.gk++; return; }
     if (excludedByDate[r.session_date]?.has(nameKey)) { excluded.status++; return; }
 
     const k = r.session_date;
@@ -7342,13 +7366,14 @@ async function fetchAmsWeekActuals(weekNum) {
       d.duration = Math.round(d.duration / d.count);
     }
   });
-  const includedRows = (data || []).length - excluded.gk - excluded.status;
+  const includedRows = (data || []).length - excluded.gk - excluded.status - excluded.notOnRoster;
   return {
     byDate,
     fetchedAt: new Date().toISOString(),
     totalRows: (data || []).length,
     includedRows,
     excluded,
+    enforcedRoster: enforceRoster,
   };
 }
 
@@ -7362,16 +7387,44 @@ async function syncAmsForCurrentWeek() {
     state.amsActuals[w]    = result.byDate;
     state.amsSyncStatus[w] = {
       state: 'ok',
-      fetchedAt:    result.fetchedAt,
-      totalRows:    result.totalRows,
-      includedRows: result.includedRows,
-      excluded:     result.excluded,
+      fetchedAt:      result.fetchedAt,
+      totalRows:      result.totalRows,
+      includedRows:   result.includedRows,
+      excluded:       result.excluded,
+      enforcedRoster: result.enforcedRoster,
     };
   } catch (e) {
     console.error('AMS sync failed:', e);
     state.amsSyncStatus[w] = { state: 'error', message: e.message };
   }
+  // Re-render both the review and whichever view is currently open so inline
+  // actuals on session/game cards refresh immediately.
   renderWeekReview();
+  if (typeof renderWeek  === 'function') try { renderWeek();  } catch(e){}
+  if (typeof renderMonth === 'function') try { renderMonth(); } catch(e){}
+}
+
+// Date-keyed lookup that searches every synced week. Returns the per-day
+// aggregate for `dateStr` or null if not synced yet.
+function getAmsActualForDate(dateStr) {
+  if (!state.amsActuals) return null;
+  for (const w in state.amsActuals) {
+    const day = state.amsActuals[w]?.[dateStr];
+    if (day) return day;
+  }
+  return null;
+}
+
+// Colour-grade for a single actual vs its planned counterpart.
+function actualVsPlannedColor(actual, planned) {
+  if (actual == null || actual === '' || !planned) return 'var(--text3)';
+  const a = Number(actual), p = Number(planned);
+  if (!a || !p) return 'var(--text3)';
+  const r = a / p;
+  if (r >= 0.95 && r <= 1.05) return '#2eb86b';
+  if (r >= 0.85 && r <= 1.15) return '#c5d12b';
+  if (r >= 0.75 && r <= 1.25) return '#f5a623';
+  return '#ff6b6b';
 }
 
 // Aggregate session notes from all sessions in the selected week,
