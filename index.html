@@ -7114,7 +7114,16 @@ function renderWeekReview() {
         : syncStatus?.state === 'error'
           ? `<span style="font-size:10px;color:#ff6b6b;font-family:'Barlow Condensed',sans-serif;letter-spacing:1px" title="${escapeHtml(syncStatus.message||'')}">SYNC FAILED</span>`
           : syncStatus?.state === 'ok'
-            ? `<span style="font-size:10px;color:var(--text3);font-family:'Barlow Condensed',sans-serif;letter-spacing:1px">${syncStatus.totalRows} ROWS · ${new Date(syncStatus.fetchedAt).toLocaleTimeString('en',{hour:'numeric',minute:'2-digit'})}</span>`
+            ? (() => {
+                const inc = syncStatus.includedRows ?? syncStatus.totalRows;
+                const ex = syncStatus.excluded || { gk: 0, status: 0 };
+                const exParts = [];
+                if (ex.gk)     exParts.push(`${ex.gk} GK`);
+                if (ex.status) exParts.push(`${ex.status} status`);
+                const exTxt = exParts.length ? ` · −${exParts.join(' · ')}` : '';
+                const t = new Date(syncStatus.fetchedAt).toLocaleTimeString('en',{hour:'numeric',minute:'2-digit'});
+                return `<span style="font-size:10px;color:var(--text3);font-family:'Barlow Condensed',sans-serif;letter-spacing:1px" title="${syncStatus.totalRows} total rows · ${ex.gk} goalkeeper rows excluded · ${ex.status} status-flagged player rows excluded">${inc} ROWS${exTxt} · ${t}</span>`;
+              })()
             : '';
 
       return `
@@ -7172,8 +7181,8 @@ function renderWeekReview() {
               </tbody>
             </table>
           </div>
-          <div style="font-size:10px;color:var(--text3);margin-top:8px;font-family:'Barlow Condensed',sans-serif;letter-spacing:1px">
-            Planned from sessions + match projected load. Actuals pulled live from the AMS Catapult view — per-day team average across athletes. Colour codes: <span style="color:#2eb86b">on target</span> · <span style="color:#c5d12b">close</span> · <span style="color:#f5a623">off</span> · <span style="color:#ff6b6b">significant deviation</span>.
+          <div style="font-size:10px;color:var(--text3);margin-top:8px;font-family:'Barlow Condensed',sans-serif;letter-spacing:1px;line-height:1.5">
+            Planned from sessions + match projected load. Actuals pulled live from the AMS Catapult view — per-day average across <b>outfield players in full training</b> (goalkeepers and any player logged Modified · Recovery · RTP · Out on that date are excluded so the average reflects the full-load group). Colour codes: <span style="color:#2eb86b">on target</span> · <span style="color:#c5d12b">close</span> · <span style="color:#f5a623">off</span> · <span style="color:#ff6b6b">significant deviation</span>.
           </div>
         </div>
       `;
@@ -7260,6 +7269,22 @@ function statusBadge(status, count) {
 // ── AMS (Athlete Management System) — actuals integration ──
 // Pulls per-athlete Catapult metrics from the AMS Supabase project for the week
 // and aggregates them to per-day team averages so we can compare against planned.
+//
+// Exclusions applied to the average:
+//   • Goalkeepers (position_name in AMS view)
+//   • Players logged as Modified / Recovery / RTP / Out in PeriodizePro on that date —
+//     their reduced workload by design would skew the team average down.
+
+const GK_POSITION_PATTERNS = ['gk', 'goalkeeper', 'keeper', 'goalie', 'portero'];
+function isGoalkeeperPosition(positionName) {
+  if (!positionName) return false;
+  const p = positionName.toLowerCase().trim();
+  return GK_POSITION_PATTERNS.some(pat => p === pat || p.includes('goalkeep') || p.includes('goalie'));
+}
+function normalizeAthleteName(n) {
+  return (n || '').trim().toLowerCase().replace(/\s+/g, ' ');
+}
+
 async function fetchAmsWeekActuals(weekNum) {
   const start = getWeekStart(weekNum);
   const dates = [];
@@ -7272,16 +7297,35 @@ async function fetchAmsWeekActuals(weekNum) {
 
   const { data, error } = await sbAms
     .from('v_athlete_session_stats')
-    .select('session_date,total_distance_m,hsr_m,sprint_m,acc_b2_3_efforts,dec_b2_3_efforts,duration_minutes')
+    .select('session_date,athlete_name,position_name,total_distance_m,hsr_m,sprint_m,acc_b2_3_efforts,dec_b2_3_efforts,duration_minutes')
     .gte('session_date', startStr)
     .lte('session_date', endStr);
   if (error) throw error;
 
-  // Aggregate per date → team average across athletes
+  // Build a lookup of names-to-exclude per date from PeriodizePro player_logs.
+  // Any player flagged Modified / Recovery / RTP / Out on a given date is excluded
+  // from that date's average.
+  const EXCLUDE_STATUSES = new Set(['Modified', 'Recovery', 'RTP', 'Out']);
+  const excludedByDate = {}; // { date: Set<normalizedName> }
+  (state.playerLogs || []).forEach(l => {
+    if (l.date < startStr || l.date > endStr) return;
+    if (!EXCLUDE_STATUSES.has(l.status)) return;
+    const player = (state.players || []).find(p => p.id === l.playerId);
+    if (!player) return;
+    if (!excludedByDate[l.date]) excludedByDate[l.date] = new Set();
+    excludedByDate[l.date].add(normalizeAthleteName(player.name));
+  });
+
+  // Aggregate per date → team average across included athletes
   const byDate = {};
+  const excluded = { gk: 0, status: 0 };
   (data || []).forEach(r => {
+    if (isGoalkeeperPosition(r.position_name)) { excluded.gk++; return; }
+    const nameKey = normalizeAthleteName(r.athlete_name);
+    if (excludedByDate[r.session_date]?.has(nameKey)) { excluded.status++; return; }
+
     const k = r.session_date;
-    if (!byDate[k]) byDate[k] = { td:0, hsr:0, sd:0, accDec:0, duration:0, count:0, athletes:new Set() };
+    if (!byDate[k]) byDate[k] = { td:0, hsr:0, sd:0, accDec:0, duration:0, count:0 };
     byDate[k].td       += (r.total_distance_m   || 0);
     byDate[k].hsr      += (r.hsr_m              || 0);
     byDate[k].sd       += (r.sprint_m           || 0);
@@ -7289,7 +7333,6 @@ async function fetchAmsWeekActuals(weekNum) {
     byDate[k].duration += (r.duration_minutes   || 0);
     byDate[k].count++;
   });
-  // Convert sums to per-athlete averages so they compare like-for-like with planned (per-player targets)
   Object.values(byDate).forEach(d => {
     if (d.count > 0) {
       d.td       = Math.round(d.td       / d.count);
@@ -7299,7 +7342,14 @@ async function fetchAmsWeekActuals(weekNum) {
       d.duration = Math.round(d.duration / d.count);
     }
   });
-  return { byDate, fetchedAt: new Date().toISOString(), totalRows: (data || []).length };
+  const includedRows = (data || []).length - excluded.gk - excluded.status;
+  return {
+    byDate,
+    fetchedAt: new Date().toISOString(),
+    totalRows: (data || []).length,
+    includedRows,
+    excluded,
+  };
 }
 
 async function syncAmsForCurrentWeek() {
@@ -7310,7 +7360,13 @@ async function syncAmsForCurrentWeek() {
   try {
     const result = await fetchAmsWeekActuals(w);
     state.amsActuals[w]    = result.byDate;
-    state.amsSyncStatus[w] = { state: 'ok', fetchedAt: result.fetchedAt, totalRows: result.totalRows };
+    state.amsSyncStatus[w] = {
+      state: 'ok',
+      fetchedAt:    result.fetchedAt,
+      totalRows:    result.totalRows,
+      includedRows: result.includedRows,
+      excluded:     result.excluded,
+    };
   } catch (e) {
     console.error('AMS sync failed:', e);
     state.amsSyncStatus[w] = { state: 'error', message: e.message };
