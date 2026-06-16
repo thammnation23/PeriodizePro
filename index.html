@@ -7453,9 +7453,20 @@ async function fetchAmsWeekActuals(weekNum) {
   const excluded = { gk: 0, status: 0, notOnRoster: 0, secondaryActivity: 0 };
   const primaryActivityByDate = {};
 
+  // How many of THIS activity's athletes are on the PeriodizePro squad.
+  // When a roster is set, the "main session" is the activity with the most of
+  // OUR players — not just the most bodies — so a larger academy/other-team
+  // file on the same day can't hijack the day.
+  const rosterMatchCount = (rows) => enforceRoster
+    ? rows.filter(r => rosterNames.has(normalizeAthleteName(r.athlete_name))).length
+    : rows.length;
+
   Object.entries(byDateActivity).forEach(([date, activities]) => {
-    // Primary = activity with the most rows (athletes)
-    const sorted = Object.entries(activities).sort((a, b) => b[1].length - a[1].length);
+    // Primary = activity with the most roster athletes (ties broken by total size)
+    const sorted = Object.entries(activities).sort((a, b) => {
+      const diff = rosterMatchCount(b[1]) - rosterMatchCount(a[1]);
+      return diff !== 0 ? diff : b[1].length - a[1].length;
+    });
     const [primaryName, primaryRows] = sorted[0];
     primaryActivityByDate[date] = primaryName;
     // Count rows in the dropped secondary activities for transparency
