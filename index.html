@@ -2926,6 +2926,21 @@
 </div>
 
 <!-- ═══ MEDIA DETAIL MODAL ═══ -->
+<!-- Lightweight inline player for ad-hoc exercise URLs (not library drills) -->
+<div class="modal-overlay" id="urlPlayerModal">
+  <div class="modal" style="width:720px">
+    <div class="modal-header">
+      <div class="modal-title" id="urlPlayerTitle">Video</div>
+      <button class="modal-close" onclick="closeUrlPlayer()">✕</button>
+    </div>
+    <div class="modal-body" id="urlPlayerBody"></div>
+    <div class="modal-footer">
+      <a id="urlPlayerOpen" href="#" target="_blank" class="btn btn-ghost btn-sm">Open in new tab ↗</a>
+      <button class="btn btn-ghost" onclick="closeUrlPlayer()">Close</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-overlay" id="mediaDetailModal">
   <div class="modal" style="width:680px">
     <div class="modal-header">
@@ -3991,7 +4006,7 @@ function buildSessionCardHTML(s) {
               ${linkUrl ? (
                 drill
                   ? `<span class="ex-summary-link" style="cursor:pointer" onclick="event.stopPropagation();openMediaDetail('${drill.id}')" title="${escapeAttr(linkLabel)}">▶</span>`
-                  : `<a class="ex-summary-link" href="${linkUrl}" target="_blank" title="${escapeAttr(linkLabel)}">▶</a>`
+                  : `<span class="ex-summary-link" style="cursor:pointer" onclick="event.stopPropagation();openUrlPlayer('${escapeAttr(linkUrl)}','${escapeAttr(ex.name || ex.urlTitle || 'Video')}')" title="${escapeAttr(linkLabel)}">▶</span>`
               ) : ''}
             </div>
           `;
@@ -4209,6 +4224,11 @@ function closeModal(id) {
   if (id === 'mediaDetailModal') {
     const frame = document.getElementById('drillVideoFrame');
     if (frame) frame.src = frame.src; // reset iframe = stops playback
+  }
+  // Stop the ad-hoc URL player video
+  if (id === 'urlPlayerModal') {
+    const body = document.getElementById('urlPlayerBody');
+    if (body) body.innerHTML = '';
   }
 }
 
@@ -4939,7 +4959,7 @@ function openDayPanel(dateStr) {
                   ${linkUrl ? (
                     drill
                       ? `<span class="ex-summary-link" style="cursor:pointer" onclick="event.stopPropagation();openMediaDetail('${drill.id}')" title="${escapeAttr(linkLabel)}">▶ Watch</span>`
-                      : `<a class="ex-summary-link" href="${linkUrl}" target="_blank" title="${escapeAttr(linkLabel)}">▶ Watch</a>`
+                      : `<span class="ex-summary-link" style="cursor:pointer" onclick="event.stopPropagation();openUrlPlayer('${escapeAttr(linkUrl)}','${escapeAttr(ex.name || ex.urlTitle || 'Video')}')" title="${escapeAttr(linkLabel)}">▶ Watch</span>`
                   ) : ''}
                 </div>
               `;
@@ -5007,8 +5027,43 @@ function previewImg(inputId, previewId) {
 }
 
 function extractYTId(url) {
-  const m = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([a-zA-Z0-9_-]{11})/);
+  const m = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/|youtube\.com\/shorts\/)([a-zA-Z0-9_-]{11})/);
   return m ? m[1] : null;
+}
+
+// Inline player for an ad-hoc URL (exercise links that aren't library drills).
+// Embeds YouTube and Vimeo; falls back to opening the link for anything else.
+function openUrlPlayer(url, title) {
+  if (!url) return;
+  const body  = document.getElementById('urlPlayerBody');
+  const open  = document.getElementById('urlPlayerOpen');
+  document.getElementById('urlPlayerTitle').textContent = title || 'Video';
+  open.href = url;
+
+  const ytId = extractYTId(url);
+  const vimeo = url.match(/vimeo\.com\/(?:video\/)?(\d+)/);
+  let embedSrc = null;
+  if (ytId)       embedSrc = `https://www.youtube.com/embed/${ytId}?autoplay=1&rel=0&modestbranding=1`;
+  else if (vimeo) embedSrc = `https://player.vimeo.com/video/${vimeo[1]}?autoplay=1`;
+
+  if (embedSrc) {
+    body.innerHTML = `<div style="position:relative;width:100%;aspect-ratio:16/9;background:#000;border-radius:var(--radius);overflow:hidden">
+      <iframe src="${embedSrc}" style="position:absolute;inset:0;width:100%;height:100%;border:none" allow="autoplay; fullscreen" allowfullscreen></iframe>
+    </div>`;
+  } else {
+    // Not embeddable (Drive, PDF, generic link) — show an open button
+    body.innerHTML = `<div style="text-align:center;padding:24px;color:var(--text2);font-size:13px;line-height:1.6">
+      This link can't be embedded inline.<br>
+      <a href="${url}" target="_blank" class="btn btn-primary btn-sm" style="margin-top:10px;display:inline-block">Open link ↗</a>
+    </div>`;
+  }
+  openModal('urlPlayerModal');
+}
+
+function closeUrlPlayer() {
+  const body = document.getElementById('urlPlayerBody');
+  if (body) body.innerHTML = ''; // stop the video
+  closeModal('urlPlayerModal');
 }
 
 // ══════════════════════════════════════════════════════
