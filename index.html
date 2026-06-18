@@ -1450,10 +1450,19 @@
   }
   .exercise-row-main {
     display: grid;
-    grid-template-columns: 24px 1.6fr 0.6fr 0.9fr auto;
+    grid-template-columns: 34px 1.6fr 0.6fr 0.9fr auto;
     gap: 8px;
     align-items: center;
   }
+  .exercise-num-col {
+    display: flex; flex-direction: column; align-items: center; gap: 1px;
+  }
+  .exercise-move {
+    background: transparent; border: none; color: var(--text3);
+    font-size: 9px; line-height: 1; cursor: pointer; padding: 1px;
+  }
+  .exercise-move:hover:not(:disabled) { color: var(--accent); }
+  .exercise-move:disabled { opacity: 0.25; cursor: default; }
   .exercise-row-link {
     display: grid;
     grid-template-columns: 24px auto 1fr;
@@ -5514,7 +5523,11 @@ function renderExercises() {
     return `
       <div class="exercise-row">
         <div class="exercise-row-main">
-          <div class="exercise-num">${i + 1}</div>
+          <div class="exercise-num-col">
+            <button class="exercise-move" onclick="moveExerciseRow(${i},-1)" ${i === 0 ? 'disabled' : ''} title="Move up">▲</button>
+            <span class="exercise-num">${i + 1}</span>
+            <button class="exercise-move" onclick="moveExerciseRow(${i},1)" ${i === currentExercises.length - 1 ? 'disabled' : ''} title="Move down">▼</button>
+          </div>
           <input type="text" placeholder="Exercise name" value="${escapeAttr(ex.name || '')}" oninput="updateExerciseField(${i},'name',this.value)">
           <input type="text" placeholder="Min" value="${escapeAttr(ex.duration || '')}" oninput="updateExerciseField(${i},'duration',this.value)">
           <input type="text" placeholder="Sets/reps" value="${escapeAttr(ex.setsReps || '')}" oninput="updateExerciseField(${i},'setsReps',this.value)">
@@ -5548,6 +5561,14 @@ function addExerciseRow() {
 
 function removeExerciseRow(idx) {
   currentExercises.splice(idx, 1);
+  renderExercises();
+}
+
+// Move an exercise up (dir -1) or down (dir +1) in the list
+function moveExerciseRow(idx, dir) {
+  const j = idx + dir;
+  if (j < 0 || j >= currentExercises.length) return;
+  [currentExercises[idx], currentExercises[j]] = [currentExercises[j], currentExercises[idx]];
   renderExercises();
 }
 
