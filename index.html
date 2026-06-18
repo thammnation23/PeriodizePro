@@ -1886,6 +1886,7 @@
       <option value="2026-27">2026 / 27</option>
     </select>
     <button class="btn btn-primary btn-sm" onclick="openAddGame()">＋ Game</button>
+    <button class="btn btn-ghost btn-sm" onclick="openBulkGames()">⧉ Schedule</button>
     <button class="btn btn-ghost btn-sm" onclick="exportData()">↓ Export</button>
     <div class="user-pill" id="userPill">
       <div class="user-pill-dot"></div>
@@ -2372,6 +2373,31 @@
       <button class="btn btn-danger btn-sm" id="deleteSessionBtn" style="display:none" onclick="deleteSession()">Delete</button>
       <button class="btn btn-ghost" onclick="closeModal('sessionModal')">Cancel</button>
       <button class="btn btn-primary" onclick="saveSession()">Save Session</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ BULK SCHEDULE MODAL ═══ -->
+<div class="modal-overlay" id="bulkGamesModal">
+  <div class="modal" style="width:680px">
+    <div class="modal-header">
+      <div class="modal-title">Add Schedule</div>
+      <button class="modal-close" onclick="closeModal('bulkGamesModal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div style="font-size:11px;color:var(--text3);font-family:'Barlow Condensed',sans-serif;letter-spacing:0.5px;margin-bottom:10px;line-height:1.5">
+        Enter all your fixtures quickly — date, opponent, venue. Save them all, then click any match in the Week / Month / Annual views to fill in load, score, and availability.
+      </div>
+      <div style="display:grid;grid-template-columns:130px 1fr 150px 1fr 28px;gap:8px;padding:0 2px 6px;font-size:9px;font-family:'Barlow Condensed',sans-serif;letter-spacing:1.5px;color:var(--text3);text-transform:uppercase">
+        <span>Date</span><span>Opponent</span><span>Venue</span><span>Competition</span><span></span>
+      </div>
+      <div id="bulkGamesList" style="display:flex;flex-direction:column;gap:6px;max-height:50vh;overflow-y:auto"></div>
+      <button class="btn btn-ghost btn-sm" style="margin-top:8px" onclick="addBulkRow()">＋ Add Row</button>
+    </div>
+    <div class="modal-footer">
+      <span id="bulkGamesStatus" style="font-size:11px;color:var(--text3);font-family:'Barlow Condensed',sans-serif;letter-spacing:1px;margin-right:auto"></span>
+      <button class="btn btn-ghost" onclick="closeModal('bulkGamesModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveBulkGames()">Save All</button>
     </div>
   </div>
 </div>
@@ -4342,6 +4368,87 @@ function openAddGameOnDate(dateStr) {
   openAddGame();
   document.getElementById('gameDate').value = dateStr;
   refreshGameMdi();
+}
+
+// ── BULK SCHEDULE ENTRY ──
+let bulkRows = []; // [{date, opponent, venue, competition}]
+
+function openBulkGames() {
+  // Start with a few blank rows
+  bulkRows = [
+    { date:'', opponent:'', venue:'Home', competition:'' },
+    { date:'', opponent:'', venue:'Home', competition:'' },
+    { date:'', opponent:'', venue:'Home', competition:'' },
+  ];
+  document.getElementById('bulkGamesStatus').textContent = '';
+  renderBulkRows();
+  openModal('bulkGamesModal');
+}
+
+function renderBulkRows() {
+  const host = document.getElementById('bulkGamesList');
+  if (!host) return;
+  // Build a datalist of opponent names once
+  const oppOptions = (state.opponents || []).map(o => `<option value="${escapeAttr(o.name)}">`).join('');
+  host.innerHTML = `<datalist id="bulkOppList">${oppOptions}</datalist>` + bulkRows.map((r, i) => `
+    <div style="display:grid;grid-template-columns:130px 1fr 150px 1fr 28px;gap:8px;align-items:center">
+      <input type="date" value="${escapeAttr(r.date)}" oninput="updateBulkRow(${i},'date',this.value)">
+      <input type="text" list="bulkOppList" placeholder="Opponent" value="${escapeAttr(r.opponent)}" oninput="updateBulkRow(${i},'opponent',this.value)">
+      <select onchange="updateBulkRow(${i},'venue',this.value)">
+        <option ${r.venue==='Home'?'selected':''}>Home</option>
+        <option ${r.venue==='Away'?'selected':''}>Away</option>
+        <option ${r.venue==='Neutral'?'selected':''}>Neutral</option>
+      </select>
+      <input type="text" placeholder="e.g. MLS" value="${escapeAttr(r.competition)}" oninput="updateBulkRow(${i},'competition',this.value)">
+      <span class="exercise-remove" onclick="removeBulkRow(${i})" title="Remove">✕</span>
+    </div>
+  `).join('');
+}
+
+function updateBulkRow(i, field, val) { if (bulkRows[i]) bulkRows[i][field] = val; }
+function addBulkRow() { bulkRows.push({ date:'', opponent:'', venue:'Home', competition:'' }); renderBulkRows(); }
+function removeBulkRow(i) { bulkRows.splice(i, 1); renderBulkRows(); }
+
+async function saveBulkGames() {
+  // Only rows with at least a date are saved
+  const valid = bulkRows.filter(r => r.date);
+  if (valid.length === 0) { alert('Add at least one row with a date.'); return; }
+
+  const existing = new Set(state.games.map(g => `${g.date}|${(g.opponent||'').toLowerCase()}`));
+  const toCreate = [];
+  let skipped = 0;
+  for (const r of valid) {
+    const key = `${r.date}|${(r.opponent||'').toLowerCase()}`;
+    if (existing.has(key)) { skipped++; continue; }
+    const opp = (state.opponents||[]).find(o => o.name.toLowerCase() === (r.opponent||'').toLowerCase());
+    toCreate.push({
+      id: genId(),
+      date: r.date,
+      opponent: r.opponent.trim(),
+      opponent_id: opp?.id || null,
+      competition: r.competition.trim(),
+      venue: r.venue || 'Home',
+      notes: '',
+      td:'', hsr:'', sprint:'', acc:'', dec:'',
+      scoreUs:null, scoreThem:null, result:'',
+      squadSize:null, available:null,
+      travelKm:null, tzHours:null, weather:'', daysRestOverride:null, formOverride:'',
+    });
+  }
+
+  if (toCreate.length === 0) { document.getElementById('bulkGamesStatus').textContent = `All ${skipped} already exist`; return; }
+
+  document.getElementById('bulkGamesStatus').textContent = `Saving ${toCreate.length}…`;
+  setSyncStatus('syncing');
+  const rows = toCreate.map(gameToDB);
+  const { error } = await sb.from('games').upsert(rows);
+  if (error) { setSyncStatus('error'); alert('Save failed: ' + error.message); return; }
+  toCreate.forEach(g => state.games.push(g));
+  setSyncStatus('ok');
+  closeModal('bulkGamesModal');
+  try { renderWeek(); } catch(e){}
+  try { renderMonth(); } catch(e){}
+  try { renderYear(); } catch(e){}
 }
 
 function editGame(id) {
