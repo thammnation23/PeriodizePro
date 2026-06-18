@@ -1853,49 +1853,18 @@
 <div class="auth-overlay" id="authOverlay">
   <div class="auth-box">
     <div class="auth-logo"><span>PERIODIZE</span>PRO</div>
-    <div class="auth-subtitle">Coaching Periodization Platform</div>
-
-    <div class="auth-tabs">
-      <div class="auth-tab active" id="tabSignIn" onclick="switchAuthTab('signin')">Sign In</div>
-      <div class="auth-tab" id="tabSignUp" onclick="switchAuthTab('signup')">Sign Up</div>
-    </div>
+    <div class="auth-subtitle">Enter access code</div>
 
     <div class="auth-error" id="authError"></div>
-    <div class="auth-success" id="authSuccess"></div>
 
     <div class="auth-form">
-      <!-- Sign In -->
-      <div id="formSignIn">
-        <div class="form-group">
-          <label>Email</label>
-          <input type="email" id="siEmail" placeholder="coach@club.com" autocomplete="email">
-        </div>
-        <div class="form-group">
-          <label>Password</label>
-          <input type="password" id="siPassword" placeholder="••••••••" autocomplete="current-password">
-        </div>
-        <button class="btn btn-primary" style="width:100%;justify-content:center;margin-top:8px" onclick="doSignIn()">Sign In →</button>
-        <div style="text-align:center;margin-top:12px">
-          <span style="font-size:11px;color:var(--text3);cursor:pointer;font-family:'Barlow Condensed',sans-serif;letter-spacing:1px" onclick="doForgotPassword()">Forgot password?</span>
-        </div>
+      <div class="form-group">
+        <input type="password" id="pinInput" inputmode="numeric" autocomplete="off"
+          placeholder="• • • •" maxlength="12"
+          style="width:100%;text-align:center;font-size:28px;letter-spacing:12px;font-family:'JetBrains Mono',monospace;padding:14px"
+          onkeydown="if(event.key==='Enter')doPinSignIn()">
       </div>
-
-      <!-- Sign Up -->
-      <div id="formSignUp" style="display:none">
-        <div class="form-group">
-          <label>Your Name</label>
-          <input type="text" id="suName" placeholder="e.g. John Smith" autocomplete="name">
-        </div>
-        <div class="form-group">
-          <label>Email</label>
-          <input type="email" id="suEmail" placeholder="coach@club.com" autocomplete="email">
-        </div>
-        <div class="form-group">
-          <label>Password</label>
-          <input type="password" id="suPassword" placeholder="Min 6 characters" autocomplete="new-password">
-        </div>
-        <button class="btn btn-primary" style="width:100%;justify-content:center;margin-top:8px" onclick="doSignUp()">Create Account →</button>
-      </div>
+      <button class="btn btn-primary" style="width:100%;justify-content:center;margin-top:8px" onclick="doPinSignIn()">Enter →</button>
     </div>
   </div>
 </div>
@@ -2930,61 +2899,34 @@ const sbAms = supabase.createClient(AMS_URL, AMS_KEY);
 let currentUser = null;
 
 // ── AUTH HELPERS ──
-function switchAuthTab(tab) {
-  document.getElementById('formSignIn').style.display = tab === 'signin' ? '' : 'none';
-  document.getElementById('formSignUp').style.display = tab === 'signup' ? '' : 'none';
-  document.getElementById('tabSignIn').classList.toggle('active', tab === 'signin');
-  document.getElementById('tabSignUp').classList.toggle('active', tab === 'signup');
-  clearAuthMessages();
-}
 function showAuthError(msg) {
   const el = document.getElementById('authError');
-  el.textContent = msg; el.classList.add('show');
-  document.getElementById('authSuccess').classList.remove('show');
-}
-function showAuthSuccess(msg) {
-  const el = document.getElementById('authSuccess');
-  el.textContent = msg; el.classList.add('show');
-  document.getElementById('authError').classList.remove('show');
+  if (el) { el.textContent = msg; el.classList.add('show'); }
 }
 function clearAuthMessages() {
-  document.getElementById('authError').classList.remove('show');
-  document.getElementById('authSuccess').classList.remove('show');
+  const e = document.getElementById('authError');
+  if (e) e.classList.remove('show');
 }
 
-async function doSignIn() {
-  const email = document.getElementById('siEmail').value.trim();
-  const pass  = document.getElementById('siPassword').value;
-  if (!email || !pass) { showAuthError('Please fill in all fields.'); return; }
-  const { error } = await sb.auth.signInWithPassword({ email, password: pass });
-  if (error) showAuthError(error.message);
-}
-
-async function doSignUp() {
-  const name  = document.getElementById('suName').value.trim();
-  const email = document.getElementById('suEmail').value.trim();
-  const pass  = document.getElementById('suPassword').value;
-  if (!name || !email || !pass) { showAuthError('Please fill in all fields.'); return; }
-  if (pass.length < 6) { showAuthError('Password must be at least 6 characters.'); return; }
-  const { error } = await sb.auth.signUp({
-    email, password: pass,
-    options: { data: { name } }
-  });
-  if (error) showAuthError(error.message);
-  else showAuthSuccess('Account created! Check your email to confirm, then sign in.');
+// PIN sign-in — the access code IS the account password. Email is fixed.
+const PIN_ACCOUNT_EMAIL = 'thammnation@gmail.com';
+async function doPinSignIn() {
+  const pin = document.getElementById('pinInput').value.trim();
+  if (!pin) { showAuthError('Enter the access code.'); return; }
+  const btn = document.querySelector('#authOverlay .btn-primary');
+  if (btn) { btn.disabled = true; btn.textContent = 'Checking…'; }
+  const { error } = await sb.auth.signInWithPassword({ email: PIN_ACCOUNT_EMAIL, password: pin });
+  if (error) {
+    showAuthError('Incorrect access code.');
+    const pi = document.getElementById('pinInput');
+    if (pi) { pi.value = ''; pi.focus(); }
+    if (btn) { btn.disabled = false; btn.textContent = 'Enter →'; }
+  }
 }
 
 async function doSignOut() {
   await sb.auth.signOut();
   window.location.reload(); // cleanest way — full page reset
-}
-
-async function doForgotPassword() {
-  const email = document.getElementById('siEmail').value.trim();
-  if (!email) { showAuthError('Enter your email first.'); return; }
-  const { error } = await sb.auth.resetPasswordForEmail(email);
-  if (error) showAuthError(error.message);
-  else showAuthSuccess('Password reset email sent!');
 }
 
 // ── SYNC STATUS ──
@@ -8883,15 +8825,11 @@ sb.auth.onAuthStateChange(async (event, session) => {
   const { data: { session } } = await sb.auth.getSession().catch(() => ({ data: {} }));
   if (session?.user) {
     await bootApp(session.user);
+  } else {
+    // No session — focus the PIN field for quick entry
+    const pi = document.getElementById('pinInput');
+    if (pi) pi.focus();
   }
-  // Enter key on auth inputs
-  document.querySelectorAll('.auth-form input').forEach(inp => {
-    inp.addEventListener('keydown', e => {
-      if (e.key === 'Enter') {
-        document.getElementById('formSignUp').style.display !== 'none' ? doSignUp() : doSignIn();
-      }
-    });
-  });
 })();
 
 // Season change reloads data
