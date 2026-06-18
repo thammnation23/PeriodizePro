@@ -1442,14 +1442,24 @@
   /* ─── EXERCISES ─── */
   .exercise-list { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
   .exercise-row {
-    display: grid;
-    grid-template-columns: 24px 1.6fr 0.6fr 0.9fr auto auto;
-    gap: 8px;
-    align-items: center;
     padding: 8px;
     border: 1px solid var(--border);
     border-radius: var(--radius);
     background: var(--surface2);
+    margin-bottom: 6px;
+  }
+  .exercise-row-main {
+    display: grid;
+    grid-template-columns: 24px 1.6fr 0.6fr 0.9fr auto;
+    gap: 8px;
+    align-items: center;
+  }
+  .exercise-row-link {
+    display: grid;
+    grid-template-columns: 24px auto 1fr;
+    gap: 8px;
+    align-items: center;
+    margin-top: 6px;
   }
   .exercise-row input { padding: 6px 8px; font-size: 12px; }
   .exercise-num {
@@ -5493,20 +5503,38 @@ function renderExercises() {
     return;
   }
   list.innerHTML = currentExercises.map((ex, i) => {
-    const linked = ex.mediaId || ex.url;
-    const linkLabel = linked ? '🔗 Linked' : '＋ Link';
-    const linkClass = linked ? 'has-link' : '';
+    const drill = ex.mediaId ? state.media.find(m => m.id === ex.mediaId) : null;
+    // If a library drill is attached, show its title (read-only) + an unlink button.
+    // Otherwise show an inline URL input that saves like any other field.
+    const linkLine = drill
+      ? `<button class="exercise-link-btn has-link" onclick="openPicker('exercise:${i}')" title="Change library drill">📚 ${escapeAttr(drill.title || 'Drill')}</button>
+         <button class="exercise-link-btn" onclick="clearExerciseLink(${i})" title="Remove link">✕ unlink</button>`
+      : `<button class="exercise-link-btn" onclick="openPicker('exercise:${i}')" title="Pick from Drill Library">📚 Library</button>
+         <input type="url" placeholder="…or paste a link (YouTube, Drive, etc.)" value="${escapeAttr(ex.url || '')}" oninput="updateExerciseField(${i},'url',this.value)">`;
     return `
       <div class="exercise-row">
-        <div class="exercise-num">${i + 1}</div>
-        <input type="text" placeholder="Exercise name" value="${escapeAttr(ex.name || '')}" oninput="updateExerciseField(${i},'name',this.value)">
-        <input type="text" placeholder="Min" value="${escapeAttr(ex.duration || '')}" oninput="updateExerciseField(${i},'duration',this.value)">
-        <input type="text" placeholder="Sets/reps" value="${escapeAttr(ex.setsReps || '')}" oninput="updateExerciseField(${i},'setsReps',this.value)">
-        <button class="exercise-link-btn ${linkClass}" onclick="openExerciseLinkMenu(${i})">${linkLabel}</button>
-        <span class="exercise-remove" onclick="removeExerciseRow(${i})">✕</span>
+        <div class="exercise-row-main">
+          <div class="exercise-num">${i + 1}</div>
+          <input type="text" placeholder="Exercise name" value="${escapeAttr(ex.name || '')}" oninput="updateExerciseField(${i},'name',this.value)">
+          <input type="text" placeholder="Min" value="${escapeAttr(ex.duration || '')}" oninput="updateExerciseField(${i},'duration',this.value)">
+          <input type="text" placeholder="Sets/reps" value="${escapeAttr(ex.setsReps || '')}" oninput="updateExerciseField(${i},'setsReps',this.value)">
+          <span class="exercise-remove" onclick="removeExerciseRow(${i})">✕</span>
+        </div>
+        <div class="exercise-row-link">
+          <div></div>
+          ${linkLine}
+        </div>
       </div>
     `;
   }).join('');
+}
+
+// Remove a library/url link from an exercise without removing the row
+function clearExerciseLink(idx) {
+  const ex = currentExercises[idx];
+  if (!ex) return;
+  ex.mediaId = ''; ex.url = ''; ex.urlTitle = '';
+  renderExercises();
 }
 
 function escapeAttr(s) {
