@@ -1933,7 +1933,6 @@
   <div class="nav-tab" onclick="switchTab('month')">🗓 Month</div>
   <div class="nav-tab" onclick="switchTab('week')">⚡ Week</div>
   <div class="nav-tab" onclick="switchTab('review')">🔁 Week Review</div>
-  <div class="nav-tab" onclick="switchTab('matches')">⚽ Matches</div>
   <div class="nav-tab" onclick="switchTab('squad')">👥 Squad</div>
   <div class="nav-tab" onclick="switchTab('library')">📚 Drill Library</div>
   <div class="nav-tab" onclick="switchTab('methodology')">📖 Methodology</div>
@@ -2053,45 +2052,6 @@
     </div>
 
     <div id="reviewBody"></div>
-  </div>
-
-  <!-- ── MATCHES VIEW ── -->
-  <div id="view-matches" class="view">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:10px">
-      <div>
-        <h2 style="margin:0;font-family:'Barlow Condensed',sans-serif;letter-spacing:2px;font-size:24px">SEASON MATCHES</h2>
-        <div style="font-size:11px;color:var(--text3);font-family:'Barlow Condensed',sans-serif;letter-spacing:1px;margin-top:2px">Predicted vs actual difficulty across the season</div>
-      </div>
-      <div style="display:flex;align-items:center;gap:10px">
-        <label style="font-size:11px;color:var(--text3);font-family:'Barlow Condensed',sans-serif;letter-spacing:1.5px">SEASON:</label>
-        <select id="matchesSeasonFilter" onchange="renderMatches()" style="min-width:120px"></select>
-        <button class="btn btn-primary btn-sm" onclick="openAddGame()">＋ Add Match</button>
-      </div>
-    </div>
-
-    <!-- Stats summary -->
-    <div id="matchStats" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;margin-bottom:18px"></div>
-
-    <!-- MDI timeline chart -->
-    <div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:16px;margin-bottom:18px">
-      <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px">
-        <div>
-          <div style="font-family:'Barlow Condensed',sans-serif;letter-spacing:2px;font-size:14px;color:var(--text2)">MATCH DIFFICULTY TIMELINE</div>
-          <div style="font-size:10px;color:var(--text3);font-family:'Barlow Condensed',sans-serif;letter-spacing:1px;margin-top:2px">Each match plotted by date · colour = difficulty tier</div>
-        </div>
-        <div style="display:flex;gap:6px;font-size:10px;font-family:'Barlow Condensed',sans-serif;letter-spacing:1px">
-          <span style="display:flex;align-items:center;gap:4px"><span style="width:8px;height:8px;background:#2eb86b;border-radius:50%"></span>EASY</span>
-          <span style="display:flex;align-items:center;gap:4px"><span style="width:8px;height:8px;background:#c5d12b;border-radius:50%"></span>MOD</span>
-          <span style="display:flex;align-items:center;gap:4px"><span style="width:8px;height:8px;background:#f5a623;border-radius:50%"></span>CHAL</span>
-          <span style="display:flex;align-items:center;gap:4px"><span style="width:8px;height:8px;background:#ff6b6b;border-radius:50%"></span>HARD</span>
-          <span style="display:flex;align-items:center;gap:4px"><span style="width:8px;height:8px;background:#d63b3b;border-radius:50%"></span>V.HARD</span>
-        </div>
-      </div>
-      <div id="mdiChart"></div>
-    </div>
-
-    <!-- Match list -->
-    <div id="matchList"></div>
   </div>
 
   <!-- ── SQUAD VIEW ── -->
@@ -3421,14 +3381,13 @@ function switchTab(tab) {
   document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
   document.getElementById('view-' + tab).classList.add('active');
   document.querySelectorAll('.nav-tab').forEach(t => {
-    const match = tab === 'loading' ? 'planned' : tab === 'library' ? 'drill' : tab === 'matches' ? '⚽ matches' : tab === 'squad' ? '👥 squad' : tab === 'methodology' ? '📖 methodology' : tab === 'review' ? '🔁 week review' : tab;
+    const match = tab === 'loading' ? 'planned' : tab === 'library' ? 'drill' : tab === 'squad' ? '👥 squad' : tab === 'methodology' ? '📖 methodology' : tab === 'review' ? '🔁 week review' : tab;
     if (t.textContent.toLowerCase().includes(match)) t.classList.add('active');
   });
   if (tab === 'year')     renderYear();
   if (tab === 'loading')  renderLoading();
   if (tab === 'month')    renderMonth();
   if (tab === 'week')     renderWeek();
-  if (tab === 'matches')  renderMatches();
   if (tab === 'squad')    renderSquad();
   if (tab === 'review')   renderWeekReview();
   if (tab === 'methodology') renderMethodology();
@@ -6713,7 +6672,6 @@ async function importMyTeamSchedule() {
     }
 
     setStatus(`✓ Imported ${created} matches · skipped ${skipped} duplicates`);
-    if (typeof renderMatches === 'function') renderMatches();
     if (typeof renderWeek === 'function') renderWeek();
     if (typeof renderYear === 'function') renderYear();
   } catch (e) {
