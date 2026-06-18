@@ -1950,12 +1950,10 @@
     <div class="year-legend" style="margin-top:16px" id="yearLegendField"></div>
     <div class="year-legend" style="margin-top:8px" id="yearLegendGym"></div>
     <div class="year-legend" style="margin-top:8px" id="yearLegendMdi">
-      <span style="font-family:'Barlow Condensed',sans-serif;letter-spacing:1.5px;color:var(--text3);font-size:11px;margin-right:8px">MATCH MDI:</span>
-      <span style="display:inline-flex;align-items:center;gap:4px;margin-right:10px"><span style="width:14px;height:14px;background:#2eb86b;border-radius:2px"></span>Easy</span>
-      <span style="display:inline-flex;align-items:center;gap:4px;margin-right:10px"><span style="width:14px;height:14px;background:#c5d12b;border-radius:2px"></span>Moderate</span>
-      <span style="display:inline-flex;align-items:center;gap:4px;margin-right:10px"><span style="width:14px;height:14px;background:#f5a623;border-radius:2px"></span>Challenging</span>
-      <span style="display:inline-flex;align-items:center;gap:4px;margin-right:10px"><span style="width:14px;height:14px;background:#ff6b6b;border-radius:2px"></span>Hard</span>
-      <span style="display:inline-flex;align-items:center;gap:4px"><span style="width:14px;height:14px;background:#d63b3b;border-radius:2px"></span>Very Hard</span>
+      <span style="font-family:'Barlow Condensed',sans-serif;letter-spacing:1.5px;color:var(--text3);font-size:11px;margin-right:8px">MATCH ⚽:</span>
+      <span style="display:inline-flex;align-items:center;gap:4px;margin-right:10px"><span style="width:14px;height:14px;background:#ffffff;border:1px solid #888;border-radius:2px"></span>Home</span>
+      <span style="display:inline-flex;align-items:center;gap:4px;margin-right:10px"><span style="width:14px;height:14px;background:#fdd835;border:1px solid #888;border-radius:2px"></span>Away</span>
+      <span style="display:inline-flex;align-items:center;gap:4px"><span style="width:14px;height:14px;background:#bdbdbd;border:1px solid #888;border-radius:2px"></span>Neutral</span>
     </div>
   </div>
 
@@ -3534,26 +3532,13 @@ function renderYear() {
 
       if (isGame) {
         cell.classList.add('game');
-        // MDI heatmap — colour the cell by computed match difficulty (when opponent rated)
-        const opp = game.opponent_id
-          ? state.opponents.find(o => o.id === game.opponent_id)
-          : state.opponents.find(o => o.name?.toLowerCase() === game.opponent?.toLowerCase());
-        const yourElo = state.settings?.team_elo || ELO_DEFAULT;
-        const mdi = opp ? calculateMDI(yourElo, opp.current_elo, buildMatchContext(game, state.games)) : null;
-        if (mdi != null) {
-          const c = mdiColor(mdi);
-          cell.style.background = c;
-          cell.style.borderColor = c;
-          cell.style.color = '#fff';
-          cell.style.cssText += 'display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;font-family:"JetBrains Mono",monospace;';
-          cell.textContent = mdi.toFixed(1);
-        } else {
-          // No opponent rating yet — fall back to plain match marker
-          const g = document.createElement('div');
-          g.style.cssText = 'font-size:8px;';
-          g.textContent = '⚽';
-          cell.appendChild(g);
-        }
+        // Venue highlight: White = Home, Yellow = Away (Neutral = light grey)
+        const venue = game.venue || 'Home';
+        const bg = venue === 'Away' ? '#fdd835' : venue === 'Neutral' ? '#bdbdbd' : '#ffffff';
+        cell.style.background = bg;
+        cell.style.borderColor = '#888';
+        cell.style.cssText += 'display:flex;align-items:center;justify-content:center;font-size:9px;color:#222;';
+        cell.textContent = '⚽';
       } else if (sessions.length > 0) {
         const s = sessions[0];
         const bg1 = getTypeBackground(s.type);
@@ -3715,7 +3700,8 @@ function showTooltip(e, week, dateStr, sessions, isGame) {
   let html = '';
   if (isGame) {
     const g = state.games.find(g => g.date === dateStr);
-    html += `<div class="tooltip-row" style="color:var(--game)">⚽ MATCH${g ? ' vs ' + g.opponent : ''}</div>`;
+    const venue = g?.venue ? ` · ${g.venue}` : '';
+    html += `<div class="tooltip-row" style="color:var(--game)">⚽ MATCH${g ? ' vs ' + g.opponent : ''}${venue}</div>`;
   }
   sessions.forEach(s => {
     const t2 = s.type2 ? ` + ${s.type2}` : '';
