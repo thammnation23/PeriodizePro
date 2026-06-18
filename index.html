@@ -7399,6 +7399,15 @@ function statusBadge(status, count) {
   const c = statusColor(status);
   return `<span style="display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:3px;font-family:'Barlow Condensed',sans-serif;font-weight:700;letter-spacing:1px;font-size:10px;background:${c}22;color:${c}">${count} ${status.toUpperCase()}</span>`;
 }
+// Per-day exception badges only — skips Full and any zero-count status.
+// Returns "ALL AVAILABLE" placeholder when nothing is flagged.
+function exceptionBadges(c) {
+  const badges = ['Modified', 'Recovery', 'RTP', 'Out']
+    .filter(s => (c[s] || 0) > 0)
+    .map(s => statusBadge(s, c[s]))
+    .join('');
+  return badges || `<span style="font-size:10px;color:var(--text3);font-family:'Barlow Condensed',sans-serif;letter-spacing:1px">ALL AVAILABLE</span>`;
+}
 
 // ── AMS (Athlete Management System) — actuals integration ──
 // Pulls per-athlete Catapult metrics from the AMS Supabase project for the week
@@ -7805,11 +7814,7 @@ function renderAvailabilityReview(weekNum) {
             <span style="font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--text3)">${availablePct}% available · ${total}/${avail.rosterSize} logged</span>
           </div>
           <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px">
-            ${statusBadge('Full',     c.Full)}
-            ${statusBadge('Modified', c.Modified)}
-            ${statusBadge('Recovery', c.Recovery)}
-            ${statusBadge('RTP',      c.RTP)}
-            ${statusBadge('Out',      c.Out)}
+            ${exceptionBadges(c)}
           </div>
           ${avail.sessionNonFull.length ? `
             <div style="margin-top:4px;display:flex;flex-direction:column;gap:3px">
@@ -7838,11 +7843,7 @@ function renderAvailabilityReview(weekNum) {
             <span style="font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--text3)">${availablePct}% available · ${total}/${avail.rosterSize} logged</span>
           </div>
           <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px">
-            ${statusBadge('Full',     c.Full)}
-            ${statusBadge('Modified', c.Modified)}
-            ${statusBadge('Recovery', c.Recovery)}
-            ${statusBadge('RTP',      c.RTP)}
-            ${statusBadge('Out',      c.Out)}
+            ${exceptionBadges(c)}
           </div>
           ${avail.gameNonFull.length ? `
             <div style="margin-top:4px;display:flex;flex-direction:column;gap:3px">
