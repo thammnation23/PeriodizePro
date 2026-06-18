@@ -1917,7 +1917,6 @@
     <p class="section-title">Annual Plan · 52 Weeks</p>
     <div id="yearGrid"></div>
     <div class="year-legend" style="margin-top:16px" id="yearLegendField"></div>
-    <div class="year-legend" style="margin-top:8px" id="yearLegendGym"></div>
     <div class="year-legend" style="margin-top:8px" id="yearLegendMdi">
       <span style="font-family:'Barlow Condensed',sans-serif;letter-spacing:1.5px;color:var(--text3);font-size:11px;margin-right:8px">MATCH ⚽:</span>
       <span style="display:inline-flex;align-items:center;gap:4px;margin-right:10px"><span style="width:14px;height:14px;background:#ffffff;border:1px solid #888;border-radius:2px"></span>Home</span>
@@ -3576,19 +3575,10 @@ function renderYear() {
 
   // ── Dynamic legend ──
   const fieldLegend = document.getElementById('yearLegendField');
-  const gymLegend   = document.getElementById('yearLegendGym');
   if (fieldLegend) {
     fieldLegend.innerHTML = getSessionTypes().map(t =>
       `<div class="legend-item"><div class="legend-dot" style="background:${t.color}"></div> ${t.name}</div>`
     ).join('') + `<div class="legend-item"><div class="legend-dot" style="background:var(--surface3);border:1px solid var(--border)"></div> Rest</div>`;
-  }
-  if (gymLegend) {
-    gymLegend.innerHTML =
-      `<div style="font-size:10px;font-weight:700;color:var(--text3);font-family:'Barlow Condensed',sans-serif;letter-spacing:1px;text-transform:uppercase;margin-right:4px">Gym:</div>` +
-      getGymPhases().map(p =>
-        `<div class="legend-item"><div class="legend-dot" style="background:${p.color}"></div> ${p.name}</div>`
-      ).join('') +
-      `<div class="legend-item"><div class="legend-dot" style="background:#b388ff;height:6px;margin-top:2px"></div> Activation</div>`;
   }
 }
 
