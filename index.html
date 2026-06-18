@@ -2388,8 +2388,8 @@
       <div style="font-size:11px;color:var(--text3);font-family:'Barlow Condensed',sans-serif;letter-spacing:0.5px;margin-bottom:10px;line-height:1.5">
         Enter all your fixtures quickly — date, opponent, venue. Save them all, then click any match in the Week / Month / Annual views to fill in load, score, and availability.
       </div>
-      <div style="display:grid;grid-template-columns:130px 1fr 150px 1fr 28px;gap:8px;padding:0 2px 6px;font-size:9px;font-family:'Barlow Condensed',sans-serif;letter-spacing:1.5px;color:var(--text3);text-transform:uppercase">
-        <span>Date</span><span>Opponent</span><span>Venue</span><span>Competition</span><span></span>
+      <div style="display:grid;grid-template-columns:150px 1fr 160px 28px;gap:8px;padding:0 2px 6px;font-size:9px;font-family:'Barlow Condensed',sans-serif;letter-spacing:1.5px;color:var(--text3);text-transform:uppercase">
+        <span>Date</span><span>Opposition</span><span>Location</span><span></span>
       </div>
       <div id="bulkGamesList" style="display:flex;flex-direction:column;gap:6px;max-height:50vh;overflow-y:auto"></div>
       <button class="btn btn-ghost btn-sm" style="margin-top:8px" onclick="addBulkRow()">＋ Add Row</button>
@@ -3464,8 +3464,22 @@ function renderYear() {
         const bg = venue === 'Away' ? '#fdd835' : venue === 'Neutral' ? '#bdbdbd' : '#ffffff';
         cell.style.background = bg;
         cell.style.borderColor = '#888';
-        cell.style.cssText += 'display:flex;align-items:center;justify-content:center;font-size:9px;color:#222;';
-        cell.textContent = '⚽';
+        cell.style.cssText += 'display:flex;align-items:center;justify-content:center;overflow:hidden;';
+        // Opponent crest if we have one, else a ball
+        const opp = game.opponent_id
+          ? state.opponents.find(o => o.id === game.opponent_id)
+          : state.opponents.find(o => o.name?.toLowerCase() === game.opponent?.toLowerCase());
+        if (opp?.badge_url) {
+          const img = document.createElement('img');
+          img.src = opp.badge_url;
+          img.alt = opp.name || '';
+          img.style.cssText = 'width:22px;height:22px;object-fit:contain;display:block';
+          img.onerror = function(){ this.replaceWith(document.createTextNode('⚽')); };
+          cell.appendChild(img);
+        } else {
+          cell.style.cssText += 'font-size:9px;color:#222;';
+          cell.textContent = '⚽';
+        }
       } else if (sessions.length > 0) {
         const s = sessions[0];
         const bg1 = getTypeBackground(s.type);
@@ -4390,19 +4404,26 @@ function renderBulkRows() {
   if (!host) return;
   // Build a datalist of opponent names once
   const oppOptions = (state.opponents || []).map(o => `<option value="${escapeAttr(o.name)}">`).join('');
-  host.innerHTML = `<datalist id="bulkOppList">${oppOptions}</datalist>` + bulkRows.map((r, i) => `
-    <div style="display:grid;grid-template-columns:130px 1fr 150px 1fr 28px;gap:8px;align-items:center">
+  host.innerHTML = `<datalist id="bulkOppList">${oppOptions}</datalist>` + bulkRows.map((r, i) => {
+    const opp = (state.opponents||[]).find(o => o.name.toLowerCase() === (r.opponent||'').toLowerCase());
+    const crest = opp?.badge_url
+      ? `<img src="${escapeAttr(opp.badge_url)}" style="width:20px;height:20px;object-fit:contain;vertical-align:middle" onerror="this.style.display='none'">`
+      : '<span style="display:inline-block;width:20px;text-align:center;color:var(--text3)">⚽</span>';
+    return `
+    <div style="display:grid;grid-template-columns:150px 1fr 160px 28px;gap:8px;align-items:center">
       <input type="date" value="${escapeAttr(r.date)}" oninput="updateBulkRow(${i},'date',this.value)">
-      <input type="text" list="bulkOppList" placeholder="Opponent" value="${escapeAttr(r.opponent)}" oninput="updateBulkRow(${i},'opponent',this.value)">
+      <div style="display:flex;align-items:center;gap:6px">
+        ${crest}
+        <input type="text" list="bulkOppList" placeholder="Opposition" value="${escapeAttr(r.opponent)}" oninput="updateBulkRow(${i},'opponent',this.value)" onchange="renderBulkRows()" style="flex:1">
+      </div>
       <select onchange="updateBulkRow(${i},'venue',this.value)">
         <option ${r.venue==='Home'?'selected':''}>Home</option>
         <option ${r.venue==='Away'?'selected':''}>Away</option>
         <option ${r.venue==='Neutral'?'selected':''}>Neutral</option>
       </select>
-      <input type="text" placeholder="e.g. MLS" value="${escapeAttr(r.competition)}" oninput="updateBulkRow(${i},'competition',this.value)">
       <span class="exercise-remove" onclick="removeBulkRow(${i})" title="Remove">✕</span>
-    </div>
-  `).join('');
+    </div>`;
+  }).join('');
 }
 
 function updateBulkRow(i, field, val) { if (bulkRows[i]) bulkRows[i][field] = val; }
