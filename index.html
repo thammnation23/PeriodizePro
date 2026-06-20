@@ -1846,7 +1846,7 @@
     </select>
     <button class="btn btn-primary btn-sm" onclick="openAddGame()">＋ Game</button>
     <button class="btn btn-ghost btn-sm" onclick="openBulkGames()">⧉ Schedule</button>
-    <button class="btn btn-ghost btn-sm" id="gpsSyncBtn" onclick="syncGpsNow()" title="Pull Catapult GPS actuals from the AMS for the week(s) in view">🛰 GPS Sync</button>
+    <button class="btn btn-ghost btn-sm" id="gpsSyncBtn" onclick="syncGpsNow()" title="Pull Catapult GPS actuals from the AMS for the week(s) in view">GPS Sync</button>
     <button class="btn btn-ghost btn-sm" onclick="exportData()">↓ Export</button>
     <div class="user-pill" id="userPill">
       <div class="user-pill-dot"></div>
@@ -7839,7 +7839,7 @@ async function syncGpsNow() {
 
   const btn = document.getElementById('gpsSyncBtn');
   const orig = btn ? btn.innerHTML : '';
-  if (btn) { btn.disabled = true; btn.innerHTML = '🛰 Syncing…'; }
+  if (btn) { btn.disabled = true; btn.innerHTML = 'Syncing…'; }
 
   let ok = 0, fail = 0;
   for (const w of weeks) {
@@ -7854,7 +7854,7 @@ async function syncGpsNow() {
 
   if (btn) {
     btn.disabled = false;
-    btn.innerHTML = fail ? `🛰 ${ok} ok · ${fail} ✗` : `🛰 Synced ${ok} wk${ok === 1 ? '' : 's'}`;
+    btn.innerHTML = fail ? `${ok} ok · ${fail} ✗` : `Synced ${ok} wk${ok === 1 ? '' : 's'}`;
     setTimeout(() => { btn.innerHTML = orig; }, 2500);
   }
 }
