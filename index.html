@@ -2353,6 +2353,11 @@
       <div id="prePostList"></div>
       <button class="btn btn-ghost btn-sm" style="margin-top:8px" onclick="addPrePostEntry()">＋ Add Pre/Post Entry</button>
 
+      <hr class="section-divider">
+      <div class="subsection-label">Testing <span style="color:var(--text3);font-size:10px;font-weight:400;letter-spacing:0;text-transform:none">— select any tests run this session</span></div>
+      <div id="testingChips" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px"></div>
+      <div id="testingNotes"></div>
+
       <div class="form-group" style="margin-top:14px;margin-bottom:14px">
         <label>Activation Theme <span style="color:var(--text3);font-size:10px;font-weight:400;letter-spacing:0">— legacy free text</span></label>
         <input type="text" id="sessionActivation" placeholder="e.g. Hip activation, Ankle prep, Glute circuit...">
@@ -3088,6 +3093,7 @@ function dbToSession(r) {
     sessionMedia: r.session_drills || [],
     exercises:    r.exercises      || [],
     prePost:      r.pre_post        || [],
+    testing:      r.testing         || [],
     gdMinus: r.gd_minus || '',
     gdPlus:  r.gd_plus  || '',
     activation: r.activation || '',
@@ -3110,6 +3116,7 @@ function sessionToDB(s) {
     session_drills: s.sessionMedia || [],
     exercises:      s.exercises    || [],
     pre_post:       s.prePost      || [],
+    testing:        s.testing      || [],
     gd_minus: s.gdMinus ? parseInt(s.gdMinus) : null,
     gd_plus:  s.gdPlus  ? parseInt(s.gdPlus)  : null,
     activation: s.activation || null,
@@ -3944,6 +3951,11 @@ function buildSessionCardHTML(s) {
           </div>`;
         }).join('')}
       </div>` : ''}
+      ${(s.testing && s.testing.length) ? `
+      <div style="margin-top:6px;display:flex;flex-wrap:wrap;gap:4px;align-items:center">
+        <span style="font-family:'Barlow Condensed',sans-serif;font-weight:700;letter-spacing:1px;font-size:9px;color:var(--text3)">🧪 TEST</span>
+        ${s.testing.map(t => `<span style="background:rgba(0,212,255,0.12);color:var(--accent);font-family:'Barlow Condensed',sans-serif;font-weight:700;letter-spacing:0.5px;padding:1px 6px;border-radius:2px;font-size:10px" title="${escapeAttr(t.notes || '')}">${escapeAttr(t.test)}${t.notes ? ' ·' : ''}</span>`).join('')}
+      </div>` : ''}
     </div>
   `;
 }
@@ -4225,6 +4237,8 @@ function editSession(id) {
   currentExercises = (s.exercises || []).map(ex => ({ ...ex }));
   renderExercises();
   // Load pre/post entries
+  currentTesting = (s.testing || []).map(t => ({ ...t }));
+  renderTestingChips();
   currentPrePost = (s.prePost || []).map(p => ({ ...p }));
   renderPrePost();
   document.getElementById('sessionNotes').value = s.notes || '';
@@ -4257,6 +4271,8 @@ function clearSessionForm() {
   renderExercises();
   currentPrePost = [];
   renderPrePost();
+  currentTesting = [];
+  renderTestingChips();
 }
 
 async function saveSession() {
@@ -4286,6 +4302,7 @@ async function saveSession() {
     prePost: currentPrePost
       .filter(p => p.description?.trim() || p.type)
       .map(p => ({ ...p })),
+    testing: currentTesting.map(t => ({ ...t })),
     gdMinus: document.getElementById('gdMinus').value,
     gdPlus:  document.getElementById('gdPlus').value,
     activation: document.getElementById('sessionActivation').value,
@@ -5496,6 +5513,42 @@ function openMediaDetail(id) {
 let sessionAttachments = { warmup: [], session: [] };
 let pickerSlot = null; // 'warmup' or 'session' or 'exercise:<idx>'
 let pickerSelections = new Set();
+
+// ── TESTING ──
+const TEST_TYPES = ['Nordic', 'CMJ', 'DJ', 'SJ', '10-5', 'Hip Ad/Ab 60', 'Hip Ad/Ab 0'];
+let currentTesting = []; // [{ test, notes }]
+
+function renderTestingChips() {
+  const chipHost = document.getElementById('testingChips');
+  if (!chipHost) return;
+  const selected = new Set(currentTesting.map(t => t.test));
+  chipHost.innerHTML = TEST_TYPES.map(t => {
+    const on = selected.has(t);
+    return `<button type="button" onclick="toggleTest('${escapeAttr(t)}')"
+      style="padding:4px 10px;border-radius:3px;border:1px solid ${on ? 'var(--accent)' : 'var(--border)'};background:${on ? 'rgba(0,212,255,0.15)' : 'transparent'};color:${on ? 'var(--accent)' : 'var(--text2)'};font-family:'Barlow Condensed',sans-serif;font-weight:700;letter-spacing:0.5px;font-size:12px;cursor:pointer">${on ? '✓ ' : ''}${t}</button>`;
+  }).join('');
+  renderTestingNotes();
+}
+
+function renderTestingNotes() {
+  const host = document.getElementById('testingNotes');
+  if (!host) return;
+  if (currentTesting.length === 0) { host.innerHTML = ''; return; }
+  host.innerHTML = currentTesting.map((t, i) => `
+    <div style="display:grid;grid-template-columns:130px 1fr;gap:8px;align-items:center;margin-bottom:5px">
+      <span style="font-family:'Barlow Condensed',sans-serif;font-weight:700;letter-spacing:0.5px;font-size:12px;color:var(--text)">${escapeAttr(t.test)}</span>
+      <input type="text" placeholder="Result / notes (optional)" value="${escapeAttr(t.notes || '')}" oninput="updateTestNotes(${i}, this.value)" style="font-size:12px;padding:5px 8px">
+    </div>
+  `).join('');
+}
+
+function toggleTest(test) {
+  const idx = currentTesting.findIndex(t => t.test === test);
+  if (idx === -1) currentTesting.push({ test, notes: '' });
+  else currentTesting.splice(idx, 1);
+  renderTestingChips();
+}
+function updateTestNotes(i, val) { if (currentTesting[i]) currentTesting[i].notes = val; }
 
 // ── PRE / POST TRAINING ──
 const PRE_POST_TYPES = ['Gym', 'Activation', 'Recovery', 'Mobility', 'Cool Down', 'Other'];
@@ -7438,6 +7491,8 @@ function renderWeekReview() {
 
     ${renderPrePostRollup(w)}
 
+    ${renderTestingRollup(w)}
+
     <!-- Quick stats -->
     <div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:14px 18px;font-size:11px;color:var(--text3);font-family:'Barlow Condensed',sans-serif;letter-spacing:1px">
       ${days.reduce((c, d) => c + d.sessions.length, 0)} sessions · ${days.filter(d => d.game).length} match${days.filter(d => d.game).length === 1 ? '' : 'es'} · Week starts ${fmt(start)} ${start.getFullYear()}
@@ -7806,6 +7861,55 @@ function renderSessionNotesRollup(weekNum) {
 }
 
 // Aggregate pre/post training entries from all sessions in the selected week.
+// Aggregate testing entries across the selected week's sessions.
+function renderTestingRollup(weekNum) {
+  const start = getWeekStart(weekNum);
+  const weekDates = [];
+  for (let i = 0; i < 7; i++) { const d = new Date(start); d.setDate(d.getDate() + i); weekDates.push(formatDate(d)); }
+  const sessionsThisWeek = (state.sessions || []).filter(s => weekDates.includes(s.date) && (s.testing || []).length);
+
+  if (sessionsThisWeek.length === 0) {
+    return `
+      <div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:18px 22px;margin-bottom:14px">
+        <h3 style="margin:0 0 8px 0;font-family:'Barlow Condensed',sans-serif;letter-spacing:1.5px;font-size:15px;color:var(--accent)">TESTING</h3>
+        <div style="font-size:11.5px;color:var(--text3);font-style:italic">No testing logged this week. Select tests on the session form to see a rollup here.</div>
+      </div>`;
+  }
+
+  const byDate = {};
+  sessionsThisWeek.forEach(s => { (byDate[s.date] = byDate[s.date] || []).push(...(s.testing || [])); });
+  const sortedDates = Object.keys(byDate).sort();
+  // Count by test type
+  const counts = {};
+  Object.values(byDate).flat().forEach(t => { counts[t.test] = (counts[t.test] || 0) + 1; });
+  const countChips = Object.entries(counts).sort((a,b)=>b[1]-a[1])
+    .map(([t,n]) => `<span style="background:rgba(0,212,255,0.12);color:var(--accent);font-family:'Barlow Condensed',sans-serif;font-weight:700;letter-spacing:1px;padding:2px 8px;border-radius:3px;font-size:11px">${n} ${escapeHtml(t)}</span>`).join('');
+
+  return `
+    <div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:18px 22px;margin-bottom:14px">
+      <h3 style="margin:0 0 6px 0;font-family:'Barlow Condensed',sans-serif;letter-spacing:1.5px;font-size:15px;color:var(--accent)">TESTING</h3>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px">${countChips}</div>
+      <div style="display:flex;flex-direction:column;gap:10px">
+        ${sortedDates.map(date => {
+          const dt = new Date(date + 'T12:00:00');
+          const dayLabel = dt.toLocaleDateString('en', { weekday: 'short', month: 'short', day: 'numeric' });
+          return `
+            <div style="border:1px solid var(--border);border-radius:var(--radius);padding:10px 14px;background:var(--surface3)">
+              <div style="font-family:'Barlow Condensed',sans-serif;font-weight:700;letter-spacing:1.5px;font-size:11.5px;color:var(--text2);margin-bottom:6px">${dayLabel.toUpperCase()}</div>
+              <div style="display:flex;flex-direction:column;gap:5px">
+                ${byDate[date].map(t => `
+                  <div style="display:flex;align-items:flex-start;gap:8px;font-size:12px;line-height:1.45">
+                    <span style="background:rgba(0,212,255,0.12);color:var(--accent);font-family:'Barlow Condensed',sans-serif;font-weight:700;letter-spacing:0.5px;padding:2px 7px;border-radius:3px;white-space:nowrap;font-size:11px">${escapeHtml(t.test)}</span>
+                    <span style="color:var(--text2);flex:1">${escapeHtml(t.notes || '')}</span>
+                  </div>
+                `).join('')}
+              </div>
+            </div>`;
+        }).join('')}
+      </div>
+    </div>`;
+}
+
 function renderPrePostRollup(weekNum) {
   const start = getWeekStart(weekNum);
   const weekDates = [];
