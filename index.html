@@ -1928,23 +1928,36 @@
 
   <!-- ── LOADING VIEW ── -->
   <div id="view-loading" class="view">
-    <p class="section-title">Planned Loading · Season Overview</p>
-
-    <div class="planned-loading-wrap">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
-        <div style="font-family:'Anton',sans-serif;font-size:15px;font-weight:700;letter-spacing:1px;color:var(--text2)">WEEKLY LOAD INDEX</div>
-        <div style="display:flex;gap:8px">
-          <span class="legend-item" style="font-size:11px"><span style="color:var(--high)">■</span> High</span>
-          <span class="legend-item" style="font-size:11px"><span style="color:var(--med)">■</span> Med</span>
-          <span class="legend-item" style="font-size:11px"><span style="color:var(--low)">■</span> Low</span>
-          <span class="legend-item" style="font-size:11px"><span style="color:var(--game)">●</span> Match</span>
-        </div>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:10px">
+      <div>
+        <h2 style="margin:0;font-family:'Anton',sans-serif;letter-spacing:1px;font-size:24px">LOAD MONITORING</h2>
+        <div style="font-size:11px;color:var(--text3);font-family:'Anton',sans-serif;letter-spacing:1px;margin-top:2px">Season load trend (planned vs actual) + acute:chronic risk</div>
       </div>
-      <div class="planned-bars" id="loadingBars"></div>
-      <div style="display:flex;gap:2px;margin-top:2px" id="loadingNums"></div>
+      <div style="display:flex;align-items:center;gap:6px" id="loadingMetricToggle"></div>
     </div>
 
-    <!-- Week list -->
+    <div id="loadingStats" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;margin-bottom:16px"></div>
+
+    <div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:16px 18px;margin-bottom:14px">
+      <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px;flex-wrap:wrap;gap:6px">
+        <div style="font-family:'Anton',sans-serif;letter-spacing:1px;font-size:14px;color:var(--text2)" id="loadingCurveTitle">SEASON LOAD CURVE</div>
+        <div style="display:flex;gap:12px;font-size:10px;font-family:'Anton',sans-serif;letter-spacing:1px;color:var(--text3)">
+          <span><span style="display:inline-block;width:14px;height:2px;background:var(--text);vertical-align:middle"></span> PLANNED</span>
+          <span><span style="display:inline-block;width:14px;height:2px;background:var(--accent);vertical-align:middle"></span> ACTUAL</span>
+          <span><span style="color:var(--game)">●</span> MATCH WK</span>
+        </div>
+      </div>
+      <div id="loadingCurve"></div>
+    </div>
+
+    <div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:16px 18px;margin-bottom:14px">
+      <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px;flex-wrap:wrap;gap:6px">
+        <div style="font-family:'Anton',sans-serif;letter-spacing:1px;font-size:14px;color:var(--text2)">ACUTE : CHRONIC WORKLOAD RATIO</div>
+        <div style="font-size:10px;color:var(--text3);font-family:'Anton',sans-serif;letter-spacing:1px">SAFE 0.8–1.3 · this week ÷ 4-week avg</div>
+      </div>
+      <div id="loadingAcwr"></div>
+    </div>
+
     <p class="section-title">Week Sessions</p>
     <div id="loadingWeekList"></div>
   </div>
@@ -3663,55 +3676,173 @@ function hideTooltip() {
 // ══════════════════════════════════════════════════════
 //  LOADING VIEW
 // ══════════════════════════════════════════════════════
-function renderLoading() {
-  const bars = document.getElementById('loadingBars');
-  const nums = document.getElementById('loadingNums');
-  bars.innerHTML = '';
-  nums.innerHTML = '';
+const LOAD_METRICS = [
+  { key: 'td',  label: 'TD',      unit: 'm' },
+  { key: 'hsr', label: 'HSR',     unit: 'm' },
+  { key: 'sd',  label: 'Sprint',  unit: 'm' },
+  { key: 'ad',  label: 'Acc/Dec', unit: '' },
+];
+let loadingMetric = 'td';
 
+// Per-week planned + actual totals for the whole season.
+function computeSeasonWeeklyLoads() {
+  const weeks = [];
+  const today = formatDate(new Date());
   for (let w = 1; w <= 52; w++) {
-    const weekStart = getWeekStart(w);
-    const sessions = [];
+    const ws = getWeekStart(w);
+    const planned = { td:0, hsr:0, sd:0, ad:0 };
+    const actual  = { td:0, hsr:0, sd:0, ad:0 };
+    let hasPlanned = false, hasActual = false, isGameWeek = false;
     for (let d = 0; d < 7; d++) {
-      const dd = new Date(weekStart);
-      dd.setDate(dd.getDate() + d);
+      const dd = new Date(ws); dd.setDate(dd.getDate() + d);
       const dateStr = formatDate(dd);
-      state.sessions.filter(s => s.date === dateStr).forEach(s => sessions.push(s));
+      const sess = state.sessions.filter(s => s.date === dateStr);
+      const game = state.games.find(g => g.date === dateStr);
+      if (game) isGameWeek = true;
+      [...sess, ...(game ? [game] : [])].forEach(x => {
+        const td = parseInt(x.td)||0, hsr = parseInt(x.hsr)||0;
+        const sd = parseInt(x.sd ?? x.sprint)||0, ad = (parseInt(x.acc)||0)+(parseInt(x.dec)||0);
+        if (td||hsr||sd||ad) hasPlanned = true;
+        planned.td+=td; planned.hsr+=hsr; planned.sd+=sd; planned.ad+=ad;
+      });
+      const a = getAmsActualForDate(dateStr);
+      if (a) { hasActual = true; actual.td+=a.td||0; actual.hsr+=a.hsr||0; actual.sd+=a.sd||0; actual.ad+=a.accDec||0; }
     }
-    const isGameWeek = state.games.some(g => {
-      const gd = new Date(g.date);
-      const ws = getWeekStart(w);
-      const we = new Date(ws); we.setDate(we.getDate() + 6);
-      return gd >= ws && gd <= we;
-    });
-
-    // Average intensity
-    const avgInt = sessions.length
-      ? sessions.reduce((a, s) => a + (parseInt(s.intensity) || 5), 0) / sessions.length
-      : 0;
-
-    const wrap = document.createElement('div');
-    wrap.className = 'planned-bar-wrap' + (isGameWeek ? ' game-week' : '');
-    wrap.title = 'Week ' + w;
-    wrap.onclick = () => { currentWeek = w; switchTab('week'); };
-
-    const inner = document.createElement('div');
-    inner.className = 'planned-bar-inner';
-    const heightPct = avgInt ? Math.round((avgInt / 10) * 75) + 5 : 2;
-    inner.style.cssText = `height:${heightPct}px;background:${isGameWeek ? 'var(--game)' : getIntensityColor(avgInt || 5)};`;
-
-    wrap.appendChild(inner);
-    bars.appendChild(wrap);
-
-    const num = document.createElement('div');
-    num.className = 'planned-bar-num';
-    num.style.cssText = 'flex:1;text-align:center;';
-    num.textContent = w % 4 === 1 ? w : '';
-    nums.appendChild(num);
+    weeks.push({ w, planned, actual, hasPlanned, hasActual, isGameWeek, isPast: formatDate(ws) <= today });
   }
+  return weeks;
+}
 
-  // Week list
+function renderLoading() {
+  // Metric toggle
+  const tog = document.getElementById('loadingMetricToggle');
+  if (tog) tog.innerHTML = LOAD_METRICS.map(m => `
+    <button onclick="loadingMetric='${m.key}';renderLoading()" style="padding:4px 12px;border-radius:3px;border:1px solid ${loadingMetric===m.key?'var(--accent)':'var(--border)'};background:${loadingMetric===m.key?'rgba(0,212,255,0.15)':'transparent'};color:${loadingMetric===m.key?'var(--accent)':'var(--text2)'};font-family:'Anton',sans-serif;letter-spacing:1px;font-size:12px;cursor:pointer">${m.label}</button>
+  `).join('');
+
+  const weeks = computeSeasonWeeklyLoads();
+  const mk = loadingMetric;
+  const metricLabel = LOAD_METRICS.find(m => m.key===mk).label;
+  document.getElementById('loadingCurveTitle').textContent = `SEASON LOAD CURVE · ${metricLabel.toUpperCase()}`;
+
+  // Active range: first planned week → last planned/actual week (fallback whole season)
+  const active = weeks.filter(x => x.hasPlanned || x.hasActual);
+  const firstW = active.length ? active[0].w : 1;
+  const lastW  = active.length ? active[active.length-1].w : 52;
+  const view = weeks.filter(x => x.w >= firstW && x.w <= lastW);
+
+  renderLoadingStats(weeks, mk, metricLabel);
+  renderLoadCurve(view, mk);
+  renderAcwr(weeks, firstW, lastW, mk);
   renderLoadingWeekList();
+}
+
+function renderLoadingStats(weeks, mk, metricLabel) {
+  const el = document.getElementById('loadingStats');
+  if (!el) return;
+  const plannedVals = weeks.filter(x => x.hasPlanned).map(x => x.planned[mk]);
+  const total = plannedVals.reduce((a,b)=>a+b,0);
+  const avg = plannedVals.length ? Math.round(total/plannedVals.length) : 0;
+  const peak = plannedVals.length ? Math.max(...plannedVals) : 0;
+  // current-week ACWR (planned)
+  const acwrThis = computeAcwrForWeek(weeks, currentWeek, mk);
+  const acwrColor = acwrThis == null ? 'var(--text3)' : acwrThis < 0.8 ? '#42a5f5' : acwrThis <= 1.3 ? '#2eb86b' : acwrThis <= 1.5 ? '#f5a623' : '#d32f2f';
+  const stat = (label, val, color) => `
+    <div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:10px 12px">
+      <div style="font-size:10px;color:var(--text3);font-family:'Anton',sans-serif;letter-spacing:1px;text-transform:uppercase">${label}</div>
+      <div style="font-family:'JetBrains Mono',monospace;font-size:18px;font-weight:700;color:${color||'var(--text)'};margin-top:2px">${val}</div>
+    </div>`;
+  el.innerHTML = [
+    stat(`Avg Week ${metricLabel}`, avg ? fmtNum(avg) : '—'),
+    stat(`Peak Week ${metricLabel}`, peak ? fmtNum(peak) : '—'),
+    stat('Loaded Weeks', plannedVals.length),
+    stat(`W${currentWeek} ACWR`, acwrThis == null ? '—' : acwrThis.toFixed(2), acwrColor),
+  ].join('');
+}
+
+// ACWR for a given week = week load / mean of prior 4 weeks (incl current) planned load
+function computeAcwrForWeek(weeks, w, mk) {
+  const idx = weeks.findIndex(x => x.w === w);
+  if (idx < 0) return null;
+  const acute = weeks[idx].planned[mk];
+  if (!acute) return null;
+  const windowWeeks = weeks.slice(Math.max(0, idx-3), idx+1).filter(x => x.planned[mk] > 0);
+  if (windowWeeks.length < 2) return null;
+  const chronic = windowWeeks.reduce((a,x)=>a+x.planned[mk],0) / windowWeeks.length;
+  return chronic ? acute/chronic : null;
+}
+
+function renderLoadCurve(view, mk) {
+  const host = document.getElementById('loadingCurve');
+  if (!host) return;
+  if (view.length === 0) { host.innerHTML = `<div style="text-align:center;padding:40px;color:var(--text3);font-family:'Anton',sans-serif;letter-spacing:1px">No planned load yet — add load metrics to sessions/matches</div>`; return; }
+
+  const W=900, H=260, padL=46, padR=16, padT=16, padB=28;
+  const innerW=W-padL-padR, innerH=H-padT-padB;
+  const maxVal = Math.max(1, ...view.map(x => Math.max(x.planned[mk], x.hasActual ? x.actual[mk] : 0)));
+  const x = i => padL + (view.length===1?innerW/2:(i/(view.length-1))*innerW);
+  const y = v => padT + innerH - (v/maxVal)*innerH;
+
+  // gridlines
+  let grid='';
+  for (let g=0; g<=4; g++){ const v=maxVal*g/4, yy=padT+innerH-(g/4)*innerH;
+    grid += `<line x1="${padL}" y1="${yy}" x2="${W-padR}" y2="${yy}" stroke="var(--border)" stroke-width="0.5" stroke-dasharray="2,3"/><text x="${padL-6}" y="${yy+3}" font-family="'JetBrains Mono',monospace" font-size="9" fill="var(--text3)" text-anchor="end">${fmtNum(Math.round(v))}</text>`; }
+
+  const plannedPath = view.map((d,i)=>`${i===0?'M':'L'} ${x(i).toFixed(1)} ${y(d.planned[mk]).toFixed(1)}`).join(' ');
+  const actualPts = view.map((d,i)=>({d,i})).filter(o=>o.d.hasActual);
+  const actualPath = actualPts.length>1 ? actualPts.map((o,j)=>`${j===0?'M':'L'} ${x(o.i).toFixed(1)} ${y(o.d.actual[mk]).toFixed(1)}`).join(' ') : '';
+
+  // match-week markers + x labels (every 4th week)
+  let marks='', xlabels='';
+  view.forEach((d,i)=>{
+    if (d.isGameWeek) marks += `<circle cx="${x(i)}" cy="${H-padB+8}" r="3" fill="var(--game)"><title>Week ${d.w} · match week</title></circle>`;
+    if (d.w % 4 === 1 || i===0 || i===view.length-1) xlabels += `<text x="${x(i)}" y="${H-2}" font-family="'JetBrains Mono',monospace" font-size="9" fill="var(--text3)" text-anchor="middle">W${d.w}</text>`;
+  });
+  const dots = view.map((d,i)=>`<circle cx="${x(i)}" cy="${y(d.planned[mk])}" r="2.5" fill="var(--text)"><title>W${d.w} planned ${fmtNum(d.planned[mk])}${d.hasActual?' · actual '+fmtNum(d.actual[mk]):''}</title></circle>`).join('');
+  const actualDots = actualPts.map(o=>`<circle cx="${x(o.i)}" cy="${y(o.d.actual[mk])}" r="2.5" fill="var(--accent)"/>`).join('');
+
+  host.innerHTML = `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;display:block">
+    ${grid}
+    ${actualPath?`<path d="${actualPath}" stroke="var(--accent)" stroke-width="1.5" fill="none" opacity="0.9"/>`:''}
+    <path d="${plannedPath}" stroke="var(--text)" stroke-width="1.5" fill="none"/>
+    ${dots}${actualDots}${marks}${xlabels}
+  </svg>`;
+}
+
+function renderAcwr(weeks, firstW, lastW, mk) {
+  const host = document.getElementById('loadingAcwr');
+  if (!host) return;
+  const view = weeks.filter(x => x.w>=firstW && x.w<=lastW);
+  const ratios = view.map(d => ({ w:d.w, r: computeAcwrForWeek(weeks, d.w, mk) }));
+  if (!ratios.some(x=>x.r!=null)) { host.innerHTML = `<div style="text-align:center;padding:24px;color:var(--text3);font-family:'Anton',sans-serif;letter-spacing:1px">Need a few loaded weeks to compute ACWR</div>`; return; }
+
+  const W=900,H=150,padL=46,padR=16,padT=10,padB=22;
+  const innerW=W-padL-padR, innerH=H-padT-padB;
+  const maxR=2.0;
+  const x=i=>padL+(ratios.length===1?innerW/2:(i/(ratios.length-1))*innerW);
+  const y=r=>padT+innerH-(Math.min(r,maxR)/maxR)*innerH;
+  // safe band 0.8-1.3
+  const bandTop=y(1.3), bandBot=y(0.8);
+  let gl='';
+  [0.8,1.0,1.3,1.5].forEach(v=>{ gl+=`<line x1="${padL}" y1="${y(v)}" x2="${W-padR}" y2="${y(v)}" stroke="var(--border)" stroke-width="0.5" stroke-dasharray="2,3"/><text x="${padL-6}" y="${y(v)+3}" font-family="'JetBrains Mono',monospace" font-size="9" fill="var(--text3)" text-anchor="end">${v.toFixed(1)}</text>`; });
+  const dots = ratios.map((o,i)=>{
+    if (o.r==null) return '';
+    const c = o.r<0.8?'#42a5f5':o.r<=1.3?'#2eb86b':o.r<=1.5?'#f5a623':'#d32f2f';
+    return `<circle cx="${x(i)}" cy="${y(o.r)}" r="3.5" fill="${c}"><title>W${o.w} ACWR ${o.r.toFixed(2)}</title></circle>`;
+  }).join('');
+  const linePts = ratios.map((o,i)=>o.r==null?null:`${x(i).toFixed(1)},${y(o.r).toFixed(1)}`).filter(Boolean).join(' ');
+  let xlabels='';
+  ratios.forEach((o,i)=>{ if (o.w%4===1||i===0||i===ratios.length-1) xlabels+=`<text x="${x(i)}" y="${H-2}" font-family="'JetBrains Mono',monospace" font-size="9" fill="var(--text3)" text-anchor="middle">W${o.w}</text>`; });
+
+  host.innerHTML = `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;display:block">
+    <rect x="${padL}" y="${bandTop}" width="${innerW}" height="${bandBot-bandTop}" fill="#2eb86b" opacity="0.10"/>
+    ${gl}
+    <polyline points="${linePts}" fill="none" stroke="var(--text3)" stroke-width="1" opacity="0.5"/>
+    ${dots}${xlabels}
+  </svg>
+  <div style="font-size:10px;color:var(--text3);margin-top:6px;font-family:'Anton',sans-serif;letter-spacing:1px">
+    <span style="color:#42a5f5">●</span> &lt;0.8 undertraining · <span style="color:#2eb86b">●</span> 0.8–1.3 optimal · <span style="color:#f5a623">●</span> 1.3–1.5 caution · <span style="color:#d32f2f">●</span> &gt;1.5 spike risk
+  </div>`;
 }
 
 function renderLoadingWeekList() {
