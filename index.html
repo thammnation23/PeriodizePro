@@ -3818,12 +3818,12 @@ async function updateGameMetric(gameId, field, value) {
 
 // Editable metric chip — labelled input that stops click propagation so the
 // parent session/game card click handler does not also fire.
-// Optional `actualValue` renders a read-only sub-line under the planned input,
-// colour-graded by ratio vs planned.
+// Optional `actualValue` renders the Catapult actual as a clear second line
+// under the planned input (planned on top, actual below), in the accent colour.
 function editableMetricChip(label, value, onChangeJs, actualValue) {
   const safe = value == null || value === '' ? '' : value;
   const actualLine = (actualValue != null && actualValue !== '' && actualValue !== 0)
-    ? `<div style="font-family:'JetBrains Mono',monospace;font-size:9px;font-weight:600;margin-top:1px;color:${actualVsPlannedColor(actualValue, value)}" title="Catapult actual">${fmtNum(actualValue)}</div>`
+    ? `<div style="font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:700;margin-top:2px;padding-top:2px;border-top:1px solid var(--border);color:var(--accent)" title="Catapult actual">${fmtNum(actualValue)}</div>`
     : '';
   return `
     <div class="metric-chip">
@@ -7389,10 +7389,6 @@ function renderWeekReview() {
         td: t.td + (d.td||0), hsr: t.hsr + (d.hsr||0), sd: t.sd + (d.sd||0), accDec: t.accDec + (d.accDec||0),
       }), { td:0, hsr:0, sd:0, accDec:0 });
 
-      // Share the hot/cold scale with the inline chips so the whole app
-      // tells the same story.
-      const ratioColor = (actual, planned) => actualVsPlannedColor(actual, planned);
-
       const rowDefs = [
         { label: 'Intensity',   plannedGetter: d => d.avgIntensity != null ? Math.round(d.avgIntensity) : '', plannedTotal: '—', actualKey: null },
         { label: 'TD (m)',      plannedGetter: d => d.td,           plannedTotal: totals.td,             actualKey: 'td' },
@@ -7486,12 +7482,10 @@ function renderWeekReview() {
                       <td style="padding:4px 8px;font-family:'Barlow Condensed',sans-serif;letter-spacing:1px;font-size:9px;color:var(--accent)">ACTUAL</td>
                       ${days.map(d => {
                         const a = actuals[d.date]?.[row.actualKey];
-                        const p = row.plannedGetter(d);
                         if (a == null) return `<td style="text-align:center;padding:4px 8px;font-family:'JetBrains Mono',monospace;color:var(--text3);font-size:11px">—</td>`;
-                        const color = ratioColor(a, p);
-                        return `<td style="text-align:center;padding:4px 8px;font-family:'JetBrains Mono',monospace;color:${color};font-size:11px;font-weight:600">${fmtNum(a)}</td>`;
+                        return `<td style="text-align:center;padding:4px 8px;font-family:'JetBrains Mono',monospace;color:var(--accent);font-size:11px;font-weight:600">${fmtNum(a)}</td>`;
                       }).join('')}
-                      <td style="text-align:center;padding:4px 8px;font-family:'JetBrains Mono',monospace;font-weight:700;color:${ratioColor(actualTotals[row.actualKey], row.plannedTotal)}">${actualTotals[row.actualKey] ? fmtNum(actualTotals[row.actualKey]) : '—'}</td>
+                      <td style="text-align:center;padding:4px 8px;font-family:'JetBrains Mono',monospace;font-weight:700;color:var(--accent)">${actualTotals[row.actualKey] ? fmtNum(actualTotals[row.actualKey]) : '—'}</td>
                     </tr>
                   `;
                   return [plannedRow, actualRow];
@@ -7500,7 +7494,7 @@ function renderWeekReview() {
             </table>
           </div>
           <div style="font-size:10px;color:var(--text3);margin-top:8px;font-family:'Barlow Condensed',sans-serif;letter-spacing:1px;line-height:1.5">
-            Planned from sessions + match projected load. Actuals pulled live from the AMS Catapult view. For each day the <b>Activity</b> dropdown picks which Catapult session to use (number in parentheses = athletes in that activity). The average uses everyone in the chosen activity except goalkeepers and anyone logged Modified · Recovery · RTP · Out that date — selecting the right activity already scopes to the correct group. Tick <b>SQUAD ONLY</b> to additionally keep just players whose names match your roster (use only if an activity mixes squads). "N used" = athletes that fed the average. Hot/cold scale: <span style="color:#1565c0">●</span> <span style="color:#1565c0">very cold</span> (&lt;80% of planned) · <span style="color:#42a5f5">●</span> <span style="color:#42a5f5">cold</span> · <span style="color:#9e9e9e">●</span> <span style="color:#9e9e9e">on target</span> (±8%) · <span style="color:#ff8a4c">●</span> <span style="color:#ff8a4c">hot</span> · <span style="color:#d32f2f">●</span> <span style="color:#d32f2f">very hot</span> (&gt;120%). Once synced, actuals also appear under planned numbers on every session/match card across Week and Month views.
+            Planned from sessions + match projected load. Actuals pulled live from the AMS Catapult view. For each day the <b>Activity</b> dropdown picks which Catapult session to use (number in parentheses = athletes in that activity). The average uses everyone in the chosen activity except goalkeepers and anyone logged Modified · Recovery · RTP · Out that date — selecting the right activity already scopes to the correct group. Tick <b>SQUAD ONLY</b> to additionally keep just players whose names match your roster (use only if an activity mixes squads). "N used" = athletes that fed the average. Once synced, the actual also appears under the planned number on every session/match card across Week and Month views.
           </div>
         </div>
       `;
