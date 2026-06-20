@@ -1982,6 +1982,7 @@
         <span class="lib-search-icon">🔍</span>
         <input class="lib-search" id="libSearch" placeholder="Search title, tags, notes…" oninput="renderLibrary()">
       </div>
+      <button class="btn btn-ghost" onclick="backfillExerciseLinks()" title="Add any pasted exercise links from your sessions into the library">↻ Import session links</button>
       <button class="btn btn-primary" onclick="openAddMedia()">＋ Add Drill</button>
     </div>
     <div class="lib-cat-tabs" id="libCatTabs"></div>
@@ -4249,6 +4250,34 @@ async function promoteExerciseUrlsToLibrary(exercises) {
   }
   if (added) { try { renderLibrary(); } catch (e) {} }
   return added;
+}
+
+// One-time backfill: scan every existing session for exercises that carry a
+// pasted URL but aren't yet linked to a library drill, promote them into the
+// Drill Library, and re-save those sessions. Safe to run repeatedly — it only
+// touches exercises that still have a loose URL.
+async function backfillExerciseLinks() {
+  const pending = state.sessions.reduce((n, s) =>
+    n + (s.exercises || []).filter(ex => (ex.url || '').trim() && !ex.mediaId).length, 0);
+  if (pending === 0) {
+    alert('No exercise links to import — every linked exercise is already in the Drill Library.');
+    return;
+  }
+  if (!confirm(`Import ${pending} exercise link${pending === 1 ? '' : 's'} from your sessions into the Drill Library?\n\nEach linked exercise will be connected to a new drill (or an existing one with the same URL).`)) return;
+
+  let drillsAdded = 0, sessionsUpdated = 0;
+  for (const s of state.sessions) {
+    if (!s.exercises || !s.exercises.length) continue;
+    if (!s.exercises.some(ex => (ex.url || '').trim() && !ex.mediaId)) continue;
+    drillsAdded += await promoteExerciseUrlsToLibrary(s.exercises);
+    try { await upsertSessionDB(s); } catch (e) { console.warn('Backfill session save failed:', e); }
+    sessionsUpdated++;
+  }
+
+  try { renderLibrary(); } catch (e) {}
+  if (typeof renderWeek  === 'function') try { renderWeek();  } catch (e) {}
+  if (typeof renderMonth === 'function') try { renderMonth(); } catch (e) {}
+  alert(`Done — ${drillsAdded} new drill${drillsAdded === 1 ? '' : 's'} added, ${sessionsUpdated} session${sessionsUpdated === 1 ? '' : 's'} linked.`);
 }
 
 async function saveSession() {
