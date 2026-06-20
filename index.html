@@ -6815,7 +6815,7 @@ async function loadPlayers() {
       sb.from('players').select('*').eq('user_id', currentUser.id).order('shirt_number', { nullsFirst: false }),
       sb.from('player_logs').select('*').eq('user_id', currentUser.id),
     ]);
-    state.players    = (pRes.data    || []).map(r => ({ id: r.id, name: r.name, position: r.position, shirtNumber: r.shirt_number, notes: r.notes }));
+    state.players    = (pRes.data    || []).map(r => ({ id: r.id, name: r.name, position: r.position, shirtNumber: r.shirt_number, notes: r.notes, includeInAvg: r.include_in_avg !== false }));
     state.playerLogs = (lRes.data    || []).map(r => ({
       id: r.id, playerId: r.player_id, date: r.date,
       sessionId: r.session_id, gameId: r.game_id,
@@ -6880,27 +6880,43 @@ function renderSquadList() {
     return;
   }
   host.innerHTML = `
+    <div style="font-size:10px;color:var(--text3);font-family:'Barlow Condensed',sans-serif;letter-spacing:1px;margin-bottom:6px">Tap the <b>AVG</b> toggle to include / exclude a player from AMS load averages.</div>
     <div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden">
-      <div style="display:grid;grid-template-columns:50px 1fr 80px 100px 100px 60px;gap:8px;padding:10px 14px;background:var(--surface3);font-size:10px;font-family:'Barlow Condensed',sans-serif;letter-spacing:1.5px;color:var(--text3);text-transform:uppercase">
-        <span>#</span><span>Name</span><span>Pos</span><span>Status</span><span>Last Log</span><span></span>
+      <div style="display:grid;grid-template-columns:50px 1fr 80px 100px 90px 64px 44px;gap:8px;padding:10px 14px;background:var(--surface3);font-size:10px;font-family:'Barlow Condensed',sans-serif;letter-spacing:1.5px;color:var(--text3);text-transform:uppercase">
+        <span>#</span><span>Name</span><span>Pos</span><span>Status</span><span>Last Log</span><span>Avg</span><span></span>
       </div>
       ${players.map(p => {
         const latest = latestPlayerLog(p.id);
         const s = latest?.status || 'Full';
         const lastDate = latest?.date ? new Date(latest.date).toLocaleDateString('en', { month: 'short', day: 'numeric' }) : '—';
+        const inAvg = p.includeInAvg !== false;
         return `
-          <div onclick="openPlayerHistory('${p.id}')" style="display:grid;grid-template-columns:50px 1fr 80px 100px 100px 60px;gap:8px;padding:10px 14px;border-top:1px solid var(--border);font-size:12px;align-items:center;cursor:pointer" onmouseover="this.style.background='var(--surface3)'" onmouseout="this.style.background=''">
+          <div onclick="openPlayerHistory('${p.id}')" style="display:grid;grid-template-columns:50px 1fr 80px 100px 90px 64px 44px;gap:8px;padding:10px 14px;border-top:1px solid var(--border);font-size:12px;align-items:center;cursor:pointer;${inAvg ? '' : 'opacity:0.55'}" onmouseover="this.style.background='var(--surface3)'" onmouseout="this.style.background=''">
             <span style="font-family:'JetBrains Mono',monospace;color:var(--text3)">${p.shirtNumber || '—'}</span>
             <span style="font-weight:600">${p.name}</span>
             <span style="font-size:11px;color:var(--text2)">${p.position || ''}</span>
             <span><span style="display:inline-block;padding:2px 8px;border-radius:3px;font-family:'Barlow Condensed',sans-serif;letter-spacing:1px;font-size:11px;font-weight:700;background:${statusColor(s)}22;color:${statusColor(s)}">${s.toUpperCase()}</span></span>
             <span style="font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--text3)">${lastDate}</span>
+            <button onclick="event.stopPropagation();toggleIncludeInAvg('${p.id}')" title="${inAvg ? 'Included in AMS averages — click to exclude' : 'Excluded from AMS averages — click to include'}" style="padding:2px 6px;border-radius:3px;border:1px solid ${inAvg ? '#2eb86b' : 'var(--border)'};background:${inAvg ? '#2eb86b22' : 'transparent'};color:${inAvg ? '#2eb86b' : 'var(--text3)'};font-family:'Barlow Condensed',sans-serif;font-weight:700;letter-spacing:1px;font-size:10px;cursor:pointer">${inAvg ? '✓ AVG' : 'OFF'}</button>
             <button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();openEditPlayer('${p.id}')">✏</button>
           </div>
         `;
       }).join('')}
     </div>
   `;
+}
+
+async function toggleIncludeInAvg(id) {
+  const p = state.players.find(x => x.id === id);
+  if (!p) return;
+  p.includeInAvg = p.includeInAvg === false ? true : false;
+  renderSquadList();
+  setSyncStatus('syncing');
+  const { error } = await sb.from('players').update({ include_in_avg: p.includeInAvg }).eq('id', id);
+  setSyncStatus(error ? 'error' : 'ok');
+  if (error) { console.error('toggleIncludeInAvg failed:', error.message); return; }
+  // Recompute any already-synced weeks so the change reflects immediately
+  Object.keys(state.amsRaw || {}).forEach(w => recomputeAmsActuals(Number(w)));
 }
 
 // ── ADD/EDIT PLAYER ──
@@ -6941,7 +6957,9 @@ async function savePlayer() {
   if (error) { setSyncStatus('error'); alert('Save failed: ' + error.message); return; }
 
   // Update local state
-  const local = { id: player.id, name, position: player.position, shirtNumber: player.shirt_number, notes: player.notes };
+  // Preserve the avg-inclusion flag (managed via the squad-row toggle, not this modal)
+  const prevInclude = editingPlayerId ? state.players.find(x => x.id === editingPlayerId)?.includeInAvg : true;
+  const local = { id: player.id, name, position: player.position, shirtNumber: player.shirt_number, notes: player.notes, includeInAvg: prevInclude !== false };
   if (editingPlayerId) {
     const idx = state.players.findIndex(x => x.id === editingPlayerId);
     if (idx !== -1) state.players[idx] = local;
@@ -7627,7 +7645,7 @@ async function fetchAmsWeekActuals(weekNum) {
   state.amsRaw[weekNum] = rows;
 
   // Roster set for primary-activity selection
-  const rosterNames = new Set((state.players || []).map(p => normalizeAthleteName(p.name)));
+  const rosterNames = new Set((state.players || []).filter(p => p.includeInAvg !== false).map(p => normalizeAthleteName(p.name)));
   const enforceRoster = rosterNames.size > 0;
   const rosterMatchCount = (rs) => enforceRoster
     ? rs.filter(r => rosterNames.has(normalizeAthleteName(r.athlete_name))).length
@@ -7668,7 +7686,7 @@ function recomputeAmsActuals(weekNum) {
   const endD = new Date(start); endD.setDate(endD.getDate() + 6);
   const endStr = formatDate(endD);
 
-  const rosterNames = new Set((state.players || []).map(p => normalizeAthleteName(p.name)));
+  const rosterNames = new Set((state.players || []).filter(p => p.includeInAvg !== false).map(p => normalizeAthleteName(p.name)));
   // Roster name-matching is OPTIONAL now. The selected activity already scopes
   // the group, so by default we average everyone in it (minus GK + status).
   // Turning "squad only" on additionally requires a roster name match — useful
