@@ -7199,6 +7199,11 @@ async function saveRosterLogs(rosterEntries, sourceType, sourceId, dateStr) {
     sessionId: r.session_id, gameId: r.game_id,
     status: r.status, plannedMinutes: r.planned_minutes, actualMinutes: r.actual_minutes,
   }));
+  // Status changes affect AMS per-day exclusions — recompute any already-synced
+  // weeks so the team average reflects who is RTP/Out/Modified/Recovery today.
+  if (typeof recomputeAmsActuals === 'function') {
+    Object.keys(state.amsRaw || {}).forEach(w => { try { recomputeAmsActuals(Number(w)); } catch(e){} });
+  }
 }
 
 // ── WEEK REVIEW ──
