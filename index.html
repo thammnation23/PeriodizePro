@@ -1846,6 +1846,7 @@
     </select>
     <button class="btn btn-primary btn-sm" onclick="openAddGame()">＋ Game</button>
     <button class="btn btn-ghost btn-sm" onclick="openBulkGames()">⧉ Schedule</button>
+    <button class="btn btn-ghost btn-sm" id="gpsSyncBtn" onclick="syncGpsNow()" title="Pull Catapult GPS actuals from the AMS for the week(s) in view">🛰 GPS Sync</button>
     <button class="btn btn-ghost btn-sm" onclick="exportData()">↓ Export</button>
     <div class="user-pill" id="userPill">
       <div class="user-pill-dot"></div>
@@ -4200,9 +4201,63 @@ function clearSessionForm() {
   renderTestingChips();
 }
 
+// When a session is saved, any exercise carrying a pasted URL (but not yet
+// linked to a library drill) is auto-added to the Drill Library and linked by
+// id — so every referenced link becomes a reusable, searchable drill. An
+// existing library drill with the same URL is reused instead of duplicated.
+async function promoteExerciseUrlsToLibrary(exercises) {
+  let added = 0;
+  for (const ex of exercises) {
+    const url = (ex.url || '').trim();
+    if (!url || ex.mediaId) continue;
+
+    // Reuse an existing library drill with the same URL if one exists.
+    const existing = state.media.find(m => (m.url || '').trim() === url);
+    if (existing) {
+      ex.mediaId = existing.id; ex.url = ''; ex.urlTitle = '';
+      if (!ex.name && existing.title) ex.name = existing.title;
+      continue;
+    }
+
+    const ytId = extractYTId(url);
+    const isImg = /\.(png|jpe?g|gif|webp|svg)(\?|#|$)/i.test(url);
+    const mtype = ytId ? 'youtube' : (isImg ? 'image' : 'link');
+    const title = (ex.urlTitle && ex.urlTitle.trim())
+      || (ex.name && ex.name.trim())
+      || (ytId ? 'YouTube Drill'
+          : (() => { try { return new URL(url).hostname.replace(/^www\./, ''); } catch { return 'Drill Link'; } })());
+
+    const item = {
+      id: genId(),
+      mediaType: mtype,
+      url,
+      dataUrl: null,
+      title,
+      category: 'technical',
+      intensityTag: '',
+      tags: ['from session'],
+      notes: 'Added automatically from a session plan',
+      load: null,
+      addedAt: Date.now(),
+    };
+    state.media.push(item);
+    try { await saveDrillDB(item); added++; }
+    catch (e) { console.warn('Auto-add drill to library failed:', e); }
+
+    ex.mediaId = item.id; ex.url = ''; ex.urlTitle = '';
+    if (!ex.name) ex.name = title;
+  }
+  if (added) { try { renderLibrary(); } catch (e) {} }
+  return added;
+}
+
 async function saveSession() {
   const dateStr = document.getElementById('sessionDate').value;
   if (!dateStr) { alert('Please select a date.'); return; }
+
+  // Auto-promote any pasted exercise links into the Drill Library first, so the
+  // saved session stores library ids rather than loose URLs.
+  await promoteExerciseUrlsToLibrary(currentExercises);
 
   const session = {
     id: editingSessionId || genId(),
@@ -7691,30 +7746,88 @@ function setAmsActivity(weekNum, date, activityName) {
   if (typeof renderMonth === 'function') try { renderMonth(); } catch(e){}
 }
 
-async function syncAmsForCurrentWeek() {
-  const w = reviewCurrentWeek;
-  if (!w) return;
-  state.amsSyncStatus[w] = { state: 'loading' };
-  renderWeekReview();
+// Core single-week GPS sync. Caller is responsible for showing a loading
+// state + re-rendering. Returns true on success, false on failure.
+async function syncAmsWeek(w) {
   try {
     const result = await fetchAmsWeekActuals(w);
     recomputeAmsActuals(w);
     state.amsSyncStatus[w] = {
-      ...state.amsSyncStatus[w],
+      ...(state.amsSyncStatus[w] || {}),
       state: 'ok',
       fetchedAt:      result.fetchedAt,
       totalRows:      result.totalRows,
       enforcedRoster: result.enforcedRoster,
     };
+    return true;
   } catch (e) {
-    console.error('AMS sync failed:', e);
+    console.error('AMS sync failed (week ' + w + '):', e);
     state.amsSyncStatus[w] = { state: 'error', message: e.message };
+    return false;
   }
+}
+
+async function syncAmsForCurrentWeek() {
+  const w = reviewCurrentWeek;
+  if (!w) return;
+  state.amsSyncStatus[w] = { state: 'loading' };
+  renderWeekReview();
+  await syncAmsWeek(w);
   // Re-render both the review and whichever view is currently open so inline
   // actuals on session/game cards refresh immediately.
   renderWeekReview();
   if (typeof renderWeek  === 'function') try { renderWeek();  } catch(e){}
   if (typeof renderMonth === 'function') try { renderMonth(); } catch(e){}
+}
+
+// Which top-level view is currently active (year / month / week / review / …).
+function activeViewId() {
+  const v = document.querySelector('.view.active');
+  return v ? v.id.replace('view-', '') : 'year';
+}
+
+// Distinct season-week numbers overlapping the month currently shown.
+function monthWeekNums() {
+  const weeks = new Set();
+  const daysInMonth = new Date(currentMonthYear, currentMonth + 1, 0).getDate();
+  for (let d = 1; d <= daysInMonth; d++) {
+    weeks.add(dateToWeekNum(formatDate(new Date(currentMonthYear, currentMonth, d))));
+  }
+  return [...weeks];
+}
+
+// Header GPS sync — context-aware: syncs the week(s) relevant to the active
+// view (the focused week on Week/Review, every week of the displayed month on
+// Month, else the current real-world week) in one click.
+async function syncGpsNow() {
+  const tab = activeViewId();
+  let weeks;
+  if (tab === 'week')        weeks = [currentWeek];
+  else if (tab === 'review') weeks = [reviewCurrentWeek || currentWeek];
+  else if (tab === 'month')  weeks = monthWeekNums();
+  else                       weeks = [getCurrentWeekNum()];
+  weeks = [...new Set(weeks.filter(Boolean))].sort((a, b) => a - b);
+
+  const btn = document.getElementById('gpsSyncBtn');
+  const orig = btn ? btn.innerHTML : '';
+  if (btn) { btn.disabled = true; btn.innerHTML = '🛰 Syncing…'; }
+
+  let ok = 0, fail = 0;
+  for (const w of weeks) {
+    state.amsSyncStatus[w] = { state: 'loading' };
+    (await syncAmsWeek(w)) ? ok++ : fail++;
+  }
+
+  // Refresh whichever views are mounted so actuals appear immediately.
+  if (typeof renderWeek       === 'function') try { renderWeek();       } catch(e){}
+  if (typeof renderMonth      === 'function') try { renderMonth();      } catch(e){}
+  if (typeof renderWeekReview === 'function') try { renderWeekReview(); } catch(e){}
+
+  if (btn) {
+    btn.disabled = false;
+    btn.innerHTML = fail ? `🛰 ${ok} ok · ${fail} ✗` : `🛰 Synced ${ok} wk${ok === 1 ? '' : 's'}`;
+    setTimeout(() => { btn.innerHTML = orig; }, 2500);
+  }
 }
 
 // Date-keyed lookup that searches every synced week. Returns the per-day
