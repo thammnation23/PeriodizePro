@@ -2003,6 +2003,7 @@
       <button class="btn btn-primary btn-sm" onclick="openAddSession()">＋ Session</button>
       <button class="btn btn-ghost btn-sm" onclick="openWeekSettings()">⚙ Week Settings</button>
     </div>
+    <div id="weekTotals"></div>
     <div class="week-days" id="weekDays"></div>
   </div>
 
@@ -4071,6 +4072,48 @@ function nextMonth() {
 // ══════════════════════════════════════════════════════
 //  WEEK VIEW
 // ══════════════════════════════════════════════════════
+// Cumulative planned (and AMS actual, if synced) load totals for the week.
+function renderWeekTotals(weekStart) {
+  const host = document.getElementById('weekTotals');
+  if (!host) return;
+  const planned = { td:0, hsr:0, sd:0, ad:0 };
+  const actual  = { td:0, hsr:0, sd:0, ad:0 };
+  let hasActual = false;
+  for (let di = 0; di < 7; di++) {
+    const d = new Date(weekStart); d.setDate(d.getDate() + di);
+    const dateStr = formatDate(d);
+    // Planned from sessions + match projected load on that date
+    [...state.sessions.filter(s => s.date === dateStr), ...state.games.filter(g => g.date === dateStr)].forEach(x => {
+      planned.td  += parseInt(x.td)     || 0;
+      planned.hsr += parseInt(x.hsr)    || 0;
+      planned.sd  += parseInt(x.sd ?? x.sprint) || 0;
+      planned.ad  += (parseInt(x.acc)||0) + (parseInt(x.dec)||0);
+    });
+    // Actual from AMS (per-day team average)
+    const a = getAmsActualForDate(dateStr);
+    if (a) {
+      hasActual = true;
+      actual.td += a.td||0; actual.hsr += a.hsr||0; actual.sd += a.sd||0; actual.ad += a.accDec||0;
+    }
+  }
+
+  const metric = (label, p, a) => `
+    <div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:8px 12px;text-align:center;min-width:90px">
+      <div style="font-size:9px;color:var(--text3);font-family:'Barlow Condensed',sans-serif;letter-spacing:1.5px;text-transform:uppercase">${label}</div>
+      <div style="font-family:'JetBrains Mono',monospace;font-size:17px;font-weight:700;color:var(--text);margin-top:1px">${p ? fmtNum(p) : '—'}</div>
+      ${hasActual ? `<div style="font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:700;color:var(--accent);margin-top:2px;padding-top:2px;border-top:1px solid var(--border)" title="Catapult actual">${a ? fmtNum(a) : '—'}</div>` : ''}
+    </div>`;
+
+  host.innerHTML = `
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px">
+      <span style="font-family:'Barlow Condensed',sans-serif;letter-spacing:1.5px;font-size:11px;color:var(--text3);margin-right:4px">WEEK TOTAL${hasActual ? ' · PLANNED / ACTUAL' : ''}</span>
+      ${metric('TD (m)',  planned.td,  actual.td)}
+      ${metric('HSR (m)', planned.hsr, actual.hsr)}
+      ${metric('Sprint',  planned.sd,  actual.sd)}
+      ${metric('Acc/Dec', planned.ad,  actual.ad)}
+    </div>`;
+}
+
 function renderWeek() {
   const weekStart = getWeekStart(currentWeek);
   const weekEnd = new Date(weekStart); weekEnd.setDate(weekEnd.getDate() + 6);
@@ -4098,6 +4141,8 @@ function renderWeek() {
   } else {
     gymBadge.style.display = 'none';
   }
+
+  renderWeekTotals(weekStart);
 
   const container = document.getElementById('weekDays');
   container.innerHTML = '';
