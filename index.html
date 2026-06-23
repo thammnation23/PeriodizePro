@@ -3786,7 +3786,7 @@ function buildSessionCardHTML(s) {
       </div>` : ''}
       ${(s.testing && s.testing.length) ? `
       <div style="margin-top:6px;display:flex;flex-wrap:wrap;gap:4px;align-items:center">
-        <span style="font-family:'Anton',sans-serif;font-weight:700;letter-spacing:1px;font-size:9px;color:var(--text3)">🧪 TEST</span>
+        <span style="font-family:'Anton',sans-serif;font-weight:700;letter-spacing:1px;font-size:9px;color:var(--text3)">TESTING</span>
         ${s.testing.map(t => `<span style="background:rgba(0,212,255,0.12);color:var(--accent);font-family:'Anton',sans-serif;font-weight:700;letter-spacing:0.5px;padding:1px 6px;border-radius:2px;font-size:10px" title="${escapeAttr(t.notes || '')}">${escapeAttr(t.test)}${t.notes ? ' ·' : ''}</span>`).join('')}
       </div>` : ''}
     </div>
