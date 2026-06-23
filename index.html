@@ -1424,12 +1424,24 @@
   .exercise-move:disabled { opacity: 0.25; cursor: default; }
   .exercise-row-link {
     display: grid;
-    grid-template-columns: 24px auto 1fr;
+    grid-template-columns: 24px auto 1fr auto;
     gap: 8px;
     align-items: center;
     margin-top: 6px;
   }
   .exercise-row input { padding: 6px 8px; font-size: 12px; }
+  .exercise-cat-select {
+    padding: 6px 8px;
+    font-size: 11px;
+    font-family: 'Anton', sans-serif;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    background: var(--surface2);
+    color: var(--text2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    white-space: nowrap;
+  }
   .exercise-num {
     font-family: 'JetBrains Mono', monospace;
     font-size: 11px;
@@ -4234,10 +4246,10 @@ async function promoteExerciseUrlsToLibrary(exercises) {
       url,
       dataUrl: null,
       title,
-      category: 'technical',
+      category: ex.category || 'technical',
       intensityTag: '',
-      tags: ['from session'],
-      notes: 'Added automatically from a session plan',
+      tags: [],
+      notes: '',
       load: null,
       addedAt: Date.now(),
     };
@@ -5626,6 +5638,12 @@ function updatePrePostField(idx, field, value) {
 // ── EXERCISES ──
 let currentExercises = []; // [{name, duration, setsReps, mediaId, url, urlTitle}]
 
+// Build <option> tags for the per-exercise Drill Library category picker.
+function drillCatOptions(selected) {
+  return Object.entries(CAT_CONFIG).map(([key, cfg]) =>
+    `<option value="${key}"${key === selected ? ' selected' : ''}>${cfg.label}</option>`).join('');
+}
+
 function renderExercises() {
   const list = document.getElementById('exerciseList');
   if (!list) return;
@@ -5641,7 +5659,8 @@ function renderExercises() {
       ? `<button class="exercise-link-btn has-link" onclick="openPicker('exercise:${i}')" title="Change library drill">📚 ${escapeAttr(drill.title || 'Drill')}</button>
          <button class="exercise-link-btn" onclick="clearExerciseLink(${i})" title="Remove link">✕ unlink</button>`
       : `<button class="exercise-link-btn" onclick="openPicker('exercise:${i}')" title="Pick from Drill Library">📚 Library</button>
-         <input type="url" placeholder="…or paste a link (YouTube, Drive, etc.)" value="${escapeAttr(ex.url || '')}" oninput="updateExerciseField(${i},'url',this.value)">`;
+         <input type="url" placeholder="…or paste a link (YouTube, Drive, etc.)" value="${escapeAttr(ex.url || '')}" oninput="updateExerciseField(${i},'url',this.value)">
+         <select class="exercise-cat-select" onchange="updateExerciseField(${i},'category',this.value)" title="Drill Library category used when this link is saved">${drillCatOptions(ex.category || 'technical')}</select>`;
     return `
       <div class="exercise-row">
         <div class="exercise-row-main">
@@ -5677,7 +5696,7 @@ function escapeAttr(s) {
 }
 
 function addExerciseRow() {
-  currentExercises.push({ name:'', duration:'', setsReps:'', mediaId:'', url:'', urlTitle:'' });
+  currentExercises.push({ name:'', duration:'', setsReps:'', mediaId:'', url:'', urlTitle:'', category:'technical' });
   renderExercises();
 }
 
