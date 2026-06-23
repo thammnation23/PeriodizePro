@@ -1950,6 +1950,7 @@
       <div style="flex:1"></div>
       <button class="btn btn-primary btn-sm" onclick="openAddSession()">＋ Session</button>
       <button class="btn btn-ghost btn-sm" onclick="openWeekSettings()">⚙ Week Settings</button>
+      <button class="btn btn-ghost btn-sm" onclick="exportWeekPDF()" title="Export this week's projected loading as a printable PDF">↧ Export PDF</button>
     </div>
     <div id="weekTotals"></div>
     <div class="week-days" id="weekDays"></div>
@@ -4082,6 +4083,142 @@ function fmtNum(n) {
 
 function prevWeek() { currentWeek = Math.max(1, currentWeek - 1); renderWeek(); }
 function nextWeek() { currentWeek = Math.min(52, currentWeek + 1); renderWeek(); }
+
+// ══════════════════════════════════════════════════════
+//  WEEK → PDF EXPORT  (Micro Cycle Loading Patterns one-pager)
+// ══════════════════════════════════════════════════════
+// Builds a self-contained, print-ready landscape page styled after the club's
+// reference sheet, then opens it in a new window and triggers the browser's
+// print dialog (Save as PDF). Projected/planned load only.
+function exportWeekPDF() {
+  const w = currentWeek;
+  const weekStart = getWeekStart(w);
+  const weekEnd = new Date(weekStart); weekEnd.setDate(weekEnd.getDate() + 6);
+  const ws = state.weekSettings[w] || {};
+  const teamName = (state.settings?.team_name && state.settings.team_name !== '__other__')
+    ? state.settings.team_name : 'My Team';
+  const DAY3 = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+
+  // Heat scale for the duration/intensity cell (concrete hex — the print window
+  // has no CSS variables). Red = hardest, green = regen.
+  const heat = (v) => { const n = parseInt(v) || 0;
+    if (n >= 8) return '#e8412c'; if (n >= 6) return '#f57c1f';
+    if (n >= 4) return '#f5c518'; if (n >= 1) return '#3cb558'; return '#ffffff'; };
+  const fmtDur = (v) => { v = String(v || '').trim(); if (!v) return '';
+    return /^[\d\s\-–to]+$/i.test(v) ? v + ' min' : v; };
+
+  // Gather per-day data + weekly totals
+  const cols = [];
+  const totals = { td: 0, hsr: 0, sd: 0, ad: 0 };
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(weekStart); d.setDate(d.getDate() + i);
+    const dateStr = formatDate(d);
+    const sessions = state.sessions.filter(s => s.date === dateStr);
+    const game = state.games.find(g => g.date === dateStr) || null;
+    const m = { td: 0, hsr: 0, sd: 0, ad: 0 };
+    [...sessions, ...(game ? [game] : [])].forEach(x => {
+      m.td  += parseInt(x.td) || 0;
+      m.hsr += parseInt(x.hsr) || 0;
+      m.sd  += parseInt(x.sd ?? x.sprint) || 0;
+      m.ad  += (parseInt(x.acc) || 0) + (parseInt(x.dec) || 0);
+    });
+    totals.td += m.td; totals.hsr += m.hsr; totals.sd += m.sd; totals.ad += m.ad;
+
+    const primary = sessions[0] || null;
+    const dur = sessions.map(s => fmtDur(s.duration)).filter(Boolean).join(' + ');
+    const focus = primary ? (primary.principle || [primary.type, primary.type2].filter(Boolean).join(' / ')) : (game ? 'Match Day' : '');
+    let drills = sessions.flatMap(s => (s.exercises || []).map(ex => ex.name || '').filter(Boolean));
+    if (!drills.length && primary) drills = [primary.type, primary.type2].filter(Boolean);
+    if (game) drills = [`Match v ${game.opponent || 'TBD'}${game.competition ? ' (' + game.competition + ')' : ''}`, ...drills];
+    const notes = [...sessions.map(s => s.notes), game ? game.notes : ''].filter(n => n && n.trim()).join(' · ');
+
+    cols.push({ i, d, sessions, game, m, dur, focus, drills, notes,
+      intensity: primary ? parseInt(primary.intensity) || 0 : (game ? 9 : 0), has: !!(sessions.length || game) });
+  }
+
+  const rangeStr = `${MONTHS_SHORT[weekStart.getMonth()]} ${weekStart.getDate()} – ${MONTHS_SHORT[weekEnd.getMonth()]} ${weekEnd.getDate()}`;
+  const titleExtra = [ws.type, ws.gymPhase].filter(Boolean).join(' · ');
+  const esc = escapeAttr;
+
+  // Shared cell styles
+  const BORD = 'border:1px solid #2b2b2b;';
+  const LBL  = `background:#000;color:#f5901e;font-family:'Anton',sans-serif;letter-spacing:.5px;text-transform:uppercase;font-size:10.5px;text-align:right;padding:5px 8px;${BORD}`;
+  const MET  = `font-family:'JetBrains Mono',monospace;font-weight:700;text-align:center;font-size:14px;padding:5px 6px;${BORD}`;
+
+  const dayHeader = cols.map(c =>
+    `<td style="background:#000;text-align:center;padding:4px;${BORD}">
+       <div style="font-family:'Anton',sans-serif;color:#f5901e;font-size:13px;letter-spacing:.5px">${DAY3[c.i]}</div>
+       <div style="color:#cfd3da;font-size:9px;font-family:Arial,sans-serif">${MONTHS_SHORT[c.d.getMonth()]} ${c.d.getDate()}</div>
+     </td>`).join('');
+
+  const durRow = cols.map(c => {
+    const bg = c.game ? '#e8412c' : (c.intensity ? heat(c.intensity) : '#ffffff');
+    const banner = c.game ? `<div style="background:#b5301f;color:#fff;font-family:'Anton',sans-serif;font-size:10px;letter-spacing:.5px;padding:2px 3px;margin:-5px -6px 4px">vs ${esc(c.game.opponent || 'TBD')}</div>` : '';
+    const txt = c.dur || (c.game ? 'Match' : (c.has ? '' : ''));
+    return `<td style="background:${bg};color:${c.game ? '#fff' : '#111'};text-align:center;font-family:'Anton',sans-serif;font-size:12px;padding:5px 6px;${BORD}">${banner}${esc(txt)}</td>`;
+  }).join('');
+
+  const focusRow = cols.map(c =>
+    `<td style="background:#cfe0f5;color:#11243a;text-align:center;font-family:'Anton',sans-serif;letter-spacing:.3px;font-size:11px;padding:5px 6px;${BORD}">${esc(c.focus || '')}</td>`).join('');
+
+  const metricRow = (label, key, total) =>
+    `<tr><td style="${LBL}">${label}</td>${
+      cols.map(c => `<td style="background:#000;color:#fff;${MET}">${c.has ? (c.m[key] || 0) : ''}</td>`).join('')
+    }<td style="background:#333;color:#f5901e;${MET}">${total || 0}</td></tr>`;
+
+  const drillRow = cols.map(c =>
+    `<td style="background:#fff;color:#222;font-size:9.5px;text-align:left;line-height:1.3;vertical-align:top;font-family:Arial,sans-serif;padding:5px 6px;${BORD}">${
+      (c.drills || []).slice(0, 7).map(x => esc(x)).join('<br>')
+    }</td>`).join('');
+
+  const hasNotes = cols.some(c => c.notes);
+  const notesRow = hasNotes ? `<tr><td style="${LBL}">Notes</td>${
+    cols.map(c => `<td style="background:#fafafa;color:#333;font-size:9px;text-align:left;line-height:1.3;vertical-align:top;font-family:Arial,sans-serif;padding:5px 6px;${BORD}">${esc(c.notes || '')}</td>`).join('')
+  }<td style="background:#333;${BORD}"></td></tr>` : '';
+
+  const html =
+`<!doctype html><html><head><meta charset="utf-8">
+<title>${esc(teamName)} — Week ${w} Loading</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Anton&family=JetBrains+Mono:wght@700&display=swap" rel="stylesheet">
+<style>
+  @page { size: landscape; margin: 8mm; }
+  * { box-sizing: border-box; }
+  body { margin:0; font-family:Arial,Helvetica,sans-serif; color:#111; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+  table { width:100%; border-collapse:collapse; table-layout:fixed; }
+  col.lbl { width:120px; } col.tot { width:72px; }
+  .print-hint { text-align:center;font-family:Arial;font-size:12px;color:#555;padding:8px;margin-bottom:6px;background:#fff7e6;border:1px solid #f5c518;border-radius:6px; }
+  @media print { .print-hint { display:none; } }
+</style></head><body>
+<div class="print-hint">Press <b>Ctrl/Cmd + P</b> and choose “Save as PDF”, landscape. (Enable “Background graphics” for colours.)</div>
+<table>
+  <colgroup><col class="lbl">${cols.map(() => '<col>').join('')}<col class="tot"></colgroup>
+  <tr>
+    <td style="background:#000;color:#fff;font-family:'Anton',sans-serif;font-size:14px;text-align:center;padding:6px;${BORD}">${esc(teamName)}</td>
+    <td colspan="8" style="background:#f5901e;color:#000;font-family:'Anton',sans-serif;font-size:18px;letter-spacing:1px;text-align:center;padding:6px;${BORD}">
+      MICRO CYCLE LOADING PATTERNS · WEEK ${w}<span style="font-size:12px;font-weight:400"> &nbsp;|&nbsp; ${rangeStr}${titleExtra ? ' · ' + esc(titleExtra) : ''}</span>
+    </td>
+  </tr>
+  <tr><td style="background:#000;${BORD}"></td>${dayHeader}<td style="background:#000;color:#f5901e;text-align:center;font-family:'Anton',sans-serif;font-size:12px;${BORD}">Total</td></tr>
+  <tr><td style="${LBL}">Duration &amp; Intensity</td>${durRow}<td style="background:#333;${BORD}"></td></tr>
+  <tr><td style="${LBL}">Physical Focus</td>${focusRow}<td style="background:#333;${BORD}"></td></tr>
+  ${metricRow('TD',      'td',  totals.td)}
+  ${metricRow('HSR',     'hsr', totals.hsr)}
+  ${metricRow('Sprint',  'sd',  totals.sd)}
+  ${metricRow('Acc/Dec', 'ad',  totals.ad)}
+  <tr><td style="${LBL}">Drill Example</td>${drillRow}<td style="background:#333;${BORD}"></td></tr>
+  ${notesRow}
+</table>
+<script>window.onload=function(){var go=function(){setTimeout(function(){window.print();},250);};if(document.fonts&&document.fonts.ready){document.fonts.ready.then(go);}else{setTimeout(go,600);}};<\/script>
+</body></html>`;
+
+  const win = window.open('', '_blank');
+  if (!win) { alert('Please allow pop-ups for this site to export the PDF.'); return; }
+  win.document.open();
+  win.document.write(html);
+  win.document.close();
+  win.focus();
+}
 
 // ══════════════════════════════════════════════════════
 //  MODALS
