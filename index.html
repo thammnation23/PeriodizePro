@@ -3682,6 +3682,18 @@ function editableMetricChip(label, value, onChangeJs, actualValue) {
   `;
 }
 
+// Read-only chip for an actuals-only metric (no projected value), e.g. avg max
+// velocity %. Renders nothing when there's no AMS reading.
+function actualOnlyMetricChip(label, actualValue, suffix) {
+  if (actualValue == null || actualValue === '') return '';
+  return `
+    <div class="metric-chip">
+      <div class="metric-label">${label}</div>
+      <div class="metric-value" style="color:var(--accent);font-weight:700" title="Avg max velocity % — Catapult actual">${actualValue}${suffix || ''}</div>
+    </div>
+  `;
+}
+
 // Squad availability badge for a given day. Returns a small card showing
 // available/total + percent. Players without a log that day are ASSUMED
 // available — coaches typically only log exceptions (Modified/Recovery/RTP/Out).
@@ -3755,6 +3767,7 @@ function buildSessionCardHTML(s) {
         ${editableMetricChip('HSR', s.hsr, `updateSessionMetric('${s.id}','hsr',this.value)`, a?.hsr)}
         ${editableMetricChip('SPR', s.sd,  `updateSessionMetric('${s.id}','sd',this.value)`,  a?.sd)}
         ${editableMetricChip('A/D', (parseInt(s.acc)||0) + (parseInt(s.dec)||0) || '', `updateSessionMetric('${s.id}','accDec',this.value)`, a?.accDec)}
+        ${actualOnlyMetricChip('MV%', a?.mv, '%')}
       </div>`;
       })()}
       ${gdHtml}
@@ -3845,6 +3858,7 @@ function buildGameCardHTML(g) {
         ${editableMetricChip('HSR', g.hsr,    `updateGameMetric('${g.id}','hsr',this.value)`,    a?.hsr)}
         ${editableMetricChip('SPR', g.sprint, `updateGameMetric('${g.id}','sprint',this.value)`, a?.sd)}
         ${editableMetricChip('A/D', (parseInt(g.acc)||0) + (parseInt(g.dec)||0) || '', `updateGameMetric('${g.id}','accDec',this.value)`, a?.accDec)}
+        ${actualOnlyMetricChip('MV%', a?.mv, '%')}
       </div>`;
       })()}
     </div>
@@ -7800,7 +7814,7 @@ async function fetchAmsWeekActuals(weekNum) {
 
   const { data, error } = await sbAms
     .from('v_athlete_session_stats')
-    .select('session_date,activity_name,athlete_name,position_name,total_distance_m,hsr_m,sprint_abs_m,acc_b2_3_efforts,dec_b2_3_efforts,duration_minutes')
+    .select('session_date,activity_name,athlete_name,position_name,total_distance_m,hsr_m,sprint_abs_m,acc_b2_3_efforts,dec_b2_3_efforts,duration_minutes,pct_max_velocity')
     .gte('session_date', startStr)
     .lte('session_date', endStr);
   if (error) throw error;
@@ -7884,7 +7898,7 @@ function recomputeAmsActuals(weekNum) {
     // Count dropped rows from non-chosen activities
     Object.entries(acts).forEach(([name, rs]) => { if (name !== chosen) excluded.secondaryActivity += rs.length; });
 
-    const agg = { td:0, hsr:0, sd:0, accDec:0, duration:0, count:0 };
+    const agg = { td:0, hsr:0, sd:0, accDec:0, duration:0, count:0, mvSum:0, mvCount:0 };
     chosenRows.forEach(r => {
       const nameKey = normalizeAthleteName(r.athlete_name);
       if (isGoalkeeperPosition(r.position_name))      { excluded.gk++; return; }
@@ -7893,12 +7907,15 @@ function recomputeAmsActuals(weekNum) {
       agg.td += (r.total_distance_m||0); agg.hsr += (r.hsr_m||0); agg.sd += (r.sprint_abs_m||0);
       agg.accDec += (r.acc_b2_3_efforts||0) + (r.dec_b2_3_efforts||0);
       agg.duration += (r.duration_minutes||0); agg.count++;
+      // Avg max-velocity % — only athletes who actually have a reading
+      if (r.pct_max_velocity != null) { agg.mvSum += Number(r.pct_max_velocity); agg.mvCount++; }
     });
     if (agg.count > 0) {
       byDate[date] = {
         td: Math.round(agg.td/agg.count), hsr: Math.round(agg.hsr/agg.count),
         sd: Math.round(agg.sd/agg.count), accDec: Math.round(agg.accDec/agg.count),
         duration: Math.round(agg.duration/agg.count), count: agg.count, activity: chosen,
+        mv: agg.mvCount > 0 ? Math.round(agg.mvSum/agg.mvCount) : null,
       };
     }
   });
