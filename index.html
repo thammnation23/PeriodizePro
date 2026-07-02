@@ -2788,6 +2788,8 @@
     </div>
     <div class="modal-footer">
       <button class="btn btn-danger btn-sm" id="deletePlayerBtn" style="display:none" onclick="deletePlayer()">Delete</button>
+      <button class="btn btn-ghost btn-sm" id="archivePlayerBtn" style="display:none" onclick="archivePlayer()" title="Remove from the active roster but keep all previous session history (loan / left)">📤 Archive</button>
+      <button class="btn btn-primary btn-sm" id="restorePlayerBtn" style="display:none" onclick="restorePlayer()" title="Return this player to the active roster">↩ Restore</button>
       <button class="btn btn-ghost" onclick="closeModal('playerModal')">Cancel</button>
       <button class="btn btn-primary" onclick="savePlayer()">Save Player</button>
     </div>
@@ -6994,7 +6996,7 @@ async function loadPlayers() {
       sb.from('players').select('*').eq('user_id', currentUser.id).order('shirt_number', { nullsFirst: false }),
       sb.from('player_logs').select('*').eq('user_id', currentUser.id),
     ]);
-    state.players    = (pRes.data    || []).map(r => ({ id: r.id, name: r.name, position: r.position, shirtNumber: r.shirt_number, notes: r.notes, includeInAvg: r.include_in_avg !== false }));
+    state.players    = (pRes.data    || []).map(r => ({ id: r.id, name: r.name, position: r.position, shirtNumber: r.shirt_number, notes: r.notes, includeInAvg: r.include_in_avg !== false, archived: r.archived === true, archivedReason: r.archived_reason || '', archivedDate: r.archived_date || '' }));
     state.playerLogs = (lRes.data    || []).map(r => ({
       id: r.id, playerId: r.player_id, date: r.date,
       sessionId: r.session_id, gameId: r.game_id,
@@ -7028,7 +7030,7 @@ function renderSquad() {
 function renderSquadStats() {
   const el = document.getElementById('squadStats');
   if (!el) return;
-  const players = state.players || [];
+  const players = (state.players || []).filter(p => !p.archived);
   const counts = { Full: 0, Modified: 0, Recovery: 0, RTP: 0, Out: 0 };
   players.forEach(p => {
     const s = currentPlayerStatus(p.id);
@@ -7053,36 +7055,69 @@ function renderSquadStats() {
 function renderSquadList() {
   const host = document.getElementById('squadList');
   if (!host) return;
-  const players = state.players || [];
-  if (players.length === 0) {
+  const all = state.players || [];
+  if (all.length === 0) {
     host.innerHTML = '<div style="text-align:center;padding:30px;color:var(--text3);font-family:\'Anton\',sans-serif;letter-spacing:1px">No players yet — click ＋ Add Player</div>';
     return;
   }
-  host.innerHTML = `
+  const active = all.filter(p => !p.archived);
+  const archived = all.filter(p => p.archived)
+    .sort((a, b) => (b.archivedDate || '').localeCompare(a.archivedDate || ''));
+
+  const activeRow = (p) => {
+    const latest = latestPlayerLog(p.id);
+    const s = latest?.status || 'Full';
+    const lastDate = latest?.date ? new Date(latest.date).toLocaleDateString('en', { month: 'short', day: 'numeric' }) : '—';
+    const inAvg = p.includeInAvg !== false;
+    return `
+      <div onclick="openPlayerHistory('${p.id}')" style="display:grid;grid-template-columns:50px 1fr 80px 100px 90px 64px 44px;gap:8px;padding:10px 14px;border-top:1px solid var(--border);font-size:12px;align-items:center;cursor:pointer;${inAvg ? '' : 'opacity:0.55'}" onmouseover="this.style.background='var(--surface3)'" onmouseout="this.style.background=''">
+        <span style="font-family:'JetBrains Mono',monospace;color:var(--text3)">${p.shirtNumber || '—'}</span>
+        <span style="font-weight:600">${p.name}</span>
+        <span style="font-size:11px;color:var(--text2)">${p.position || ''}</span>
+        <span><span style="display:inline-block;padding:2px 8px;border-radius:3px;font-family:'Anton',sans-serif;letter-spacing:1px;font-size:11px;font-weight:700;background:${statusColor(s)}22;color:${statusColor(s)}">${s.toUpperCase()}</span></span>
+        <span style="font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--text3)">${lastDate}</span>
+        <button onclick="event.stopPropagation();toggleIncludeInAvg('${p.id}')" title="${inAvg ? 'Included in AMS averages — click to exclude' : 'Excluded from AMS averages — click to include'}" style="padding:2px 6px;border-radius:3px;border:1px solid ${inAvg ? '#2eb86b' : 'var(--border)'};background:${inAvg ? '#2eb86b22' : 'transparent'};color:${inAvg ? '#2eb86b' : 'var(--text3)'};font-family:'Anton',sans-serif;font-weight:700;letter-spacing:1px;font-size:10px;cursor:pointer">${inAvg ? '✓ AVG' : 'OFF'}</button>
+        <button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();openEditPlayer('${p.id}')">✏</button>
+      </div>`;
+  };
+
+  const archivedRow = (p) => {
+    const latest = latestPlayerLog(p.id);
+    const lastDate = latest?.date ? new Date(latest.date).toLocaleDateString('en', { month: 'short', day: 'numeric' }) : '—';
+    const reason = (p.archivedReason || 'Archived');
+    const when = p.archivedDate ? new Date(p.archivedDate).toLocaleDateString('en', { month: 'short', year: '2-digit' }) : '';
+    return `
+      <div onclick="openPlayerHistory('${p.id}')" style="display:grid;grid-template-columns:50px 1fr 80px 130px 90px 44px;gap:8px;padding:10px 14px;border-top:1px solid var(--border);font-size:12px;align-items:center;cursor:pointer;opacity:0.7" onmouseover="this.style.background='var(--surface3)'" onmouseout="this.style.background=''">
+        <span style="font-family:'JetBrains Mono',monospace;color:var(--text3)">${p.shirtNumber || '—'}</span>
+        <span style="font-weight:600">${p.name}</span>
+        <span style="font-size:11px;color:var(--text2)">${p.position || ''}</span>
+        <span><span style="display:inline-block;padding:2px 8px;border-radius:3px;font-family:'Anton',sans-serif;letter-spacing:1px;font-size:10px;font-weight:700;background:var(--surface3);color:var(--text2);border:1px solid var(--border)" title="Removed from active roster${when ? ' · ' + when : ''}">${reason.toUpperCase()}${when ? ' · ' + when : ''}</span></span>
+        <span style="font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--text3)">${lastDate}</span>
+        <button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();openEditPlayer('${p.id}')" title="Edit / restore">✏</button>
+      </div>`;
+  };
+
+  let html = `
     <div style="font-size:10px;color:var(--text3);font-family:'Anton',sans-serif;letter-spacing:1px;margin-bottom:6px">Tap the <b>AVG</b> toggle to include / exclude a player from AMS load averages.</div>
     <div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden">
       <div style="display:grid;grid-template-columns:50px 1fr 80px 100px 90px 64px 44px;gap:8px;padding:10px 14px;background:var(--surface3);font-size:10px;font-family:'Anton',sans-serif;letter-spacing:1.5px;color:var(--text3);text-transform:uppercase">
         <span>#</span><span>Name</span><span>Pos</span><span>Status</span><span>Last Log</span><span>Avg</span><span></span>
       </div>
-      ${players.map(p => {
-        const latest = latestPlayerLog(p.id);
-        const s = latest?.status || 'Full';
-        const lastDate = latest?.date ? new Date(latest.date).toLocaleDateString('en', { month: 'short', day: 'numeric' }) : '—';
-        const inAvg = p.includeInAvg !== false;
-        return `
-          <div onclick="openPlayerHistory('${p.id}')" style="display:grid;grid-template-columns:50px 1fr 80px 100px 90px 64px 44px;gap:8px;padding:10px 14px;border-top:1px solid var(--border);font-size:12px;align-items:center;cursor:pointer;${inAvg ? '' : 'opacity:0.55'}" onmouseover="this.style.background='var(--surface3)'" onmouseout="this.style.background=''">
-            <span style="font-family:'JetBrains Mono',monospace;color:var(--text3)">${p.shirtNumber || '—'}</span>
-            <span style="font-weight:600">${p.name}</span>
-            <span style="font-size:11px;color:var(--text2)">${p.position || ''}</span>
-            <span><span style="display:inline-block;padding:2px 8px;border-radius:3px;font-family:'Anton',sans-serif;letter-spacing:1px;font-size:11px;font-weight:700;background:${statusColor(s)}22;color:${statusColor(s)}">${s.toUpperCase()}</span></span>
-            <span style="font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--text3)">${lastDate}</span>
-            <button onclick="event.stopPropagation();toggleIncludeInAvg('${p.id}')" title="${inAvg ? 'Included in AMS averages — click to exclude' : 'Excluded from AMS averages — click to include'}" style="padding:2px 6px;border-radius:3px;border:1px solid ${inAvg ? '#2eb86b' : 'var(--border)'};background:${inAvg ? '#2eb86b22' : 'transparent'};color:${inAvg ? '#2eb86b' : 'var(--text3)'};font-family:'Anton',sans-serif;font-weight:700;letter-spacing:1px;font-size:10px;cursor:pointer">${inAvg ? '✓ AVG' : 'OFF'}</button>
-            <button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();openEditPlayer('${p.id}')">✏</button>
-          </div>
-        `;
-      }).join('')}
-    </div>
-  `;
+      ${active.length ? active.map(activeRow).join('') : `<div style="padding:16px;text-align:center;color:var(--text3);font-size:11px">No active players — all archived.</div>`}
+    </div>`;
+
+  if (archived.length) {
+    html += `
+      <div style="font-size:10px;color:var(--text3);font-family:'Anton',sans-serif;letter-spacing:1.5px;margin:16px 0 6px;text-transform:uppercase">Archived · Former players <span style="color:var(--text2)">(${archived.length})</span> — history kept, excluded from roster &amp; averages</div>
+      <div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden">
+        <div style="display:grid;grid-template-columns:50px 1fr 80px 130px 90px 44px;gap:8px;padding:10px 14px;background:var(--surface3);font-size:10px;font-family:'Anton',sans-serif;letter-spacing:1.5px;color:var(--text3);text-transform:uppercase">
+          <span>#</span><span>Name</span><span>Pos</span><span>Reason</span><span>Last Log</span><span></span>
+        </div>
+        ${archived.map(archivedRow).join('')}
+      </div>`;
+  }
+
+  host.innerHTML = html;
 }
 
 async function toggleIncludeInAvg(id) {
@@ -7103,6 +7138,8 @@ function openAddPlayer() {
   editingPlayerId = null;
   document.getElementById('playerModalTitle').textContent = 'Add Player';
   document.getElementById('deletePlayerBtn').style.display = 'none';
+  document.getElementById('archivePlayerBtn').style.display = 'none';
+  document.getElementById('restorePlayerBtn').style.display = 'none';
   ['playerName','playerPosition','playerShirt','playerNotes'].forEach(id => { document.getElementById(id).value = ''; });
   openModal('playerModal');
 }
@@ -7111,8 +7148,13 @@ function openEditPlayer(id) {
   const p = state.players.find(x => x.id === id);
   if (!p) return;
   editingPlayerId = id;
-  document.getElementById('playerModalTitle').textContent = 'Edit Player';
+  document.getElementById('playerModalTitle').textContent = p.archived
+    ? `Edit Player · Archived${p.archivedReason ? ' (' + p.archivedReason + ')' : ''}`
+    : 'Edit Player';
   document.getElementById('deletePlayerBtn').style.display = 'inline-flex';
+  // Archive vs Restore depending on current status — one is always hidden
+  document.getElementById('archivePlayerBtn').style.display = p.archived ? 'none' : 'inline-flex';
+  document.getElementById('restorePlayerBtn').style.display = p.archived ? 'inline-flex' : 'none';
   document.getElementById('playerName').value     = p.name;
   document.getElementById('playerPosition').value = p.position || '';
   document.getElementById('playerShirt').value    = p.shirtNumber || '';
@@ -7136,9 +7178,11 @@ async function savePlayer() {
   if (error) { setSyncStatus('error'); alert('Save failed: ' + error.message); return; }
 
   // Update local state
-  // Preserve the avg-inclusion flag (managed via the squad-row toggle, not this modal)
-  const prevInclude = editingPlayerId ? state.players.find(x => x.id === editingPlayerId)?.includeInAvg : true;
-  const local = { id: player.id, name, position: player.position, shirtNumber: player.shirt_number, notes: player.notes, includeInAvg: prevInclude !== false };
+  // Preserve flags managed outside this modal (avg-inclusion toggle, archive status)
+  const prev = editingPlayerId ? state.players.find(x => x.id === editingPlayerId) : null;
+  const local = { id: player.id, name, position: player.position, shirtNumber: player.shirt_number, notes: player.notes,
+    includeInAvg: prev ? prev.includeInAvg !== false : true,
+    archived: prev?.archived === true, archivedReason: prev?.archivedReason || '', archivedDate: prev?.archivedDate || '' };
   if (editingPlayerId) {
     const idx = state.players.findIndex(x => x.id === editingPlayerId);
     if (idx !== -1) state.players[idx] = local;
@@ -7150,9 +7194,51 @@ async function savePlayer() {
   renderSquad();
 }
 
+// Archive (soft-remove): player leaves the active roster but every previous
+// session/match log is kept. Used when a player goes on loan or leaves.
+async function archivePlayer() {
+  if (!editingPlayerId) return;
+  const p = state.players.find(x => x.id === editingPlayerId);
+  if (!p) return;
+  const reason = prompt(
+    `Remove ${p.name} from the active roster?\n\n` +
+    `Their previous session history is kept — they just stop appearing on new sessions and in load averages.\n\n` +
+    `Reason (e.g. Loan, Left, Released):`, 'Loan');
+  if (reason === null) return; // cancelled
+  const today = formatDate(new Date());
+  setSyncStatus('syncing');
+  const { error } = await sb.from('players')
+    .update({ archived: true, archived_reason: reason.trim() || null, archived_date: today })
+    .eq('id', editingPlayerId);
+  if (error) { setSyncStatus('error'); alert('Archive failed: ' + error.message); return; }
+  p.archived = true; p.archivedReason = reason.trim(); p.archivedDate = today;
+  setSyncStatus('ok');
+  closeModal('playerModal');
+  renderSquad();
+  // Drop them out of the roster set used for AMS averages
+  Object.keys(state.amsRaw || {}).forEach(w => recomputeAmsActuals(Number(w)));
+}
+
+// Restore an archived player back to the active roster.
+async function restorePlayer() {
+  if (!editingPlayerId) return;
+  const p = state.players.find(x => x.id === editingPlayerId);
+  if (!p) return;
+  setSyncStatus('syncing');
+  const { error } = await sb.from('players')
+    .update({ archived: false, archived_reason: null, archived_date: null })
+    .eq('id', editingPlayerId);
+  if (error) { setSyncStatus('error'); alert('Restore failed: ' + error.message); return; }
+  p.archived = false; p.archivedReason = ''; p.archivedDate = '';
+  setSyncStatus('ok');
+  closeModal('playerModal');
+  renderSquad();
+  Object.keys(state.amsRaw || {}).forEach(w => recomputeAmsActuals(Number(w)));
+}
+
 async function deletePlayer() {
   if (!editingPlayerId) return;
-  if (!confirm('Delete this player and all their log entries?')) return;
+  if (!confirm('Permanently DELETE this player and ALL their session/match history?\n\nThis cannot be undone. To remove a player who is on loan or has left while KEEPING their history, use Archive instead.')) return;
   setSyncStatus('syncing');
   const { error } = await sb.from('players').delete().eq('id', editingPlayerId);
   if (error) { setSyncStatus('error'); alert('Delete failed: ' + error.message); return; }
@@ -7260,7 +7346,11 @@ function editPlayerFromHistory() {
 function renderRosterMatrix(hostId, dateStr, sourceType, sourceId, existingLogs = []) {
   const host = document.getElementById(hostId);
   if (!host) return () => [];
-  const players = (state.players || []).slice().sort((a, b) => (a.shirtNumber || 999) - (b.shirtNumber || 999));
+  // Active roster only — but keep any archived player who already has a log for
+  // THIS session/match, so their historical availability stays visible/editable.
+  const players = (state.players || [])
+    .filter(p => !p.archived || existingLogs.some(l => l.playerId === p.id))
+    .slice().sort((a, b) => (a.shirtNumber || 999) - (b.shirtNumber || 999));
   if (players.length === 0) {
     host.innerHTML = `<div style="font-size:11px;color:var(--text3);font-family:'Anton',sans-serif;letter-spacing:1px;padding:8px 0">No players in roster yet — add some from the 👥 Squad tab to track availability here.</div>`;
     return () => [];
@@ -7697,7 +7787,7 @@ function renderWeekReview() {
 }
 
 function getDayAvailability(dateStr) {
-  const roster = state.players || [];
+  const roster = (state.players || []).filter(p => !p.archived);
   if (roster.length === 0) return null;
   const logs = (state.playerLogs || []).filter(l => l.date === dateStr);
   if (logs.length === 0) return null;
@@ -7823,7 +7913,7 @@ async function fetchAmsWeekActuals(weekNum) {
   state.amsRaw[weekNum] = rows;
 
   // Roster set for primary-activity selection
-  const rosterNames = new Set((state.players || []).filter(p => p.includeInAvg !== false).map(p => normalizeAthleteName(p.name)));
+  const rosterNames = new Set((state.players || []).filter(p => p.includeInAvg !== false && !p.archived).map(p => normalizeAthleteName(p.name)));
   const enforceRoster = rosterNames.size > 0;
   const rosterMatchCount = (rs) => enforceRoster
     ? rs.filter(r => rosterNames.has(normalizeAthleteName(r.athlete_name))).length
@@ -7864,7 +7954,7 @@ function recomputeAmsActuals(weekNum) {
   const endD = new Date(start); endD.setDate(endD.getDate() + 6);
   const endStr = formatDate(endD);
 
-  const rosterNames = new Set((state.players || []).filter(p => p.includeInAvg !== false).map(p => normalizeAthleteName(p.name)));
+  const rosterNames = new Set((state.players || []).filter(p => p.includeInAvg !== false && !p.archived).map(p => normalizeAthleteName(p.name)));
   // Roster name-matching is OPTIONAL now. The selected activity already scopes
   // the group, so by default we average everyone in it (minus GK + status).
   // Turning "squad only" on additionally requires a roster name match — useful
@@ -8359,7 +8449,7 @@ function renderAvailabilityReview(weekNum) {
     return [...out].sort();
   })();
 
-  const rosterSize = (state.players || []).length;
+  const rosterSize = (state.players || []).filter(p => !p.archived).length;
   let summary = '';
   if (activeDates.length > 0 && rosterSize > 0) {
     const priority = { Out: 5, RTP: 4, Modified: 3, Recovery: 2, Full: 1 };
