@@ -1980,7 +1980,10 @@
         <h2 style="margin:0;font-family:'Anton',sans-serif;letter-spacing:2px;font-size:24px">SQUAD</h2>
         <div style="font-size:11px;color:var(--text3);font-family:'Anton',sans-serif;letter-spacing:1px;margin-top:2px">Roster · current availability · click any player for season log</div>
       </div>
-      <button class="btn btn-primary btn-sm" onclick="openAddPlayer()">＋ Add Player</button>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-ghost btn-sm" onclick="openSquadTimeline()" title="See when each player was with the team">📅 Timeline</button>
+        <button class="btn btn-primary btn-sm" onclick="openAddPlayer()">＋ Add Player</button>
+      </div>
     </div>
 
     <div id="squadStats" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:10px;margin-bottom:18px"></div>
@@ -2781,6 +2784,11 @@
           <input type="number" id="playerShirt" min="1" max="99" placeholder="10">
         </div>
       </div>
+      <div class="form-group" style="margin-bottom:14px">
+        <label>Joined the team</label>
+        <input type="date" id="playerJoined">
+        <div style="font-size:10px;color:var(--text3);margin-top:3px">Start of their spell with the team — used for the squad timeline. Leave blank to infer from their first session.</div>
+      </div>
       <div class="form-group">
         <label>Notes</label>
         <textarea id="playerNotes" placeholder="Injury history, contract notes..."></textarea>
@@ -2811,6 +2819,23 @@
     <div class="modal-footer">
       <button class="btn btn-ghost btn-sm" onclick="editPlayerFromHistory()">✏ Edit Player Info</button>
       <button class="btn btn-ghost" onclick="closeModal('playerHistoryModal')">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ SQUAD TIMELINE MODAL ═══ -->
+<div class="modal-overlay" id="squadTimelineModal">
+  <div class="modal" style="width:920px;max-width:96vw">
+    <div class="modal-header">
+      <div class="modal-title">Squad Timeline</div>
+      <button class="modal-close" onclick="closeModal('squadTimelineModal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div style="font-size:11px;color:var(--text3);font-family:'Anton',sans-serif;letter-spacing:1px;margin-bottom:10px">When each player was with the team. Bars run from join date to departure (or today). Departures are flagged by type.</div>
+      <div id="squadTimelineBody"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('squadTimelineModal')">Close</button>
     </div>
   </div>
 </div>
@@ -2938,7 +2963,7 @@ const MONTHS = ['January','February','March','April','May','June','July','August
 const MONTHS_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
 function emptyState() {
-  return { sessions: [], games: [], weekSettings: {}, media: [], settings: null, opponents: [], players: [], playerLogs: [], weekReviews: {}, amsActuals: {}, amsSyncStatus: {}, amsRaw: {}, amsActivities: {}, amsSelectedActivity: {} };
+  return { sessions: [], games: [], weekSettings: {}, media: [], settings: null, opponents: [], players: [], playerLogs: [], athleteNotes: [], weekReviews: {}, amsActuals: {}, amsSyncStatus: {}, amsRaw: {}, amsActivities: {}, amsSelectedActivity: {} };
 }
 let state = emptyState();
 let currentWeek = getCurrentWeekNum();
@@ -6989,24 +7014,38 @@ function statusColor(s) {
 
 let editingPlayerId = null;
 
+// Athlete documentation entry mapper (groundwork for the structured records
+// layer — the athlete_notes table is created and loaded; capture UI comes next).
+function dbToAthleteNote(r) {
+  return {
+    id: r.id, playerId: r.player_id, date: r.entry_date, category: r.category,
+    summary: r.summary, decision: r.decision || '', status: r.status || 'open',
+    followUp: r.follow_up_date || '', author: r.author || '',
+    resolvedAt: r.resolved_at || null, createdAt: r.created_at, updatedAt: r.updated_at,
+  };
+}
+
 async function loadPlayers() {
   if (!sb || !currentUser) return;
   try {
-    const [pRes, lRes] = await Promise.all([
+    const [pRes, lRes, nRes] = await Promise.all([
       sb.from('players').select('*').eq('user_id', currentUser.id).order('shirt_number', { nullsFirst: false }),
       sb.from('player_logs').select('*').eq('user_id', currentUser.id),
+      sb.from('athlete_notes').select('*').eq('user_id', currentUser.id),
     ]);
-    state.players    = (pRes.data    || []).map(r => ({ id: r.id, name: r.name, position: r.position, shirtNumber: r.shirt_number, notes: r.notes, includeInAvg: r.include_in_avg !== false, archived: r.archived === true, archivedReason: r.archived_reason || '', archivedDate: r.archived_date || '' }));
+    state.players    = (pRes.data    || []).map(r => ({ id: r.id, name: r.name, position: r.position, shirtNumber: r.shirt_number, notes: r.notes, includeInAvg: r.include_in_avg !== false, archived: r.archived === true, archivedReason: r.archived_reason || '', archivedDate: r.archived_date || '', joinedDate: r.joined_date || '' }));
     state.playerLogs = (lRes.data    || []).map(r => ({
       id: r.id, playerId: r.player_id, date: r.date,
       sessionId: r.session_id, gameId: r.game_id,
       status: r.status, plannedMinutes: r.planned_minutes, actualMinutes: r.actual_minutes,
       notes: r.notes,
     }));
+    state.athleteNotes = (nRes.data || []).map(dbToAthleteNote);
   } catch (e) {
     console.warn('loadPlayers failed (table may not exist yet):', e.message);
     state.players    = [];
     state.playerLogs = [];
+    state.athleteNotes = [];
   }
 }
 
@@ -7120,6 +7159,113 @@ function renderSquadList() {
   host.innerHTML = html;
 }
 
+// ── SQUAD TIMELINE (tenure / spells) ──
+// Colour a departure by its recorded reason.
+function departureColor(reason) {
+  const r = (reason || '').toLowerCase();
+  if (r.includes('loan'))                    return '#f5a623'; // out on loan
+  if (r.includes('trans'))                   return '#378add'; // transferred out
+  if (r.includes('left') || r.includes('releas') || r.includes('waiv')) return '#c05070'; // left / released
+  return '#888780';                                            // other / unspecified
+}
+
+// Compute a player's spell with the team: start (join date, else first logged
+// session, else archive date, else season start) → end (archive date if gone,
+// else today).
+function playerTenure(p) {
+  const logDates = (state.playerLogs || []).filter(l => l.playerId === p.id).map(l => l.date).filter(Boolean).sort();
+  const earliest = logDates[0] || '';
+  const start = p.joinedDate || earliest || p.archivedDate || formatDate(SEASON_START);
+  const end = p.archived ? (p.archivedDate || earliest || start) : formatDate(new Date());
+  return { start, end, inferredStart: !p.joinedDate };
+}
+
+function openSquadTimeline() {
+  renderSquadTimeline();
+  openModal('squadTimelineModal');
+}
+
+function renderSquadTimeline() {
+  const host = document.getElementById('squadTimelineBody');
+  if (!host) return;
+  const players = (state.players || []).slice();
+  if (players.length === 0) {
+    host.innerHTML = `<div style="text-align:center;padding:30px;color:var(--text3);font-family:'Anton',sans-serif;letter-spacing:1px">No players yet — add some to see the timeline</div>`;
+    return;
+  }
+
+  const parse = (s) => new Date(s + 'T12:00:00');
+  const tenures = players.map(p => ({ p, ...playerTenure(p) }));
+
+  // Axis bounds
+  let min = Math.min(...tenures.map(t => parse(t.start).getTime()));
+  let max = Math.max(...tenures.map(t => parse(t.end).getTime()), Date.now());
+  if (max <= min) max = min + 86400000 * 30;
+  const span = max - min;
+  const pctFor = (ms) => Math.max(0, Math.min(100, ((ms - min) / span) * 100));
+
+  // Month ticks (adaptive step so labels don't crowd)
+  const minD = new Date(min), maxD = new Date(max);
+  const months = (maxD.getFullYear() - minD.getFullYear()) * 12 + (maxD.getMonth() - minD.getMonth());
+  const step = months > 20 ? 3 : months > 10 ? 2 : 1;
+  const ticks = [];
+  const td = new Date(minD.getFullYear(), minD.getMonth(), 1);
+  while (td.getTime() <= max) {
+    ticks.push({ pct: pctFor(td.getTime()), label: MONTHS_SHORT[td.getMonth()], year: td.getMonth() === 0 || ticks.length === 0 ? String(td.getFullYear()).slice(2) : '' });
+    td.setMonth(td.getMonth() + step);
+  }
+  const gridLines = ticks.map(t => `<div style="position:absolute;left:${t.pct}%;top:0;bottom:0;width:1px;background:var(--border);opacity:0.5"></div>`).join('');
+  const tickLabels = ticks.map(t => `<div style="position:absolute;left:${t.pct}%;transform:translateX(-50%);font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--text3);white-space:nowrap">${t.label}${t.year ? " '" + t.year : ''}</div>`).join('');
+
+  const row = (t) => {
+    const p = t.p;
+    const l = pctFor(parse(t.start).getTime());
+    const w = Math.max(1.5, pctFor(parse(t.end).getTime()) - l);
+    const color = p.archived ? departureColor(p.archivedReason) : '#2eb86b';
+    const startTxt = new Date(parse(t.start)).toLocaleDateString('en', { month: 'short', year: 'numeric' });
+    const endTxt = p.archived ? new Date(parse(t.end)).toLocaleDateString('en', { month: 'short', year: 'numeric' }) : 'present';
+    const tip = `${p.name} · ${startTxt} → ${endTxt}${p.archived ? ' · ' + (p.archivedReason || 'left') : ''}${t.inferredStart ? ' (start inferred)' : ''}`;
+    const cap = p.archived
+      ? `<div style="position:absolute;left:${l + w}%;transform:translateX(2px);top:50%;margin-top:-6px;font-size:9px;color:${color};font-family:'Anton',sans-serif;letter-spacing:.5px;white-space:nowrap">${(p.archivedReason || 'LEFT').toUpperCase()}</div>`
+      : `<div style="position:absolute;left:${l + w}%;transform:translateX(2px);top:50%;margin-top:-5px;color:#2eb86b;font-size:10px">▶</div>`;
+    return `
+      <div style="display:grid;grid-template-columns:150px 1fr;gap:10px;align-items:center;padding:3px 0">
+        <div style="font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escapeAttr(p.name)}">
+          <span style="font-family:'JetBrains Mono',monospace;color:var(--text3);margin-right:5px">${p.shirtNumber || '—'}</span>${escapeAttr(p.name)}
+        </div>
+        <div style="position:relative;height:16px;background:var(--surface2);border:1px solid var(--border);border-radius:3px">
+          ${gridLines}
+          <div title="${escapeAttr(tip)}" style="position:absolute;left:${l}%;width:${w}%;top:2px;bottom:2px;background:${color};border-radius:2px;opacity:0.85"></div>
+          ${cap}
+        </div>
+      </div>`;
+  };
+
+  const active = tenures.filter(t => !t.p.archived).sort((a, b) => parse(a.start) - parse(b.start));
+  const gone   = tenures.filter(t => t.p.archived).sort((a, b) => parse(b.end) - parse(a.end));
+
+  const sectionHead = (txt) => `<div style="font-family:'Anton',sans-serif;letter-spacing:1.5px;font-size:11px;color:var(--text3);text-transform:uppercase;margin:14px 0 4px">${txt}</div>`;
+  const axisHead = `
+    <div style="display:grid;grid-template-columns:150px 1fr;gap:10px;margin-bottom:2px">
+      <div></div>
+      <div style="position:relative;height:14px">${tickLabels}</div>
+    </div>`;
+
+  const legend = `
+    <div style="display:flex;gap:14px;flex-wrap:wrap;margin-top:14px;font-size:10px;font-family:'Anton',sans-serif;letter-spacing:.5px;color:var(--text3)">
+      <span><span style="display:inline-block;width:12px;height:8px;background:#2eb86b;border-radius:2px;vertical-align:middle"></span> With team</span>
+      <span><span style="display:inline-block;width:12px;height:8px;background:#f5a623;border-radius:2px;vertical-align:middle"></span> On loan</span>
+      <span><span style="display:inline-block;width:12px;height:8px;background:#378add;border-radius:2px;vertical-align:middle"></span> Transferred</span>
+      <span><span style="display:inline-block;width:12px;height:8px;background:#c05070;border-radius:2px;vertical-align:middle"></span> Left / released</span>
+    </div>`;
+
+  host.innerHTML =
+    axisHead +
+    (active.length ? sectionHead(`Current squad (${active.length})`) + active.map(row).join('') : '') +
+    (gone.length ? sectionHead(`Former · on loan (${gone.length})`) + gone.map(row).join('') : '') +
+    legend;
+}
+
 async function toggleIncludeInAvg(id) {
   const p = state.players.find(x => x.id === id);
   if (!p) return;
@@ -7140,7 +7286,7 @@ function openAddPlayer() {
   document.getElementById('deletePlayerBtn').style.display = 'none';
   document.getElementById('archivePlayerBtn').style.display = 'none';
   document.getElementById('restorePlayerBtn').style.display = 'none';
-  ['playerName','playerPosition','playerShirt','playerNotes'].forEach(id => { document.getElementById(id).value = ''; });
+  ['playerName','playerPosition','playerShirt','playerNotes','playerJoined'].forEach(id => { document.getElementById(id).value = ''; });
   openModal('playerModal');
 }
 
@@ -7158,6 +7304,7 @@ function openEditPlayer(id) {
   document.getElementById('playerName').value     = p.name;
   document.getElementById('playerPosition').value = p.position || '';
   document.getElementById('playerShirt').value    = p.shirtNumber || '';
+  document.getElementById('playerJoined').value   = p.joinedDate || '';
   document.getElementById('playerNotes').value    = p.notes || '';
   openModal('playerModal');
 }
@@ -7171,6 +7318,7 @@ async function savePlayer() {
     name,
     position:     document.getElementById('playerPosition').value || null,
     shirt_number: parseInt(document.getElementById('playerShirt').value) || null,
+    joined_date:  document.getElementById('playerJoined').value || null,
     notes:        document.getElementById('playerNotes').value || null,
   };
   setSyncStatus('syncing');
@@ -7181,6 +7329,7 @@ async function savePlayer() {
   // Preserve flags managed outside this modal (avg-inclusion toggle, archive status)
   const prev = editingPlayerId ? state.players.find(x => x.id === editingPlayerId) : null;
   const local = { id: player.id, name, position: player.position, shirtNumber: player.shirt_number, notes: player.notes,
+    joinedDate: player.joined_date || '',
     includeInAvg: prev ? prev.includeInAvg !== false : true,
     archived: prev?.archived === true, archivedReason: prev?.archivedReason || '', archivedDate: prev?.archivedDate || '' };
   if (editingPlayerId) {
