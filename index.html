@@ -2814,6 +2814,7 @@
     <div class="modal-body">
       <div id="playerHistoryStats"></div>
       <div id="playerHistoryTimeline"></div>
+      <div id="playerHistoryDocs"></div>
       <div id="playerHistoryLog"></div>
     </div>
     <div class="modal-footer">
@@ -2836,6 +2837,60 @@
     </div>
     <div class="modal-footer">
       <button class="btn btn-ghost" onclick="closeModal('squadTimelineModal')">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ ATHLETE DOCUMENTATION ENTRY MODAL ═══ -->
+<div class="modal-overlay" id="noteModal">
+  <div class="modal" style="width:520px">
+    <div class="modal-header">
+      <div class="modal-title" id="noteModalTitle">Add Documentation</div>
+      <button class="modal-close" onclick="closeModal('noteModal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-grid" style="margin-bottom:12px">
+        <div class="form-group">
+          <label>Category</label>
+          <select id="noteCategory" onchange="onNoteCategoryChange()">
+            <option value="restriction">Med Restriction</option>
+            <option value="concern" selected>Athlete Concern</option>
+            <option value="conversation">Coach Conversation</option>
+            <option value="modification">Modification Rationale</option>
+            <option value="compliance">Parent / Compliance</option>
+            <option value="note">General Note</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Date</label>
+          <input type="date" id="noteDate">
+        </div>
+      </div>
+      <div class="form-group" style="margin-bottom:12px">
+        <label>What happened (summary)</label>
+        <textarea id="noteSummary" placeholder="e.g. Sports med cleared limited running, no sprinting for 5 days"></textarea>
+      </div>
+      <div class="form-group" style="margin-bottom:12px">
+        <label>Decision / action taken <span style="color:var(--text3);font-weight:400">(optional)</span></label>
+        <textarea id="noteDecision" placeholder="e.g. Capped TD at 4k, removed sprint block, reviewed with head coach"></textarea>
+      </div>
+      <div class="form-grid" style="margin-bottom:4px">
+        <div class="form-group">
+          <label>Follow-up date <span style="color:var(--text3);font-weight:400">(optional)</span></label>
+          <input type="date" id="noteFollowUp">
+        </div>
+        <div class="form-group" style="display:flex;flex-direction:column;justify-content:center">
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-top:18px">
+            <input type="checkbox" id="noteOpen" style="width:auto;margin:0">
+            <span>Open item — needs follow-up</span>
+          </label>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-danger btn-sm" id="deleteNoteBtn" style="display:none" onclick="deleteNote()">Delete</button>
+      <button class="btn btn-ghost" onclick="closeModal('noteModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveNote()">Save Entry</button>
     </div>
   </div>
 </div>
@@ -7025,6 +7080,176 @@ function dbToAthleteNote(r) {
   };
 }
 
+// ══════════════════════════════════════════════════════
+//  ATHLETE DOCUMENTATION  (structured, attributable records)
+// ══════════════════════════════════════════════════════
+// Dated, categorised entries linked to an athlete — med restrictions, concerns,
+// coach conversations, modification rationale, compliance. Each carries an
+// author + timestamps; actionable ones track open/resolved so unresolved items
+// surface as risk on the Squad page and in the player's history.
+const NOTE_CATEGORIES = {
+  restriction:  { label: 'Med Restriction',        color: '#e24b4a', actionable: true  },
+  concern:      { label: 'Athlete Concern',        color: '#f5a623', actionable: true  },
+  conversation: { label: 'Coach Conversation',     color: '#378add', actionable: true  },
+  modification: { label: 'Modification Rationale', color: '#7f77dd', actionable: false },
+  compliance:   { label: 'Parent / Compliance',    color: '#1d9e75', actionable: true  },
+  note:         { label: 'General Note',           color: '#888780', actionable: false },
+};
+function noteCatCfg(k) { return NOTE_CATEGORIES[k] || NOTE_CATEGORIES.note; }
+
+function athleteNoteToDB(n) {
+  return {
+    id: n.id, user_id: currentUser.id, player_id: n.playerId, entry_date: n.date,
+    category: n.category, summary: n.summary, decision: n.decision || null,
+    status: n.status, follow_up_date: n.followUp || null, author: n.author || null,
+    resolved_at: n.status === 'resolved' ? (n.resolvedAt || new Date().toISOString()) : null,
+    updated_at: new Date().toISOString(),
+  };
+}
+
+function daysSince(dateStr) { if (!dateStr) return null; const d = new Date(dateStr + 'T12:00:00'); return Math.max(0, Math.floor((Date.now() - d.getTime()) / 86400000)); }
+function openNotesForPlayer(pid) { return (state.athleteNotes || []).filter(n => n.playerId === pid && n.status === 'open'); }
+function notesForPlayer(pid) { return (state.athleteNotes || []).filter(n => n.playerId === pid).sort((a, b) => new Date(b.date) - new Date(a.date) || new Date(b.createdAt || 0) - new Date(a.createdAt || 0)); }
+
+async function saveAthleteNoteDB(n) { setSyncStatus('syncing'); const { error } = await sb.from('athlete_notes').upsert(athleteNoteToDB(n)); setSyncStatus(error ? 'error' : 'ok'); if (error) console.error('Save note error', error); return !error; }
+async function deleteAthleteNoteDB(id) { setSyncStatus('syncing'); const { error } = await sb.from('athlete_notes').delete().eq('id', id); setSyncStatus(error ? 'error' : 'ok'); return !error; }
+
+let editingNoteId = null;
+let noteForPlayerId = null;
+
+function onNoteCategoryChange() {
+  // In add mode, default the "open item" flag from the category (actionable ones
+  // default to open). In edit mode we leave whatever the entry already had.
+  if (editingNoteId === null) {
+    document.getElementById('noteOpen').checked = noteCatCfg(document.getElementById('noteCategory').value).actionable;
+  }
+}
+
+function openAddNote(playerId) {
+  editingNoteId = null;
+  noteForPlayerId = playerId;
+  const p = state.players.find(x => x.id === playerId);
+  document.getElementById('noteModalTitle').textContent = 'Add Documentation' + (p ? ` · ${p.name}` : '');
+  document.getElementById('noteCategory').value = 'concern';
+  document.getElementById('noteDate').value = formatDate(new Date());
+  document.getElementById('noteSummary').value = '';
+  document.getElementById('noteDecision').value = '';
+  document.getElementById('noteFollowUp').value = '';
+  document.getElementById('deleteNoteBtn').style.display = 'none';
+  onNoteCategoryChange();
+  openModal('noteModal');
+}
+
+function openEditNote(id) {
+  const n = (state.athleteNotes || []).find(x => x.id === id);
+  if (!n) return;
+  editingNoteId = id;
+  noteForPlayerId = n.playerId;
+  const p = state.players.find(x => x.id === n.playerId);
+  document.getElementById('noteModalTitle').textContent = 'Edit Documentation' + (p ? ` · ${p.name}` : '');
+  document.getElementById('noteCategory').value = n.category;
+  document.getElementById('noteDate').value = n.date;
+  document.getElementById('noteSummary').value = n.summary;
+  document.getElementById('noteDecision').value = n.decision || '';
+  document.getElementById('noteFollowUp').value = n.followUp || '';
+  document.getElementById('noteOpen').checked = n.status === 'open';
+  document.getElementById('deleteNoteBtn').style.display = 'inline-flex';
+  openModal('noteModal');
+}
+
+async function saveNote() {
+  const summary = document.getElementById('noteSummary').value.trim();
+  if (!summary) { alert('Add a short summary of what happened.'); return; }
+  const isOpen = document.getElementById('noteOpen').checked;
+  const existing = editingNoteId ? (state.athleteNotes || []).find(x => x.id === editingNoteId) : null;
+  const note = {
+    id: editingNoteId || (crypto.randomUUID ? crypto.randomUUID() : genId()),
+    playerId: noteForPlayerId,
+    date: document.getElementById('noteDate').value || formatDate(new Date()),
+    category: document.getElementById('noteCategory').value,
+    summary,
+    decision: document.getElementById('noteDecision').value.trim(),
+    status: isOpen ? 'open' : 'resolved',
+    followUp: document.getElementById('noteFollowUp').value || '',
+    author: existing?.author || (currentUser?.email || ''),
+    resolvedAt: !isOpen ? (existing?.resolvedAt || new Date().toISOString()) : null,
+    createdAt: existing?.createdAt || new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  };
+  const ok = await saveAthleteNoteDB(note);
+  if (!ok) { alert('Save failed — check your connection and try again.'); return; }
+  if (editingNoteId) { const i = state.athleteNotes.findIndex(x => x.id === editingNoteId); if (i !== -1) state.athleteNotes[i] = note; }
+  else state.athleteNotes.push(note);
+  closeModal('noteModal');
+  if (noteForPlayerId) renderPlayerHistoryDocs(noteForPlayerId);
+  renderSquad();
+}
+
+async function deleteNote() {
+  if (!editingNoteId) return;
+  if (!confirm('Delete this documentation entry permanently? This removes the record.')) return;
+  const ok = await deleteAthleteNoteDB(editingNoteId);
+  if (!ok) { alert('Delete failed.'); return; }
+  state.athleteNotes = state.athleteNotes.filter(x => x.id !== editingNoteId);
+  const pid = noteForPlayerId;
+  closeModal('noteModal');
+  if (pid) renderPlayerHistoryDocs(pid);
+  renderSquad();
+}
+
+async function toggleNoteResolved(id) {
+  const n = (state.athleteNotes || []).find(x => x.id === id);
+  if (!n) return;
+  n.status = n.status === 'open' ? 'resolved' : 'open';
+  n.resolvedAt = n.status === 'resolved' ? new Date().toISOString() : null;
+  n.updatedAt = new Date().toISOString();
+  await saveAthleteNoteDB(n);
+  renderPlayerHistoryDocs(n.playerId);
+  renderSquad();
+}
+
+function renderPlayerHistoryDocs(playerId) {
+  const host = document.getElementById('playerHistoryDocs');
+  if (!host) return;
+  const notes = notesForPlayer(playerId);
+  const openCount = notes.filter(n => n.status === 'open').length;
+  const header = `
+    <div style="display:flex;align-items:center;justify-content:space-between;margin:4px 0 8px">
+      <div style="font-family:'Anton',sans-serif;letter-spacing:1px;font-size:13px;color:var(--text2)">DOCUMENTATION${openCount ? ` <span style="color:#f5a623">· ${openCount} open</span>` : ''}</div>
+      <button class="btn btn-primary btn-sm" onclick="openAddNote('${playerId}')">＋ Add Entry</button>
+    </div>`;
+  if (!notes.length) {
+    host.innerHTML = header + `<div style="text-align:center;padding:16px;color:var(--text3);font-size:11px;font-family:'Anton',sans-serif;letter-spacing:1px;background:var(--surface2);border:1px dashed var(--border);border-radius:var(--radius);margin-bottom:14px">No documentation yet — log restrictions, concerns, conversations &amp; modification rationale here</div>`;
+    return;
+  }
+  const rows = notes.map(n => {
+    const c = noteCatCfg(n.category);
+    const isOpen = n.status === 'open';
+    const age = daysSince(n.date);
+    const statusBadge = isOpen
+      ? `<span style="font-family:'Anton',sans-serif;font-size:9px;letter-spacing:1px;padding:1px 6px;border-radius:2px;background:#f5a62322;color:#f5a623">OPEN${age != null ? ` · ${age}d` : ''}</span>`
+      : `<span style="font-family:'Anton',sans-serif;font-size:9px;letter-spacing:1px;padding:1px 6px;border-radius:2px;background:#2eb86b22;color:#2eb86b">RESOLVED</span>`;
+    const follow = n.followUp ? `<span style="font-size:10px;color:var(--text3)">follow-up ${new Date(n.followUp + 'T12:00:00').toLocaleDateString('en', { month: 'short', day: 'numeric' })}</span>` : '';
+    return `
+      <div style="background:var(--surface2);border:1px solid var(--border);border-left:3px solid ${c.color};border-radius:var(--radius);padding:8px 10px;margin-bottom:6px">
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:3px">
+          <span style="font-family:'Anton',sans-serif;font-size:10px;letter-spacing:.5px;color:${c.color};background:${c.color}18;padding:1px 6px;border-radius:2px">${c.label}</span>
+          <span style="font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--text2)">${new Date(n.date + 'T12:00:00').toLocaleDateString('en', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+          ${statusBadge}
+          ${follow}
+          <span style="margin-left:auto;display:flex;gap:4px">
+            ${c.actionable ? `<button class="btn btn-ghost btn-sm" style="padding:1px 8px" onclick="toggleNoteResolved('${n.id}')" title="${isOpen ? 'Mark resolved' : 'Reopen'}">${isOpen ? '✓ Resolve' : '↺ Reopen'}</button>` : ''}
+            <button class="btn btn-ghost btn-sm" style="padding:1px 8px" onclick="openEditNote('${n.id}')" title="Edit">✏</button>
+          </span>
+        </div>
+        <div style="font-size:12px;color:var(--text);line-height:1.4">${escapeAttr(n.summary)}</div>
+        ${n.decision ? `<div style="font-size:11px;color:var(--text2);margin-top:3px"><span style="color:var(--text3)">Decision / action:</span> ${escapeAttr(n.decision)}</div>` : ''}
+        ${n.author ? `<div style="font-size:9.5px;color:var(--text3);margin-top:4px;font-family:'JetBrains Mono',monospace">logged by ${escapeAttr(n.author)}${n.createdAt ? ` · ${new Date(n.createdAt).toLocaleDateString('en', { month: 'short', day: 'numeric' })}` : ''}</div>` : ''}
+      </div>`;
+  }).join('');
+  host.innerHTML = header + `<div style="max-height:280px;overflow-y:auto;margin-bottom:14px">${rows}</div>`;
+}
+
 async function loadPlayers() {
   if (!sb || !currentUser) return;
   try {
@@ -7076,6 +7301,10 @@ function renderSquadStats() {
     if (counts[s] != null) counts[s]++;
   });
   const total = players.length;
+  // Open documentation items across active players (unresolved concerns /
+  // restrictions / follow-ups) — a live risk signal.
+  const activeIds = new Set(players.map(p => p.id));
+  const openItems = (state.athleteNotes || []).filter(n => n.status === 'open' && activeIds.has(n.playerId)).length;
   const stat = (label, value, color) => `
     <div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:10px 12px">
       <div style="font-size:10px;color:var(--text3);font-family:'Anton',sans-serif;letter-spacing:1.5px;text-transform:uppercase">${label}</div>
@@ -7088,6 +7317,7 @@ function renderSquadStats() {
     stat('Recovery', counts.Recovery, statusColor('Recovery')),
     stat('RTP', counts.RTP, statusColor('RTP')),
     stat('Out', counts.Out, statusColor('Out')),
+    stat('Open Items', openItems, openItems ? '#f5a623' : undefined),
   ].join('');
 }
 
@@ -7108,10 +7338,12 @@ function renderSquadList() {
     const s = latest?.status || 'Full';
     const lastDate = latest?.date ? new Date(latest.date).toLocaleDateString('en', { month: 'short', day: 'numeric' }) : '—';
     const inAvg = p.includeInAvg !== false;
+    const openN = openNotesForPlayer(p.id).length;
+    const openBadge = openN ? ` <span title="${openN} open documentation item(s) — click to view" style="font-family:'JetBrains Mono',monospace;font-size:9px;background:#f5a62322;color:#f5a623;padding:1px 5px;border-radius:8px;vertical-align:middle">●${openN}</span>` : '';
     return `
       <div onclick="openPlayerHistory('${p.id}')" style="display:grid;grid-template-columns:50px 1fr 80px 100px 90px 64px 44px;gap:8px;padding:10px 14px;border-top:1px solid var(--border);font-size:12px;align-items:center;cursor:pointer;${inAvg ? '' : 'opacity:0.55'}" onmouseover="this.style.background='var(--surface3)'" onmouseout="this.style.background=''">
         <span style="font-family:'JetBrains Mono',monospace;color:var(--text3)">${p.shirtNumber || '—'}</span>
-        <span style="font-weight:600">${p.name}</span>
+        <span style="font-weight:600">${p.name}${openBadge}</span>
         <span style="font-size:11px;color:var(--text2)">${p.position || ''}</span>
         <span><span style="display:inline-block;padding:2px 8px;border-radius:3px;font-family:'Anton',sans-serif;letter-spacing:1px;font-size:11px;font-weight:700;background:${statusColor(s)}22;color:${statusColor(s)}">${s.toUpperCase()}</span></span>
         <span style="font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--text3)">${lastDate}</span>
@@ -7405,6 +7637,7 @@ function openPlayerHistory(playerId) {
   const p = state.players.find(x => x.id === playerId);
   if (!p) return;
   document.getElementById('playerHistoryTitle').textContent = `${p.name}${p.shirtNumber ? ' #' + p.shirtNumber : ''}${p.position ? ' · ' + p.position : ''}`;
+  renderPlayerHistoryDocs(playerId); // documentation section renders regardless of training logs
   const logs = state.playerLogs.filter(l => l.playerId === playerId).sort((a, b) => new Date(a.date) - new Date(b.date));
 
   // Stats
