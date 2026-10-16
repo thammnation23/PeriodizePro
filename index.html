@@ -4292,11 +4292,13 @@ function renderWeek() {
     }
 
 
-    // S&C planned lift for this day (from the weekly plan)
-    const scE = dayEntry(state.scWeeks[currentWeek]?.days?.[DAYS[di]]);
-    const scLift = liftByKey(scE.lift);
-    const scChip = scLift.key
-      ? `<div style="margin-bottom:6px"><span title="S&C: ${escapeAttr(scLift.label)}${scE.load ? ' · ' + escapeAttr(scE.load) : ''} — click week for details" onclick="openScWeek(${currentWeek})" style="cursor:pointer;display:inline-flex;align-items:center;gap:4px;font-family:'Anton',sans-serif;font-size:9px;letter-spacing:.5px;padding:2px 7px;border-radius:3px;background:${scLift.color}22;color:${scLift.color};border:1px solid ${scLift.color}55">🏋 ${escapeAttr(scLift.label)}${scE.load ? ` · ${escapeAttr(scE.load)}` : ''}</span></div>`
+    // S&C planned lifts for this day (pre-training Activation + post-training Gym)
+    const scEntries = dayEntries(state.scWeeks[currentWeek]?.days?.[DAYS[di]]);
+    const scChip = scEntries.length
+      ? `<div style="margin-bottom:6px;display:flex;flex-wrap:wrap;gap:4px">${scEntries.map(e => {
+          const lf = liftByKey(e.lift);
+          return `<span onclick="openScWeek(${currentWeek})" title="${escapeAttr(phaseLabel(e.phase) + ': ' + lf.label + (e.load ? ' · ' + e.load : ''))} — click week for details" style="cursor:pointer;display:inline-flex;align-items:center;gap:4px;font-family:'Anton',sans-serif;font-size:9px;letter-spacing:.5px;padding:2px 7px;border-radius:3px;background:${lf.color}22;color:${lf.color};border:1px solid ${lf.color}55">🏋 ${escapeAttr(phaseLabel(e.phase))}: ${escapeAttr(lf.label)}${e.load ? ` · ${escapeAttr(e.load)}` : ''}</span>`;
+        }).join('')}</div>`
       : '';
 
     card.innerHTML = `
@@ -9397,7 +9399,27 @@ function getScLifts() { const c = state.settings?.sc_lifts; return (Array.isArra
 function allScLifts() { return [SC_LIFT_OFF, ...getScLifts()]; }
 function liftByKey(k) { return allScLifts().find(l => l.key === (k || '')) || SC_LIFT_OFF; }
 // A day entry is { lift, load }; older saves stored just the lift key as a string.
-function dayEntry(v) { if (!v) return { lift:'', load:'' }; if (typeof v === 'string') return { lift:v, load:'' }; return { lift:v.lift||'', load:v.load||'' }; }
+// Timing slots within a day: a pre-training slot (Activation) and a post-
+// training slot (Gym). Each can hold its own lift + loading.
+const SC_PHASES = [
+  { key:'pre',  label:'Activation' },
+  { key:'post', label:'Gym' },
+];
+function phaseLabel(k) { return (SC_PHASES.find(p => p.key === k) || {}).label || k; }
+
+// A day's plan is a list of { phase, lift, load }. Older saves stored a single
+// lift (string) or a single { lift, load } object — both normalize in.
+// dayEntries() drops empty-lift slots (for display); dayEntriesRaw() keeps them
+// (for editing).
+function dayEntriesRaw(v) {
+  if (!v) return [];
+  if (typeof v === 'string') return v ? [{ phase:'post', lift:v, load:'' }] : [];
+  if (Array.isArray(v)) return v.map(e => ({ phase: e.phase || 'post', lift: e.lift || '', load: e.load || '' }));
+  if (v.lift || v.load) return [{ phase: v.phase || 'post', lift: v.lift || '', load: v.load || '' }];
+  return [];
+}
+function dayEntries(v) { return dayEntriesRaw(v).filter(e => e.lift); }
+function dayPhase(v, phase) { return dayEntries(v).find(e => e.phase === phase) || null; }
 
 const SC_PRE  = ['General + specific warm-up (RAMP)', 'Activation — glutes, trunk, scap', 'Movement prep / dynamic mobility', 'CNS potentiation / PAP (jumps, throws, accels)', 'Prehab — hamstring, groin/adductor, ankle, knee'];
 const SC_POST = ['Cool-down / aerobic flush', 'Static stretch + mobility', 'Soft-tissue / foam rolling', 'Refuel — protein + carbs, hydrate', 'Down-regulation breathing, sleep hygiene', 'Recovery / wellness check to steer next session'];
@@ -9457,11 +9479,16 @@ function renderScWeekPlanner() {
     const dayCells = DAYS.map((dn, di) => {
       const d = new Date(start); d.setDate(d.getDate() + di);
       const isMatch = state.games.some(g => g.date === formatDate(d));
-      const e = dayEntry(wk.days?.[dn]);
-      const lift = liftByKey(e.lift);
-      const bg = lift.key ? lift.color + '33' : 'transparent';
-      const bd = lift.key ? lift.color : 'var(--border)';
-      return `<div title="${dn}${isMatch ? ' · MATCH' : ''}${lift.key ? ' · ' + lift.label : ''}${e.load ? ' · ' + e.load : ''}" style="flex:1;min-width:0;height:26px;border:1px solid ${bd};border-radius:3px;background:${bg};display:flex;align-items:center;justify-content:center;font-family:'Anton',sans-serif;font-size:9px;letter-spacing:.5px;color:${lift.key ? lift.color : 'var(--text3)'}">${isMatch ? '⚽' : (lift.short || '·')}</div>`;
+      const entries = dayEntries(wk.days?.[dn]);
+      const post = entries.find(e => e.phase === 'post');
+      const pre = entries.find(e => e.phase === 'pre');
+      const main = post || pre;
+      const mLift = liftByKey(main?.lift);
+      const bg = mLift.key ? mLift.color + '33' : 'transparent';
+      const bd = mLift.key ? mLift.color : 'var(--border)';
+      const tip = `${dn}${isMatch ? ' · MATCH' : ''}` + entries.map(e => ` · ${phaseLabel(e.phase)}: ${liftByKey(e.lift).label}${e.load ? ' (' + e.load + ')' : ''}`).join('');
+      const bothDot = (pre && post) ? `<span style="position:absolute;top:1px;right:1px;width:5px;height:5px;border-radius:50%;background:${liftByKey(pre.lift).color};border:1px solid var(--surface2)"></span>` : '';
+      return `<div title="${escapeAttr(tip)}" style="position:relative;flex:1;min-width:0;height:26px;border:1px solid ${bd};border-radius:3px;background:${bg};display:flex;align-items:center;justify-content:center;font-family:'Anton',sans-serif;font-size:9px;letter-spacing:.5px;color:${mLift.key ? mLift.color : 'var(--text3)'}">${isMatch ? '⚽' : (mLift.short || '·')}${bothDot}</div>`;
     }).join('');
     const statusPill = st
       ? `<span style="font-family:'Anton',sans-serif;font-size:10px;letter-spacing:1px;padding:2px 8px;border-radius:3px;background:${st.color}22;color:${st.color}">${st.label.toUpperCase()}</span>`
@@ -9561,7 +9588,7 @@ let scWeekDraft = { status: '', days: {}, dbId: undefined };
 function openScWeek(weekNum) {
   editingScWeekNum = weekNum;
   const existing = state.scWeeks[weekNum] || { status: '', days: {} };
-  scWeekDraft = { status: existing.status || '', days: { ...(existing.days || {}) }, dbId: existing.dbId };
+  scWeekDraft = { status: existing.status || '', days: JSON.parse(JSON.stringify(existing.days || {})), dbId: existing.dbId };
   const start = getWeekStart(weekNum);
   const end = new Date(start); end.setDate(end.getDate() + 6);
   document.getElementById('scWeekModalTitle').textContent = `Week ${weekNum} · ${MONTHS_SHORT[start.getMonth()]} ${start.getDate()} – ${MONTHS_SHORT[end.getMonth()]} ${end.getDate()}`;
@@ -9575,26 +9602,37 @@ function renderScWeekEditor() {
     return `<button type="button" onclick="setScWeekStatus('${s.key}')" style="flex:1;padding:8px;border-radius:6px;border:1px solid ${on ? s.color : 'var(--border)'};background:${on ? s.color + '22' : 'transparent'};color:${on ? s.color : 'var(--text2)'};font-family:'Anton',sans-serif;letter-spacing:1px;font-size:12px;cursor:pointer">${s.label}</button>`;
   }).join('');
   const start = getWeekStart(editingScWeekNum);
+  const slotRow = (dn, phase) => {
+    const e = scGetPhase(dn, phase);
+    const opts = allScLifts().map(l => `<option value="${l.key}" ${e.lift === l.key ? 'selected' : ''}>${l.label}</option>`).join('');
+    const lift = liftByKey(e.lift);
+    return `<div style="display:grid;grid-template-columns:80px 12px 1.2fr 1fr;gap:8px;align-items:center;padding:2px 0 2px 10px">
+      <div style="font-size:10px;color:var(--text3);font-family:'Anton',sans-serif;letter-spacing:.5px">${phaseLabel(phase).toUpperCase()}</div>
+      <span style="width:11px;height:11px;border-radius:2px;background:${lift.key ? lift.color : 'transparent'};border:1px solid ${lift.key ? lift.color : 'var(--border)'}"></span>
+      <select onchange="setScWeekPhaseLift('${dn}','${phase}',this.value)">${opts}</select>
+      <input type="text" value="${escapeAttr(e.load)}" placeholder="load e.g. 4×3 @85%" oninput="setScWeekPhaseLoad('${dn}','${phase}',this.value)" style="font-size:11px">
+    </div>`;
+  };
   document.getElementById('scWeekDays').innerHTML = DAYS.map((dn, di) => {
     const d = new Date(start); d.setDate(d.getDate() + di);
     const isMatch = state.games.some(g => g.date === formatDate(d));
-    const e = dayEntry(scWeekDraft.days[dn]);
-    const opts = allScLifts().map(l => `<option value="${l.key}" ${e.lift === l.key ? 'selected' : ''}>${l.label}</option>`).join('');
-    const lift = liftByKey(e.lift);
-    return `<div style="display:grid;grid-template-columns:72px 14px 1.2fr 1fr;gap:8px;align-items:center;padding:5px 0;border-top:1px solid var(--border)">
-      <div style="font-size:12px"><span style="font-family:'Anton',sans-serif;letter-spacing:.5px">${dn}</span> <span style="font-size:10px;color:var(--text3)">${d.getDate()}</span>${isMatch ? ' <span style="color:var(--game)" title="Match">⚽</span>' : ''}</div>
-      <span style="width:12px;height:12px;border-radius:2px;background:${lift.key ? lift.color : 'transparent'};border:1px solid ${lift.key ? lift.color : 'var(--border)'}"></span>
-      <select onchange="setScWeekDayLift('${dn}',this.value)">${opts}</select>
-      <input type="text" value="${escapeAttr(e.load)}" placeholder="load e.g. 4×3 @85%" oninput="setScWeekDayLoad('${dn}',this.value)" style="font-size:11px">
+    return `<div style="border-top:1px solid var(--border);padding:6px 0">
+      <div style="font-size:12px;margin-bottom:3px"><span style="font-family:'Anton',sans-serif;letter-spacing:.5px">${dn}</span> <span style="font-size:10px;color:var(--text3)">${d.getDate()}</span>${isMatch ? ' <span style="color:var(--game)" title="Match">⚽</span>' : ''}</div>
+      ${SC_PHASES.map(p => slotRow(dn, p.key)).join('')}
     </div>`;
   }).join('');
 }
 function setScWeekStatus(k) { scWeekDraft.status = scWeekDraft.status === k ? '' : k; renderScWeekEditor(); }
-function setScWeekDayLift(dn, v) { const e = dayEntry(scWeekDraft.days[dn]); e.lift = v; scWeekDraft.days[dn] = e; renderScWeekEditor(); }
-function setScWeekDayLoad(dn, v) { const e = dayEntry(scWeekDraft.days[dn]); e.load = v; scWeekDraft.days[dn] = e; }
+function scEnsureDayArray(dn) { if (!Array.isArray(scWeekDraft.days[dn])) scWeekDraft.days[dn] = dayEntriesRaw(scWeekDraft.days[dn]); return scWeekDraft.days[dn]; }
+function scGetPhase(dn, phase) { const arr = Array.isArray(scWeekDraft.days[dn]) ? scWeekDraft.days[dn] : dayEntriesRaw(scWeekDraft.days[dn]); return arr.find(e => e.phase === phase) || { phase, lift: '', load: '' }; }
+function scSetPhase(dn, phase, field, val) { const arr = scEnsureDayArray(dn); let e = arr.find(x => x.phase === phase); if (!e) { e = { phase, lift: '', load: '' }; arr.push(e); } e[field] = val; }
+function setScWeekPhaseLift(dn, phase, v) { scSetPhase(dn, phase, 'lift', v); renderScWeekEditor(); }
+function setScWeekPhaseLoad(dn, phase, v) { scSetPhase(dn, phase, 'load', v); }
 
 async function saveScWeek() {
-  state.scWeeks[editingScWeekNum] = { status: scWeekDraft.status, days: { ...scWeekDraft.days }, dbId: scWeekDraft.dbId };
+  const cleanDays = {};
+  Object.keys(scWeekDraft.days || {}).forEach(dn => { const arr = dayEntries(scWeekDraft.days[dn]); if (arr.length) cleanDays[dn] = arr; });
+  state.scWeeks[editingScWeekNum] = { status: scWeekDraft.status, days: cleanDays, dbId: scWeekDraft.dbId };
   const ok = await saveScWeekDB(editingScWeekNum, state.scWeeks[editingScWeekNum]);
   if (!ok) { alert('Save failed — check your connection.'); return; }
   closeModal('scWeekModal');
@@ -9611,20 +9649,25 @@ function copyPrevScWeek() {
   const prev = state.scWeeks[editingScWeekNum - 1];
   if (!prev || (!prev.status && !Object.values(prev.days || {}).some(Boolean))) { alert('No plan on the previous week to copy.'); return; }
   scWeekDraft.status = prev.status || '';
-  scWeekDraft.days = { ...(prev.days || {}) };
+  scWeekDraft.days = JSON.parse(JSON.stringify(prev.days || {}));
   renderScWeekEditor();
 }
 
-// Seed a default microcycle (Maintain · Tue Lower, Thu Power, Fri Primer, Sun Regen)
-// into every week that has no plan yet — a fast starting point to then tweak.
+// Seed a default microcycle into every week that has no plan yet — a fast
+// starting point to then tweak. Shows the pre/post slots (Fri Activation primer).
 async function applyDefaultScPattern() {
-  if (!confirm('Apply a default template (Maintain · Tue Lower, Thu Power, Fri Primer, Sun Regen) to every week with no plan yet? You can then tweak any week.')) return;
-  const def = { Mon: '', Tue: 'lower', Wed: '', Thu: 'power', Fri: 'primer', Sat: '', Sun: 'regen' };
+  if (!confirm('Apply a default template (Maintain · Tue Gym Lower, Thu Gym Power, Fri Activation Primer, Sun Gym Regen) to every week with no plan yet? You can then tweak any week.')) return;
+  const def = {
+    Tue: [{ phase: 'post', lift: 'lower',  load: '' }],
+    Thu: [{ phase: 'post', lift: 'power',  load: '' }],
+    Fri: [{ phase: 'pre',  lift: 'primer', load: '' }],
+    Sun: [{ phase: 'post', lift: 'regen',  load: '' }],
+  };
   const toSave = [];
   for (let w = 1; w <= 52; w++) {
     const ex = state.scWeeks[w];
     if (ex && (ex.status || Object.values(ex.days || {}).some(Boolean))) continue;
-    state.scWeeks[w] = { status: 'maintain', days: { ...def } };
+    state.scWeeks[w] = { status: 'maintain', days: JSON.parse(JSON.stringify(def)) };
     toSave.push(scWeekToDB(w, state.scWeeks[w]));
   }
   if (!toSave.length) { renderStrength(); return; }
