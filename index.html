@@ -2387,7 +2387,10 @@
 
       <div class="form-group" style="margin-bottom:16px">
         <label>Opponent <span id="gameOppEloChip" style="display:none;margin-left:8px;font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--accent)"></span></label>
-        <input type="text" id="gameOpponent" list="opponentList" placeholder="Type or pick from MLS list..." oninput="onOpponentChange()">
+        <div style="display:flex;align-items:center;gap:10px">
+          <div id="gameOppCrest" title="Team crest" style="width:42px;height:42px;flex-shrink:0;border-radius:8px;background:var(--surface3);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:20px;overflow:hidden">⚽</div>
+          <input type="text" id="gameOpponent" list="opponentList" placeholder="Type or pick from MLS list..." oninput="onOpponentChange()" style="flex:1">
+        </div>
         <datalist id="opponentList"></datalist>
       </div>
 
@@ -4602,6 +4605,8 @@ function clearGameForm() {
   ].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
   document.getElementById('gameOppEloChip').style.display = 'none';
   document.getElementById('gameOppEloChip').textContent = '';
+  const crestEl = document.getElementById('gameOppCrest');
+  if (crestEl) crestEl.textContent = '⚽';
   document.getElementById('gameMdiPreview').style.display = 'none';
   document.getElementById('gameAvailPct').textContent = '';
   document.getElementById('gameRestAuto').textContent = '';
@@ -4797,6 +4802,18 @@ function editGame(id) {
   openModal('gameModal');
 }
 
+// Show the matched opponent's crest in the match form; fall back to a ball.
+function updateGameCrest(name) {
+  const host = document.getElementById('gameOppCrest');
+  if (!host) return;
+  const opp = (state.opponents || []).find(o => o.name.toLowerCase() === (name || '').trim().toLowerCase());
+  if (opp?.badge_url) {
+    host.innerHTML = `<img src="${escapeAttr(opp.badge_url)}" alt="${escapeAttr(opp.name)}" style="width:100%;height:100%;object-fit:contain" onerror="this.parentNode.textContent='⚽'">`;
+  } else {
+    host.textContent = '⚽';
+  }
+}
+
 function onOpponentChange() {
   const name = document.getElementById('gameOpponent').value.trim();
   const opp = (state.opponents || []).find(o => o.name.toLowerCase() === name.toLowerCase());
@@ -4808,6 +4825,7 @@ function onOpponentChange() {
     chip.style.display = 'none';
     chip.textContent = '';
   }
+  updateGameCrest(name);
 
   // Auto-fill travel km if your team + opponent are both known MLS teams,
   // venue is Away (or Neutral), and the field hasn't been set manually
