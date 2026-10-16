@@ -2001,6 +2001,7 @@
       </div>
       <div style="display:flex;gap:8px;flex-wrap:wrap">
         <button class="btn btn-ghost btn-sm" onclick="openScLiftsModal()" title="Add / rename / recolor your lift types">🏷 Lift types</button>
+        <button class="btn btn-ghost btn-sm" onclick="openScStatusModal()" title="Rename / recolor the week load statuses">🎨 Statuses</button>
         <button class="btn btn-ghost btn-sm" onclick="jumpToCurrentScWeek()" title="Scroll to the current week">⌖ Current week</button>
         <button class="btn btn-ghost btn-sm" onclick="toggleScFullYear()" title="Toggle between season window and all 52 weeks">⇄ Full year</button>
         <button class="btn btn-ghost btn-sm" onclick="applyDefaultScPattern()" title="Fill every empty week with a default weekly template you can then tweak">⚙ Default template</button>
@@ -2935,6 +2936,26 @@
     <div class="modal-footer">
       <button class="btn btn-ghost" onclick="closeModal('scLiftsModal')">Cancel</button>
       <button class="btn btn-primary" onclick="saveScLifts()">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ WEEK STATUSES MODAL ═══ -->
+<div class="modal-overlay" id="scStatusModal">
+  <div class="modal" style="width:440px">
+    <div class="modal-header">
+      <div class="modal-title">Week Statuses</div>
+      <button class="modal-close" onclick="closeModal('scStatusModal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div style="font-size:11px;color:var(--text3);margin-bottom:12px">The load statuses you can tag each week with (e.g. Load / Maintain / Deload). Rename, recolor, add or remove.</div>
+      <div style="display:grid;grid-template-columns:1fr 40px 28px;gap:8px;font-size:9px;font-family:'Anton',sans-serif;letter-spacing:1px;color:var(--text3);text-transform:uppercase;margin-bottom:6px"><span>Name</span><span>Color</span><span></span></div>
+      <div id="scStatusRows"></div>
+      <button class="btn btn-ghost btn-sm" style="margin-top:6px" onclick="addScStatusRow()">＋ Add status</button>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('scStatusModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveScStatuses()">Save</button>
     </div>
   </div>
 </div>
@@ -6530,6 +6551,7 @@ async function saveSettings() {
     team_name:     teamName,
     team_elo:      teamElo,
     sc_lifts:      state.settings?.sc_lifts || null,
+    sc_statuses:   state.settings?.sc_statuses || null,
     updated_at:    new Date().toISOString(),
   };
   if (state.settings?.id) payload.id = state.settings.id;
@@ -9350,12 +9372,14 @@ const SC_QUALITIES = [
 function qualityByKey(k) { return SC_QUALITIES.find(q => q.key === k); }
 
 // Week load status + per-day lift types for the weekly S&C planner.
-const SC_STATUSES = [
+// Week load statuses are user-editable (stored in app_settings.sc_statuses).
+const DEFAULT_SC_STATUSES = [
   { key:'load',     label:'Load',     color:'#e24b4a' },
   { key:'maintain', label:'Maintain', color:'#378add' },
   { key:'deload',   label:'Deload',   color:'#5dcaa5' },
 ];
-function statusCfg(k) { return SC_STATUSES.find(s => s.key === k); }
+function getScStatuses() { const c = state.settings?.sc_statuses; return (Array.isArray(c) && c.length) ? c : DEFAULT_SC_STATUSES; }
+function statusCfg(k) { return k ? getScStatuses().find(s => s.key === k) : null; }
 
 // Lift types are user-editable (stored in app_settings.sc_lifts); these are the
 // defaults. The blank "off" entry is implicit and prepended by allScLifts().
@@ -9503,7 +9527,7 @@ function renderScLiftLegend() {
   if (!host) return;
   const lifts = getScLifts().map(l =>
     `<span style="display:inline-flex;align-items:center;gap:5px;font-size:11px;color:var(--text2)"><span style="width:18px;height:14px;border-radius:3px;background:${l.color}33;border:1px solid ${l.color};display:inline-flex;align-items:center;justify-content:center;font-family:'Anton',sans-serif;font-size:7px;color:${l.color}">${l.short}</span>${l.label}</span>`).join('');
-  const stats = SC_STATUSES.map(s =>
+  const stats = getScStatuses().map(s =>
     `<span style="display:inline-flex;align-items:center;gap:5px;font-size:11px;color:var(--text2)"><span style="width:14px;height:9px;border-radius:2px;background:${s.color}"></span>${s.label}</span>`).join('');
   host.innerHTML = `
     <div style="display:flex;flex-wrap:wrap;gap:22px;align-items:flex-start;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:12px 14px">
@@ -9546,7 +9570,7 @@ function openScWeek(weekNum) {
 }
 
 function renderScWeekEditor() {
-  document.getElementById('scWeekStatusBtns').innerHTML = SC_STATUSES.map(s => {
+  document.getElementById('scWeekStatusBtns').innerHTML = getScStatuses().map(s => {
     const on = scWeekDraft.status === s.key;
     return `<button type="button" onclick="setScWeekStatus('${s.key}')" style="flex:1;padding:8px;border-radius:6px;border:1px solid ${on ? s.color : 'var(--border)'};background:${on ? s.color + '22' : 'transparent'};color:${on ? s.color : 'var(--text2)'};font-family:'Anton',sans-serif;letter-spacing:1px;font-size:12px;cursor:pointer">${s.label}</button>`;
   }).join('');
@@ -9654,6 +9678,49 @@ async function saveScLifts() {
   state.settings = res.data;
   closeModal('scLiftsModal');
   renderStrength();
+}
+
+// ── Week-status editor (custom Load/Maintain/Deload labels + colors) ──
+let scStatusDraft = [];
+function openScStatusModal() {
+  scStatusDraft = getScStatuses().map(s => ({ ...s }));
+  renderScStatusEditor();
+  openModal('scStatusModal');
+}
+function renderScStatusEditor() {
+  const host = document.getElementById('scStatusRows');
+  if (!host) return;
+  host.innerHTML = scStatusDraft.map((s, i) => `
+    <div style="display:grid;grid-template-columns:1fr 40px 28px;gap:8px;align-items:center;margin-bottom:6px">
+      <input type="text" value="${escapeAttr(s.label)}" placeholder="Status name" oninput="updateScStatusField(${i},'label',this.value)">
+      <input type="color" value="${s.color && s.color.startsWith('#') ? s.color : '#888780'}" oninput="updateScStatusField(${i},'color',this.value)" style="width:40px;height:30px;padding:0;border:1px solid var(--border);background:none;cursor:pointer">
+      <span class="exercise-remove" onclick="removeScStatusRow(${i})" title="Remove">✕</span>
+    </div>`).join('');
+}
+function updateScStatusField(i, f, v) { if (scStatusDraft[i]) scStatusDraft[i][f] = v; }
+function addScStatusRow() { scStatusDraft.push({ key: '', label: '', color: '#888780' }); renderScStatusEditor(); }
+function removeScStatusRow(i) { scStatusDraft.splice(i, 1); renderScStatusEditor(); }
+async function saveScStatuses() {
+  const list = scStatusDraft.filter(s => s.label && s.label.trim()).map(s => ({
+    key: s.key || slugifyLift(s.label),
+    label: s.label.trim(),
+    color: s.color || '#888780',
+  }));
+  if (!list.length) { alert('Keep at least one status.'); return; }
+  const seen = new Set(); list.forEach(s => { while (seen.has(s.key)) s.key += '_'; seen.add(s.key); });
+  setSyncStatus('syncing');
+  let res;
+  if (state.settings?.id) {
+    res = await sb.from('app_settings').update({ sc_statuses: list, updated_at: new Date().toISOString() }).eq('id', state.settings.id).select().single();
+  } else {
+    res = await sb.from('app_settings').upsert({ sc_statuses: list, updated_at: new Date().toISOString() }).select().single();
+  }
+  setSyncStatus(res.error ? 'error' : 'ok');
+  if (res.error) { alert('Save failed: ' + res.error.message); return; }
+  state.settings = res.data;
+  closeModal('scStatusModal');
+  renderStrength();
+  try { renderWeek(); } catch (e) {}
 }
 
 function renderMethodology() {
