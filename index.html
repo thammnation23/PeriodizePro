@@ -2106,66 +2106,24 @@
         <div class="settings-preview" id="settingsPreview"></div>
       </div>
 
-      <!-- Match Difficulty / ELO -->
+      <!-- Teams & Logos -->
       <div class="settings-section">
         <div class="settings-section-header">
           <div>
-            <div class="settings-section-title">Match Difficulty Index</div>
-            <div class="settings-section-sub">Your team's ELO + opponent ratings power the Match Difficulty Index (MDI). Auto-seeds from MLS history; updates from match results.</div>
+            <div class="settings-section-title">Teams &amp; Logos</div>
+            <div class="settings-section-sub">Your team and opponent teams with their crests. Seed from MLS to pull teams + logos; refresh logos any time.</div>
           </div>
         </div>
-        <div class="form-grid" style="margin-bottom:14px">
-          <div class="form-group">
-            <label>Your Team</label>
-            <select id="settingsTeamName" onchange="onTeamPicked()"></select>
-          </div>
-          <div class="form-group">
-            <label>Your Team ELO</label>
-            <input type="number" id="settingsTeamElo" placeholder="1500" min="800" max="2400">
-          </div>
+        <div class="form-group" style="margin-bottom:14px">
+          <label>Your Team</label>
+          <select id="settingsTeamName" onchange="onTeamPicked()"></select>
         </div>
         <div style="display:flex;gap:10px;align-items:center;margin-bottom:8px;flex-wrap:wrap">
-          <button class="btn btn-primary btn-sm" onclick="seedMlsOpponents()">⬇ Seed MLS Opponents</button>
+          <button class="btn btn-primary btn-sm" onclick="seedMlsOpponents()">⬇ Seed MLS Teams</button>
+          <button class="btn btn-ghost btn-sm" onclick="refreshTeamLogos()">🖼 Refresh Logos</button>
           <button class="btn btn-primary btn-sm" onclick="importMyTeamSchedule()">📅 Import My Schedule</button>
           <span id="seedStatus" style="font-size:11px;color:var(--text3);font-family:'Anton',sans-serif;letter-spacing:1px"></span>
         </div>
-
-        <details style="margin-top:10px;background:var(--surface3);border-radius:var(--radius);padding:8px 12px">
-          <summary style="cursor:pointer;font-family:'Anton',sans-serif;letter-spacing:1.5px;font-size:12px;color:var(--text2)">📖 What do these values mean?</summary>
-          <div style="padding-top:12px;font-size:12px;color:var(--text2);line-height:1.5">
-
-            <div style="font-family:'Anton',sans-serif;letter-spacing:1.5px;color:var(--accent);font-size:11px;margin-top:8px;margin-bottom:6px">ELO RATING SCALE</div>
-            <table style="width:100%;border-collapse:collapse;font-size:11px">
-              <tr><td style="padding:4px 8px;border-bottom:1px solid var(--border);font-family:'JetBrains Mono',monospace">1850+</td><td style="padding:4px 8px;border-bottom:1px solid var(--border)">Elite — dynasty-level (rare)</td></tr>
-              <tr><td style="padding:4px 8px;border-bottom:1px solid var(--border);font-family:'JetBrains Mono',monospace">1700–1850</td><td style="padding:4px 8px;border-bottom:1px solid var(--border)">Top tier — title contenders, MLS Cup level</td></tr>
-              <tr><td style="padding:4px 8px;border-bottom:1px solid var(--border);font-family:'JetBrains Mono',monospace">1550–1700</td><td style="padding:4px 8px;border-bottom:1px solid var(--border)">Above average — playoff teams</td></tr>
-              <tr><td style="padding:4px 8px;border-bottom:1px solid var(--border);font-family:'JetBrains Mono',monospace">1450–1550</td><td style="padding:4px 8px;border-bottom:1px solid var(--border)">Average — mid-table</td></tr>
-              <tr><td style="padding:4px 8px;border-bottom:1px solid var(--border);font-family:'JetBrains Mono',monospace">1300–1450</td><td style="padding:4px 8px;border-bottom:1px solid var(--border)">Bottom — relegation-zone equivalents</td></tr>
-              <tr><td style="padding:4px 8px;font-family:'JetBrains Mono',monospace">&lt;1300</td><td style="padding:4px 8px">Very weak — expansion / lower tier</td></tr>
-            </table>
-
-            <div style="font-family:'Anton',sans-serif;letter-spacing:1.5px;color:var(--accent);font-size:11px;margin-top:14px;margin-bottom:6px">MATCH DIFFICULTY INDEX (MDI)</div>
-            <table style="width:100%;border-collapse:collapse;font-size:11px">
-              <tr><td style="padding:4px 8px;border-bottom:1px solid var(--border);color:#2eb86b;font-family:'JetBrains Mono',monospace;font-weight:700">0–3</td><td style="padding:4px 8px;border-bottom:1px solid var(--border)"><b>EASY</b> — heavy favourite, can train hard the week before</td></tr>
-              <tr><td style="padding:4px 8px;border-bottom:1px solid var(--border);color:#c5d12b;font-family:'JetBrains Mono',monospace;font-weight:700">3–5</td><td style="padding:4px 8px;border-bottom:1px solid var(--border)"><b>MODERATE</b> — slight favourite</td></tr>
-              <tr><td style="padding:4px 8px;border-bottom:1px solid var(--border);color:#f5a623;font-family:'JetBrains Mono',monospace;font-weight:700">5–6.5</td><td style="padding:4px 8px;border-bottom:1px solid var(--border)"><b>CHALLENGING</b> — coin-flip / slight underdog</td></tr>
-              <tr><td style="padding:4px 8px;border-bottom:1px solid var(--border);color:#ff6b6b;font-family:'JetBrains Mono',monospace;font-weight:700">6.5–8</td><td style="padding:4px 8px;border-bottom:1px solid var(--border)"><b>HARD</b> — underdog, taper training, prioritise recovery</td></tr>
-              <tr><td style="padding:4px 8px;color:#d63b3b;font-family:'JetBrains Mono',monospace;font-weight:700">8–10</td><td style="padding:4px 8px"><b>VERY HARD</b> — heavy underdog</td></tr>
-            </table>
-
-            <div style="font-family:'Anton',sans-serif;letter-spacing:1.5px;color:var(--accent);font-size:11px;margin-top:14px;margin-bottom:6px">ELO MOVEMENT AFTER A MATCH</div>
-            <table style="width:100%;border-collapse:collapse;font-size:11px">
-              <tr><td style="padding:4px 8px;border-bottom:1px solid var(--border);font-family:'JetBrains Mono',monospace">±5 or less</td><td style="padding:4px 8px;border-bottom:1px solid var(--border)">Result was expected</td></tr>
-              <tr><td style="padding:4px 8px;border-bottom:1px solid var(--border);font-family:'JetBrains Mono',monospace">±10–15</td><td style="padding:4px 8px;border-bottom:1px solid var(--border)">Moderately surprising</td></tr>
-              <tr><td style="padding:4px 8px;font-family:'JetBrains Mono',monospace">±20</td><td style="padding:4px 8px">Big upset (max with K=20)</td></tr>
-            </table>
-
-            <div style="font-size:10px;color:var(--text3);margin-top:14px;font-family:'Anton',sans-serif;letter-spacing:1px;line-height:1.6">
-              MDI formula: based on Robertson &amp; Joyce (2014) match difficulty index from logistic regression, adapted to use ELO ratings instead of league rank. Includes 100-pt home advantage adjustment per FIFA-style football ELO. Updated via standard ELO formula (K=20).
-            </div>
-          </div>
-        </details>
-
         <div id="opponentList" style="margin-top:10px"></div>
       </div>
 
@@ -2389,24 +2347,13 @@
     </div>
     <div class="modal-body">
 
-      <!-- Live MDI preview -->
-      <div id="gameMdiPreview" style="display:none;margin-bottom:14px;padding:10px 12px;border-radius:var(--radius);background:var(--surface2);border-left:4px solid var(--accent)">
-        <div style="font-size:10px;color:var(--text3);font-family:'Anton',sans-serif;letter-spacing:2px;text-transform:uppercase">Match Difficulty Index</div>
-        <div style="display:flex;align-items:baseline;gap:10px;margin-top:4px">
-          <span id="gameMdiValue" style="font-family:'JetBrains Mono',monospace;font-size:24px;font-weight:700">—</span>
-          <span style="font-size:10px;color:var(--text3)">/ 10</span>
-          <span id="gameMdiLabel" style="font-family:'Anton',sans-serif;letter-spacing:1px;font-size:13px"></span>
-        </div>
-        <div id="gameMdiDetail" style="font-size:11px;color:var(--text2);margin-top:3px;font-family:'Anton',sans-serif"></div>
-      </div>
-
       <div class="form-group" style="margin-bottom:16px">
         <label>Date</label>
         <input type="date" id="gameDate">
       </div>
 
       <div class="form-group" style="margin-bottom:16px">
-        <label>Opponent <span id="gameOppEloChip" style="display:none;margin-left:8px;font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--accent)"></span></label>
+        <label>Opponent</label>
         <div style="display:flex;align-items:center;gap:10px">
           <div id="gameOppCrest" title="Team crest" style="width:42px;height:42px;flex-shrink:0;border-radius:8px;background:var(--surface3);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:20px;overflow:hidden">⚽</div>
           <input type="text" id="gameOpponent" list="opponentList" placeholder="Type or pick from MLS list..." oninput="onOpponentChange()" style="flex:1">
@@ -2980,26 +2927,6 @@
       <button class="btn btn-ghost btn-sm" onclick="copyPrevScWeek()" title="Copy status + lifts from the previous week">⧉ Copy prev</button>
       <button class="btn btn-ghost" onclick="closeModal('scWeekModal')">Cancel</button>
       <button class="btn btn-primary" onclick="saveScWeek()">Save Week</button>
-    </div>
-  </div>
-</div>
-
-<!-- ═══ ELO HISTORY MODAL ═══ -->
-<div class="modal-overlay" id="eloHistoryModal">
-  <div class="modal" style="width:760px">
-    <div class="modal-header">
-      <div class="modal-title" id="eloHistoryTitle">ELO History</div>
-      <button class="modal-close" onclick="closeModal('eloHistoryModal')">✕</button>
-    </div>
-    <div class="modal-body">
-      <div id="eloHistoryStats"></div>
-      <div id="eloHistoryChart"></div>
-      <div style="font-size:10px;color:var(--text3);text-align:center;margin-top:8px;font-family:'Anton',sans-serif;letter-spacing:1px">
-        Each point = match-driven ELO update · hover for date + rating
-      </div>
-    </div>
-    <div class="modal-footer">
-      <button class="btn btn-ghost" onclick="closeModal('eloHistoryModal')">Close</button>
     </div>
   </div>
 </div>
@@ -4031,22 +3958,19 @@ function buildGameCardHTML(g) {
   const oppRecord = g.opponent_id
     ? state.opponents.find(o => o.id === g.opponent_id)
     : state.opponents.find(o => o.name?.toLowerCase() === g.opponent?.toLowerCase());
-  const yourElo = state.settings?.team_elo || ELO_DEFAULT;
-  const mdi = oppRecord ? calculateMDI(yourElo, oppRecord.current_elo, buildMatchContext(g, state.games)) : null;
   const resultColor = g.result === 'W' ? '#2eb86b' : g.result === 'L' ? '#ff6b6b' : g.result === 'D' ? '#c5d12b' : null;
   const scoreText = (g.scoreUs != null && g.scoreThem != null) ? `${g.scoreUs}–${g.scoreThem}` : null;
+  const crest = oppRecord?.badge_url ? `<img src="${escapeAttr(oppRecord.badge_url)}" style="width:16px;height:16px;object-fit:contain;flex-shrink:0" onerror="this.style.display='none'">` : '';
   return `
     <div class="session-card game-card" style="cursor:pointer" onclick="event.stopPropagation();editGame('${g.id || ''}')">
       <div class="session-card-header">
         <span class="session-type" style="color:var(--game)">⚽ Match</span>
         <div style="display:flex;align-items:center;gap:6px">
-          ${mdi != null ? `<span style="font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:700;color:${mdiColor(mdi)};background:${mdiColor(mdi)}22;padding:2px 5px;border-radius:3px" title="Match Difficulty Index">MDI ${mdi.toFixed(1)}</span>` : ''}
           <span class="session-duration">${g.venue || ''}</span>
         </div>
       </div>
       <div style="font-size:12px;color:var(--text2);margin-bottom:4px;display:flex;align-items:center;gap:6px">
-        <span>${g.opponent || 'Opponent TBC'}</span>
-        ${oppRecord ? `<span style="font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--text3)">·  ELO ${oppRecord.current_elo}</span>` : ''}
+        ${crest}<span>${g.opponent || 'Opponent TBC'}</span>
       </div>
       ${g.competition ? `<div style="font-size:11px;color:var(--text3);margin-bottom:6px">${g.competition}</div>` : ''}
       ${(scoreText || g.result) ? `
@@ -4763,11 +4687,8 @@ function clearGameForm() {
    'gameScoreUs','gameScoreThem','gameSquadSize','gameAvailable',
    'gameTravelKm','gameTzHours','gameDaysRest','gameForm'
   ].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
-  document.getElementById('gameOppEloChip').style.display = 'none';
-  document.getElementById('gameOppEloChip').textContent = '';
   const crestEl = document.getElementById('gameOppCrest');
   if (crestEl) crestEl.textContent = '⚽';
-  document.getElementById('gameMdiPreview').style.display = 'none';
   document.getElementById('gameAvailPct').textContent = '';
   document.getElementById('gameRestAuto').textContent = '';
   document.getElementById('gameFormAuto').textContent = '';
@@ -4976,15 +4897,6 @@ function updateGameCrest(name) {
 
 function onOpponentChange() {
   const name = document.getElementById('gameOpponent').value.trim();
-  const opp = (state.opponents || []).find(o => o.name.toLowerCase() === name.toLowerCase());
-  const chip = document.getElementById('gameOppEloChip');
-  if (opp) {
-    chip.style.display = 'inline';
-    chip.textContent = `ELO ${opp.current_elo}`;
-  } else {
-    chip.style.display = 'none';
-    chip.textContent = '';
-  }
   updateGameCrest(name);
 
   // Auto-fill travel km if your team + opponent are both known MLS teams,
@@ -5007,6 +4919,7 @@ function onOpponentChange() {
 }
 
 function refreshGameMdi() {
+  if (!document.getElementById('gameMdiPreview')) return; // MDI/ELO removed from UI
   const name = document.getElementById('gameOpponent').value.trim();
   const opp = (state.opponents || []).find(o => o.name.toLowerCase() === name.toLowerCase());
   const preview = document.getElementById('gameMdiPreview');
@@ -5275,11 +5188,6 @@ function openDayPanel(dateStr) {
 
   // Game strip
   if (game) {
-    const oppRecord = game.opponent_id
-      ? state.opponents.find(o => o.id === game.opponent_id)
-      : state.opponents.find(o => o.name?.toLowerCase() === game.opponent?.toLowerCase());
-    const yourElo = state.settings?.team_elo || ELO_DEFAULT;
-    const mdi = oppRecord ? calculateMDI(yourElo, oppRecord.current_elo, buildMatchContext(game, state.games)) : null;
     const resultColor = game.result === 'W' ? '#2eb86b' : game.result === 'L' ? '#ff6b6b' : game.result === 'D' ? '#c5d12b' : null;
     const scoreText = (game.scoreUs != null && game.scoreThem != null) ? `${game.scoreUs}–${game.scoreThem}` : null;
 
@@ -5291,7 +5199,6 @@ function openDayPanel(dateStr) {
           <span class="game-strip-date">${game.competition || ''} ${game.venue ? '· ' + game.venue : ''}</span>
         </div>
         <div style="display:flex;align-items:center;gap:8px;margin-left:auto">
-          ${mdi != null ? `<span style="font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:700;color:${mdiColor(mdi)};background:${mdiColor(mdi)}22;padding:3px 6px;border-radius:3px" title="Match Difficulty Index">MDI ${mdi.toFixed(1)}</span>` : ''}
           ${game.result ? `<span style="font-family:'Anton',sans-serif;font-weight:700;color:${resultColor}">${game.result}</span>` : ''}
           ${scoreText ? `<span style="font-family:'JetBrains Mono',monospace;font-size:13px">${scoreText}</span>` : ''}
           <button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();editGame('${game.id}')">✏ Edit</button>
@@ -7103,13 +7010,8 @@ async function seedMlsOpponents() {
 
 // ── YOUR TEAM PICKER ──
 function onTeamPicked() {
-  // Convenience: auto-fill ELO from the seeded opponents table if your team is in there
-  const name = document.getElementById('settingsTeamName').value;
-  if (!name || name === '__other__') return;
-  const seeded = (state.opponents || []).find(o => o.name.toLowerCase() === name.toLowerCase());
-  if (seeded && (!state.settings?.team_elo || state.settings.team_elo === 1500)) {
-    document.getElementById('settingsTeamElo').value = seeded.current_elo;
-  }
+  // Team-ELO auto-fill removed with the ELO ratings; kept as a no-op so the
+  // onchange handler stays valid.
 }
 
 // ── IMPORT MY TEAM'S MLS SCHEDULE ──
@@ -9834,29 +9736,74 @@ async function loadOpponents() {
 function renderOpponentList() {
   const el = document.getElementById('opponentList');
   if (!el) return;
-  const list = state.opponents || [];
+  const list = (state.opponents || []).slice().sort((a, b) => (a.name || '').localeCompare(b.name || ''));
   if (list.length === 0) {
-    el.innerHTML = '<div style="font-size:11px;color:var(--text3);font-family:\'Anton\',sans-serif;letter-spacing:1px;padding:8px 0">No opponents seeded yet. Click the button above to pull MLS data.</div>';
+    el.innerHTML = '<div style="font-size:11px;color:var(--text3);font-family:\'Anton\',sans-serif;letter-spacing:1px;padding:8px 0">No teams yet. Click “Seed MLS Teams” above to pull teams + logos.</div>';
     return;
   }
+  const withLogo = list.filter(o => o.badge_url).length;
   el.innerHTML = `
-    <div style="font-size:11px;color:var(--text3);font-family:'Anton',sans-serif;letter-spacing:1px;margin-bottom:6px">${list.length} OPPONENTS · RANKED BY ELO · CLICK A TEAM FOR HISTORY</div>
-    <div style="max-height:300px;overflow-y:auto;border:1px solid var(--border);border-radius:var(--radius)">
-      ${list.map((o, i) => `
-        <div onclick="openOpponentHistory('${o.id}')" style="display:flex;align-items:center;justify-content:space-between;padding:6px 10px;border-bottom:1px solid var(--border);font-size:12px;cursor:pointer" onmouseover="this.style.background='var(--surface3)'" onmouseout="this.style.background=''">
-          <span><span style="color:var(--text3);font-family:'JetBrains Mono',monospace;width:24px;display:inline-block">${i + 1}.</span> ${o.name}</span>
-          <span style="display:flex;align-items:center;gap:8px">
-            <span style="font-size:9px;color:var(--text3);font-family:'Anton',sans-serif;letter-spacing:1px">${(o.elo_history || []).length} updates</span>
-            <span style="font-family:'JetBrains Mono',monospace;color:var(--accent);font-weight:600">${o.current_elo}</span>
-          </span>
+    <div style="font-size:11px;color:var(--text3);font-family:'Anton',sans-serif;letter-spacing:1px;margin-bottom:6px">${list.length} TEAMS · ${withLogo} WITH LOGOS</div>
+    <div style="max-height:320px;overflow-y:auto;border:1px solid var(--border);border-radius:var(--radius)">
+      ${list.map(o => `
+        <div style="display:flex;align-items:center;gap:10px;padding:6px 10px;border-bottom:1px solid var(--border);font-size:12px">
+          <div style="width:26px;height:26px;flex-shrink:0;display:flex;align-items:center;justify-content:center">
+            ${o.badge_url ? `<img src="${escapeAttr(o.badge_url)}" style="width:24px;height:24px;object-fit:contain" onerror="this.outerHTML='⚽'">` : '<span title="No logo" style="color:var(--text3)">⚽</span>'}
+          </div>
+          <span style="flex:1">${o.name}</span>
+          ${o.badge_url ? '' : '<span style="font-size:9px;color:var(--text3);font-family:\'Anton\',sans-serif;letter-spacing:1px">NO LOGO</span>'}
         </div>
       `).join('')}
     </div>
   `;
 }
 
-// ── ELO HISTORY CHART ──
+// Look up each team's crest from TheSportsDB and save it. Matches the MLS team
+// list first, then an individual team search for any non-MLS teams.
+async function refreshTeamLogos() {
+  const statusEl = document.getElementById('seedStatus');
+  const setStatus = (t) => { if (statusEl) statusEl.textContent = t; };
+  const opps = state.opponents || [];
+  if (!opps.length) { setStatus('No teams yet — seed teams first.'); return; }
+  try {
+    setStatus('Looking up logos…');
+    const resp = await fetch(`${SPORTSDB_BASE}/search_all_teams.php?l=American%20Major%20League%20Soccer`);
+    const json = await resp.json();
+    const byName = {};
+    (json.teams || []).forEach(t => { if (t.strTeam) byName[t.strTeam.toLowerCase().trim()] = t.strBadge || null; });
+    const findBadge = (name) => {
+      const n = (name || '').toLowerCase().trim();
+      if (byName[n]) return byName[n];
+      const key = Object.keys(byName).find(k => k.includes(n) || n.includes(k));
+      return key ? byName[key] : null;
+    };
+    let updated = 0, missing = 0;
+    for (const o of opps) {
+      let badge = findBadge(o.name);
+      if (!badge) {
+        try {
+          const r = await fetch(`${SPORTSDB_BASE}/searchteams.php?t=${encodeURIComponent(o.name)}`);
+          const j = await r.json();
+          badge = (j.teams && j.teams[0]) ? (j.teams[0].strBadge || null) : null;
+        } catch (e) { /* ignore */ }
+      }
+      if (badge && badge !== o.badge_url) {
+        const { error } = await sb.from('opponents').update({ badge_url: badge }).eq('id', o.id);
+        if (!error) { o.badge_url = badge; updated++; }
+      } else if (!badge && !o.badge_url) { missing++; }
+      setStatus(`Looking up logos… ${updated} updated`);
+    }
+    renderOpponentList();
+    setStatus(`✓ ${updated} logo(s) updated${missing ? ` · ${missing} not found` : ''}`);
+  } catch (e) {
+    console.error('Refresh logos failed:', e);
+    setStatus('✗ ' + e.message);
+  }
+}
+
+// ── ELO HISTORY CHART (dormant — ELO ratings removed from the UI) ──
 function openOpponentHistory(oppId) {
+  if (!document.getElementById('eloHistoryModal')) return; // ELO UI removed
   const opp = state.opponents.find(o => o.id === oppId);
   if (!opp) return;
   const history = opp.elo_history || [];
