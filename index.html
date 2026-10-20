@@ -3063,7 +3063,7 @@ async function loadAllData() {
     withTimeout(sb.from('games').select('*').eq('user_id', uid),                                   'games'),
     withTimeout(sb.from('week_settings').select('*').eq('user_id', uid).eq('season', season),      'week_settings'),
     withTimeout(sb.from('drills').select('*').order('created_at', { ascending: false }),           'drills'),
-    withTimeout(sb.from('app_settings').select('*').limit(1).maybeSingle(),                        'app_settings'),
+    withTimeout(sb.from('app_settings').select('*').order('updated_at', { ascending: false }).limit(1).maybeSingle(), 'app_settings'),
     withTimeout(sb.from('sc_weeks').select('*').eq('user_id', uid).eq('season', season),            'sc_weeks'),
   ]);
 
