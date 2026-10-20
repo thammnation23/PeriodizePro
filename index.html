@@ -2008,9 +2008,7 @@
       </div>
     </div>
     <div id="scAnnualMap" style="margin-bottom:16px"></div>
-    <div id="scMicrocycle" style="margin-bottom:22px"></div>
-    <div id="scQualities" style="margin-bottom:22px"></div>
-    <div id="scPrePost"></div>
+    <div id="scMicrocycle"></div>
   </div>
 
   <!-- ── LIBRARY VIEW ── -->
@@ -9370,28 +9368,8 @@ const METHODOLOGY_SECTIONS = [
 ];
 
 // ══════════════════════════════════════════════════════
-//  STRENGTH & CONDITIONING  (annual plan + loading reference)
+//  STRENGTH & CONDITIONING  (week-by-week planner)
 // ══════════════════════════════════════════════════════
-// Grounded in Bompa / NSCA (Haff & Triplett) / Issurin block periodization /
-// Gamble — team-sport S&C. The season is dominated by in-season maintenance.
-const SC_QUALITIES = [
-  { key:'anatomical',  label:'Anatomical Adaptation', block:'Accumulation',   color:'#5dcaa5',
-    purpose:'Condition tissues, movement competency, work capacity', sets:'2–3 × 12–20', intensity:'40–60%', rest:'30–90s', tempo:'Controlled', methods:'Full-body multi-joint, unilateral, core, circuits', placement:'Off-season start' },
-  { key:'hypertrophy', label:'Hypertrophy',           block:'Accumulation',   color:'#7f77dd',
-    purpose:'Add functional muscle where needed (used sparingly in soccer)', sets:'3–6 × 6–12', intensity:'67–85%', rest:'60–90s', tempo:'Moderate (TUT)', methods:'Compound + accessory (squat, press, RDL, rows)', placement:'Off / early pre-season' },
-  { key:'maxstrength', label:'Maximal Strength',      block:'Intensification',color:'#d85a30',
-    purpose:'Neural — raise the force ceiling (recruitment, rate coding)', sets:'3–5 × 1–6', intensity:'≥85%', rest:'2–5 min', tempo:'Explosive intent, controlled eccentric', methods:'Heavy compounds — squat, deadlift, hip thrust', placement:'Late off / pre-season' },
-  { key:'power',       label:'Power / Conversion',    block:'Realization',    color:'#e24b4a',
-    purpose:'Convert max strength → RFD, speed, explosive power', sets:'3–6 × 1–5', intensity:'Strength-speed 75–90% · ballistic 30–60%', rest:'2–5 min', tempo:'Maximal / explosive', methods:'Olympic derivatives, jump squats, med-ball, plyos, contrast (PAP)', placement:'Pre-season → season' },
-  { key:'maintenance', label:'In-Season Maintenance', block:'Realization',    color:'#378add',
-    purpose:'Retain strength + power at minimum effective dose, least fatigue', sets:'Strength 1–3 × 3–6 · Power 2–4 × 2–3', intensity:'Strength ≥80–85% · power 30–60%', rest:'2–4 min', tempo:'Explosive intent', methods:'Low-volume heavy + ballistic/plyo; minimum effective dose', placement:'In-season' },
-  { key:'peaking',     label:'Peaking / Taper',       block:'Realization',    color:'#f5a623',
-    purpose:'Shed fatigue, express peak for key fixtures', sets:'↓ volume 40–60%, hold intensity', intensity:'Maintain high', rest:'Full', tempo:'Explosive', methods:'Reduce sets/frequency, keep sharpness', placement:'Playoffs / key blocks' },
-  { key:'transition',  label:'Transition',            block:'Deload',         color:'#888780',
-    purpose:'Regenerate physically & mentally, avoid full detraining', sets:'Unstructured, low', intensity:'Low', rest:'—', tempo:'Easy', methods:'Cross-training, games, mobility', placement:'End of season' },
-];
-function qualityByKey(k) { return SC_QUALITIES.find(q => q.key === k); }
-
 // Week load status + per-day lift types for the weekly S&C planner.
 // Week load statuses are user-editable (stored in app_settings.sc_statuses).
 const DEFAULT_SC_STATUSES = [
@@ -9440,9 +9418,6 @@ function dayEntriesRaw(v) {
 function dayEntries(v) { return dayEntriesRaw(v).filter(e => e.lift); }
 function dayPhase(v, phase) { return dayEntries(v).find(e => e.phase === phase) || null; }
 
-const SC_PRE  = ['General + specific warm-up (RAMP)', 'Activation — glutes, trunk, scap', 'Movement prep / dynamic mobility', 'CNS potentiation / PAP (jumps, throws, accels)', 'Prehab — hamstring, groin/adductor, ankle, knee'];
-const SC_POST = ['Cool-down / aerobic flush', 'Static stretch + mobility', 'Soft-tissue / foam rolling', 'Refuel — protein + carbs, hydrate', 'Down-regulation breathing, sleep hygiene', 'Recovery / wellness check to steer next session'];
-
 function currentSeasonSC() { return document.getElementById('seasonSelect')?.value || '2025-26'; }
 function scWeekToDB(weekNum, w) { return { user_id: currentUser.id, season: currentSeasonSC(), week_num: weekNum, status: w.status || null, days: w.days || {}, updated_at: new Date().toISOString() }; }
 async function saveScWeekDB(weekNum, w) {
@@ -9462,8 +9437,6 @@ async function deleteScWeekDB(weekNum) {
 function renderStrength() {
   renderScWeekPlanner();
   renderScLiftLegend();
-  renderScQualities();
-  renderScPrePost();
 }
 
 let scShowFullYear = false;
@@ -9507,9 +9480,10 @@ function renderScWeekPlanner() {
         return `<div style="flex:1;min-height:26px;display:flex;align-items:center;justify-content:center;text-align:center;border-radius:2px;padding:3px 5px;background:${on ? lf.color + '2e' : 'transparent'};border:1px solid ${on ? lf.color : 'var(--border)'};color:${on ? lf.color : 'var(--text3)'};font-family:'Anton',sans-serif;font-size:12px;font-weight:700;letter-spacing:.2px;line-height:1.12;overflow-wrap:break-word">${on ? escapeAttr(lf.label) : ''}</div>`; };
       const body = entries.length
         ? `<div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:2px">${seg(pre)}${seg(post)}</div>`
-        : `<div style="flex:1;display:flex;align-items:center;justify-content:center;color:var(--text3);font-size:12px;border:1px solid var(--border);border-radius:3px;min-height:54px">${isMatch ? '⚽' : '·'}</div>`;
-      const matchMark = (isMatch && entries.length) ? `<span style="position:absolute;top:-2px;right:0;font-size:10px;line-height:1;z-index:1">⚽</span>` : '';
-      return `<div title="${escapeAttr(tip)}" style="position:relative;flex:1;min-width:0;min-height:54px;display:flex">${body}${matchMark}</div>`;
+        : `<div style="flex:1;display:flex;align-items:center;justify-content:center;color:var(--text3);font-size:12px;border:1px solid var(--border);border-radius:3px;min-height:44px">·</div>`;
+      // Date label (day of month) on top of each cell, with the match ball inline.
+      const dateHdr = `<div style="font-size:9px;line-height:1.2;text-align:center;font-family:'JetBrains Mono',monospace;color:${isMatch ? 'var(--game)' : 'var(--text3)'}">${MONTHS_SHORT[d.getMonth()]} ${d.getDate()}${isMatch ? ' ⚽' : ''}</div>`;
+      return `<div title="${escapeAttr(tip)}" style="position:relative;flex:1;min-width:0;min-height:54px;display:flex;flex-direction:column;gap:1px">${dateHdr}${body}</div>`;
     }).join('');
     const statusPill = st
       ? `<span style="font-family:'Anton',sans-serif;font-size:10px;letter-spacing:1px;padding:2px 8px;border-radius:3px;background:${st.color}22;color:${st.color}">${st.label.toUpperCase()}</span>`
@@ -9546,30 +9520,6 @@ function jumpToCurrentScWeek() {
   if (row) row.scrollIntoView({ block: 'center', behavior: 'smooth' });
 }
 
-function renderScQualities() {
-  const host = document.getElementById('scQualities');
-  if (!host) return;
-  const rows = SC_QUALITIES.map(q => `
-    <tr style="border-top:1px solid var(--border)">
-      <td style="padding:7px 8px;vertical-align:top"><span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:${q.color};margin-right:6px;vertical-align:middle"></span><span style="font-weight:600;font-size:12px">${q.label}</span><div style="font-size:9px;color:var(--text3);font-family:'Anton',sans-serif;letter-spacing:.5px;margin-top:1px">${q.block.toUpperCase()}</div></td>
-      <td style="padding:7px 8px;font-size:11px;color:var(--text2);vertical-align:top">${q.purpose}</td>
-      <td style="padding:7px 8px;font-family:'JetBrains Mono',monospace;font-size:11px;white-space:nowrap;vertical-align:top">${q.sets}</td>
-      <td style="padding:7px 8px;font-family:'JetBrains Mono',monospace;font-size:11px;vertical-align:top">${q.intensity}</td>
-      <td style="padding:7px 8px;font-family:'JetBrains Mono',monospace;font-size:11px;white-space:nowrap;vertical-align:top">${q.rest}</td>
-      <td style="padding:7px 8px;font-size:10.5px;color:var(--text2);vertical-align:top">${q.methods}</td>
-    </tr>`).join('');
-  host.innerHTML = `
-    <div style="font-family:'Anton',sans-serif;letter-spacing:1.5px;font-size:12px;color:var(--text2);margin-bottom:6px">STRENGTH QUALITIES &amp; LOADING</div>
-    <div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);overflow-x:auto">
-      <table style="width:100%;border-collapse:collapse;min-width:680px">
-        <thead><tr style="background:var(--surface3);font-family:'Anton',sans-serif;letter-spacing:1px;font-size:9px;color:var(--text3);text-transform:uppercase">
-          <th style="text-align:left;padding:7px 8px">Quality</th><th style="text-align:left;padding:7px 8px">Purpose</th><th style="text-align:left;padding:7px 8px">Sets × Reps</th><th style="text-align:left;padding:7px 8px">%1RM</th><th style="text-align:left;padding:7px 8px">Rest</th><th style="text-align:left;padding:7px 8px">Methods</th>
-        </tr></thead>
-        <tbody>${rows}</tbody>
-      </table>
-    </div>`;
-}
-
 function renderScLiftLegend() {
   const host = document.getElementById('scMicrocycle');
   if (!host) return;
@@ -9581,24 +9531,6 @@ function renderScLiftLegend() {
     <div style="display:flex;flex-wrap:wrap;gap:22px;align-items:flex-start;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:12px 14px">
       <div><div style="font-family:'Anton',sans-serif;letter-spacing:1px;font-size:10px;color:var(--text3);margin-bottom:7px">WEEK STATUS</div><div style="display:flex;gap:14px;flex-wrap:wrap">${stats}</div></div>
       <div style="flex:1;min-width:260px"><div style="font-family:'Anton',sans-serif;letter-spacing:1px;font-size:10px;color:var(--text3);margin-bottom:7px">LIFT TYPES</div><div style="display:flex;gap:14px;flex-wrap:wrap">${lifts}</div></div>
-    </div>`;
-}
-
-function renderScPrePost() {
-  const host = document.getElementById('scPrePost');
-  if (!host) return;
-  const list = (items, c) => items.map(x => `<li style="margin-bottom:4px;font-size:11.5px;color:var(--text2);line-height:1.4"><span style="color:${c}">•</span> ${x}</li>`).join('');
-  host.innerHTML = `
-    <div style="font-family:'Anton',sans-serif;letter-spacing:1.5px;font-size:12px;color:var(--text2);margin-bottom:8px">PRE / POST SESSION</div>
-    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:10px">
-      <div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:12px 14px">
-        <div style="font-family:'Anton',sans-serif;letter-spacing:1px;font-size:12px;color:#2eb86b;margin-bottom:6px">PRE — PRIME &amp; PROTECT</div>
-        <ul style="list-style:none;padding:0;margin:0">${list(SC_PRE, '#2eb86b')}</ul>
-      </div>
-      <div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:12px 14px">
-        <div style="font-family:'Anton',sans-serif;letter-spacing:1px;font-size:12px;color:#378add;margin-bottom:6px">POST — RECOVER &amp; ADAPT</div>
-        <ul style="list-style:none;padding:0;margin:0">${list(SC_POST, '#378add')}</ul>
-      </div>
     </div>`;
 }
 
