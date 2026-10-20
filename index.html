@@ -4289,6 +4289,8 @@ function exportWeekPDF() {
     if (n >= 4) return '#f5c518'; if (n >= 1) return '#3cb558'; return '#ffffff'; };
   const fmtDur = (v) => { v = String(v || '').trim(); if (!v) return '';
     return /^[\d\s\-–to]+$/i.test(v) ? v + ' min' : v; };
+  // Parse a duration string to minutes (average of a range) for the bar scale.
+  const parseDurMin = (v) => { const nums = (String(v || '').match(/\d+/g) || []).map(Number); return nums.length ? Math.round(nums.reduce((a, b) => a + b, 0) / nums.length) : 0; };
 
   // Gather per-day data + weekly totals
   const cols = [];
@@ -4309,13 +4311,16 @@ function exportWeekPDF() {
 
     const primary = sessions[0] || null;
     const dur = sessions.map(s => fmtDur(s.duration)).filter(Boolean).join(' + ');
-    const focus = primary ? (primary.principle || [primary.type, primary.type2].filter(Boolean).join(' / ')) : (game ? 'Match Day' : '');
+    const durMin = primary ? parseDurMin(primary.duration) : (game ? 90 : 0);
+    const typeColor = primary ? getTypeColor(primary.type) : (game ? '#e8412c' : '#ffffff');
+    const sessType = primary ? [primary.type, primary.type2].filter(Boolean).join(' / ') : (game ? 'Match Day' : '');
+    const scEntries = dayEntries(state.scWeeks?.[w]?.days?.[DAYS[i]]);
     let drills = sessions.flatMap(s => (s.exercises || []).map(ex => ex.name || '').filter(Boolean));
     if (!drills.length && primary) drills = [primary.type, primary.type2].filter(Boolean);
     if (game) drills = [`Match v ${game.opponent || 'TBD'}${game.competition ? ' (' + game.competition + ')' : ''}`, ...drills];
     const notes = [...sessions.map(s => s.notes), game ? game.notes : ''].filter(n => n && n.trim()).join(' · ');
 
-    cols.push({ i, d, sessions, game, m, dur, focus, drills, notes,
+    cols.push({ i, d, sessions, game, m, dur, durMin, typeColor, sessType, scEntries, drills, notes,
       intensity: primary ? parseInt(primary.intensity) || 0 : (game ? 9 : 0), has: !!(sessions.length || game) });
   }
 
@@ -4334,15 +4339,27 @@ function exportWeekPDF() {
        <div style="color:#cfd3da;font-size:9px;font-family:Arial,sans-serif">${MONTHS_SHORT[c.d.getMonth()]} ${c.d.getDate()}</div>
      </td>`).join('');
 
+  // Duration & Intensity: a bar per day whose HEIGHT scales 0–120 min and whose
+  // COLOUR is the session-type colour (games red). Duration value labelled on it.
+  const BARH = 66;
   const durRow = cols.map(c => {
-    const bg = c.game ? '#e8412c' : (c.intensity ? heat(c.intensity) : '#ffffff');
-    const banner = c.game ? `<div style="background:#b5301f;color:#fff;font-family:'Anton',sans-serif;font-size:10px;letter-spacing:.5px;padding:2px 3px;margin:-5px -6px 4px">vs ${esc(c.game.opponent || 'TBD')}</div>` : '';
-    const txt = c.dur || (c.game ? 'Match' : (c.has ? '' : ''));
-    return `<td style="background:${bg};color:${c.game ? '#fff' : '#111'};text-align:center;font-family:'Anton',sans-serif;font-size:12px;padding:5px 6px;${BORD}">${banner}${esc(txt)}</td>`;
+    const pct = Math.max(0, Math.min(100, (c.durMin / 120) * 100));
+    const color = c.typeColor || '#ffffff';
+    const label = c.dur || (c.game ? 'Match' : '');
+    const bar = c.durMin > 0 ? `<div style="position:absolute;bottom:0;left:0;right:0;height:${pct}%;background:${color}"></div>` : '';
+    const banner = c.game ? `<div style="position:absolute;top:0;left:0;right:0;background:#b5301f;color:#fff;font-family:'Anton',sans-serif;font-size:8px;letter-spacing:.3px;padding:1px 2px;z-index:2;white-space:nowrap;overflow:hidden">vs ${esc(c.game.opponent || 'TBD')}</div>` : '';
+    const lbl = label ? `<div style="position:absolute;bottom:2px;left:0;right:0;text-align:center;font-family:'Anton',sans-serif;font-size:11px;color:${pct >= 24 ? '#fff' : '#111'};z-index:1">${esc(label)}</div>` : '';
+    return `<td style="position:relative;height:${BARH}px;background:#fff;padding:0;${BORD}">${bar}${banner}${lbl}</td>`;
   }).join('');
 
-  const focusRow = cols.map(c =>
-    `<td style="background:#cfe0f5;color:#11243a;text-align:center;font-family:'Anton',sans-serif;letter-spacing:.3px;font-size:11px;padding:5px 6px;${BORD}">${esc(c.focus || '')}</td>`).join('');
+  // Recommended Session Type + the day's S&C slots (Activation / Gym).
+  const focusRow = cols.map(c => {
+    const scList = (c.scEntries || []).map(e => `${phaseLabel(e.phase)}: ${liftByKey(e.lift).label}${e.load ? ' (' + e.load + ')' : ''}`);
+    return `<td style="background:#cfe0f5;color:#11243a;text-align:center;vertical-align:top;padding:4px 5px;${BORD}">
+      <div style="font-family:'Anton',sans-serif;letter-spacing:.3px;font-size:11px;font-weight:700">${esc(c.sessType || '')}</div>
+      ${scList.map(x => `<div style="font-family:Arial,sans-serif;font-size:8.5px;color:#1a3a5a;margin-top:2px;line-height:1.2">${esc(x)}</div>`).join('')}
+    </td>`;
+  }).join('');
 
   const metricRow = (label, key, total) =>
     `<tr><td style="${LBL}">${label}</td>${
@@ -4384,7 +4401,7 @@ function exportWeekPDF() {
   </tr>
   <tr><td style="background:#000;${BORD}"></td>${dayHeader}<td style="background:#000;color:#f5901e;text-align:center;font-family:'Anton',sans-serif;font-size:12px;${BORD}">Total</td></tr>
   <tr><td style="${LBL}">Duration &amp; Intensity</td>${durRow}<td style="background:#333;${BORD}"></td></tr>
-  <tr><td style="${LBL}">Physical Focus</td>${focusRow}<td style="background:#333;${BORD}"></td></tr>
+  <tr><td style="${LBL}">Recommended Session Type</td>${focusRow}<td style="background:#333;${BORD}"></td></tr>
   ${metricRow('TD',      'td',  totals.td)}
   ${metricRow('HSR',     'hsr', totals.hsr)}
   ${metricRow('Sprint',  'sd',  totals.sd)}
