@@ -3691,10 +3691,17 @@ function renderYear() {
   scLbl.style.fontSize = '9px';
   scRow.appendChild(scLbl);
   for (let w = 1; w <= 52; w++) {
-    const st = statusCfg(state.scWeeks[w]?.status);
+    const wk = state.scWeeks[w];
+    const st = statusCfg(wk?.status);
     const cell = document.createElement('div');
     cell.style.cssText = `height:10px;border-radius:2px;background:${st ? st.color : 'var(--surface2)'};cursor:pointer;opacity:0.85;`;
-    cell.title = `W${w}${st ? ' · ' + st.label : ' · No S&C status'}`;
+    // Tooltip carries the week's planned lifts over from the Strength page
+    let liftSummary = '';
+    if (wk?.days) {
+      const parts = DAYS.map(dn => { const es = dayEntries(wk.days[dn]); return es.length ? `${dn} ${es.map(e => liftByKey(e.lift).short).join('/')}` : null; }).filter(Boolean);
+      if (parts.length) liftSummary = '\n' + parts.join(' · ');
+    }
+    cell.title = `W${w}${st ? ' · ' + st.label : ' · No S&C status'}${liftSummary}`;
     cell.addEventListener('click', () => { switchTab('strength'); setTimeout(() => { try { openScWeek(w); } catch (e) {} }, 120); });
     scRow.appendChild(cell);
   }
@@ -4150,15 +4157,27 @@ function renderMonth() {
       + (dateStr === selectedDayDate ? ' selected' : '');
 
     const game = isGame ? state.games.find(gg => gg.date === dateStr) : null;
+    // S&C plan for this day — a week-status dot + a chip per planned lift
+    const scDn = DAYS[(d.getDay() + 6) % 7];
+    const scStatus = statusCfg(state.scWeeks[weekNum]?.status);
+    const scEntries = dayEntries(state.scWeeks[weekNum]?.days?.[scDn]);
+    const scLiftRow = scEntries.length
+      ? `<div style="display:flex;flex-wrap:wrap;gap:3px;margin-top:3px">${scEntries.map(e => { const lf = liftByKey(e.lift);
+          return `<span title="${escapeAttr(phaseLabel(e.phase) + ': ' + lf.label + (e.load ? ' · ' + e.load : ''))}" style="font-family:'Anton',sans-serif;font-size:8px;font-weight:700;letter-spacing:.3px;padding:1px 5px;border-radius:2px;background:${lf.color}2e;color:${lf.color};border:1px solid ${lf.color}">${lf.short}</span>`; }).join('')}</div>`
+      : '';
     cell.innerHTML = `
       <div class="month-day-header-row">
         <div class="month-day-num">${d.getDate()}</div>
         ${buildSquadBadgeHTML(dateStr)}
-        <div class="week-badge">W${weekNum}</div>
+        <div style="display:flex;align-items:center;gap:4px">
+          ${scStatus ? `<span title="S&C week: ${scStatus.label}" style="width:8px;height:8px;border-radius:50%;background:${scStatus.color};display:inline-block"></span>` : ''}
+          <div class="week-badge">W${weekNum}</div>
+        </div>
       </div>
       <div class="month-day-body">
         ${game ? buildMonthGameChip(game) : ''}
         ${sessions.map(s => buildMonthSessionChip(s)).join('')}
+        ${scLiftRow}
         ${(!game && sessions.length === 0 && isCurrentMonth) ? '<div class="month-day-empty">＋</div>' : ''}
       </div>
     `;
