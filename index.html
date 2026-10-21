@@ -237,16 +237,17 @@
   .legend-item {
     display: flex;
     align-items: center;
-    gap: 8px;
-    font-size: 14px;
+    gap: 10px;
+    font-size: 16px;
     color: var(--text2);
   }
   .legend-dot {
-    width: 22px; height: 22px;
-    border-radius: 4px;
+    width: 30px; height: 30px;
+    border-radius: 5px;
     border: 1px solid var(--border);
     flex-shrink: 0;
   }
+  .year-legend { gap: 24px; row-gap: 14px; }
 
   /* ─── MONTH VIEW ─── */
   .month-nav-btn {
@@ -1892,7 +1893,7 @@
     <div id="yearGrid"></div>
     <div class="year-legend" style="margin-top:16px" id="yearLegendField"></div>
     <div class="year-legend" style="margin-top:10px" id="yearLegendMdi">
-      <span style="font-family:'Anton',sans-serif;letter-spacing:1.5px;color:var(--text3);font-size:14px;margin-right:8px">MATCH ⚽:</span>
+      <span style="font-family:'Anton',sans-serif;letter-spacing:1.5px;color:var(--text3);font-size:16px;margin-right:8px">MATCH ⚽:</span>
       <span class="legend-item"><span class="legend-dot" style="background:#e24b4a"></span>Home</span>
       <span class="legend-item"><span class="legend-dot" style="background:#7f77dd"></span>Away</span>
       <span class="legend-item"><span class="legend-dot" style="background:#9e9e9e"></span>Neutral</span>
