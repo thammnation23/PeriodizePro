@@ -9334,7 +9334,8 @@ function dayEntriesRaw(v) {
   if (v.lift || v.load) return [{ phase: v.phase || 'post', lift: v.lift || '', load: v.load || '' }];
   return [];
 }
-function dayEntries(v) { return dayEntriesRaw(v).filter(e => e.lift); }
+// Always ordered Activation (pre) → Gym (post), regardless of save order.
+function dayEntries(v) { const ord = { pre: 0, post: 1 }; return dayEntriesRaw(v).filter(e => e.lift).sort((a, b) => (ord[a.phase] ?? 9) - (ord[b.phase] ?? 9)); }
 function dayPhase(v, phase) { return dayEntries(v).find(e => e.phase === phase) || null; }
 
 function currentSeasonSC() { return document.getElementById('seasonSelect')?.value || '2025-26'; }
