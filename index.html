@@ -2280,21 +2280,6 @@
         <div style="font-size:11px;color:var(--text3);margin-top:5px;font-family:'Anton',sans-serif;letter-spacing:0.5px">e.g. GD −2 / +3 → session designed for teams losing by 2 to winning by 3</div>
       </div>
 
-      <hr class="section-divider">
-      <div class="subsection-label">Pre / Post Training <span style="color:var(--text3);font-size:10px;font-weight:400;letter-spacing:0;text-transform:none">— gym, activation, recovery, etc.</span></div>
-      <div id="prePostList"></div>
-      <button class="btn btn-ghost btn-sm" style="margin-top:8px" onclick="addPrePostEntry()">＋ Add Pre/Post Entry</button>
-
-      <hr class="section-divider">
-      <div class="subsection-label">Testing <span style="color:var(--text3);font-size:10px;font-weight:400;letter-spacing:0;text-transform:none">— select any tests run this session</span></div>
-      <div id="testingChips" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px"></div>
-      <div id="testingNotes"></div>
-
-      <div class="form-group" style="margin-top:14px;margin-bottom:14px">
-        <label>Activation Theme <span style="color:var(--text3);font-size:10px;font-weight:400;letter-spacing:0">— legacy free text</span></label>
-        <input type="text" id="sessionActivation" placeholder="e.g. Hip activation, Ankle prep, Glute circuit...">
-      </div>
-
       <div class="form-group">
         <label>Notes</label>
         <textarea id="sessionNotes" placeholder="Session notes, coaching cues, focus areas..."></textarea>
@@ -2917,9 +2902,14 @@
         <label>Week load status</label>
         <div id="scWeekStatusBtns" style="display:flex;gap:6px"></div>
       </div>
-      <div class="form-group">
+      <div class="form-group" style="margin-bottom:16px">
         <label>Lift type per day</label>
         <div id="scWeekDays"></div>
+      </div>
+      <div class="form-group">
+        <label>Testing this week <span style="color:var(--text3);font-size:10px;font-weight:400;letter-spacing:0">— select any tests run</span></label>
+        <div id="scWeekTestChips" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px"></div>
+        <div id="scWeekTestNotes"></div>
       </div>
     </div>
     <div class="modal-footer">
@@ -3073,7 +3063,7 @@ async function loadAllData() {
   // S&C weekly plan — { [weekNum]: { status, days:{Mon:lift,…}, dbId } } (non-fatal)
   state.scWeeks = {};
   if (scR && scR.status === 'fulfilled' && !scR.value.error) {
-    (scR.value.data || []).forEach(r => { state.scWeeks[r.week_num] = { status: r.status || '', days: r.days || {}, dbId: r.id }; });
+    (scR.value.data || []).forEach(r => { state.scWeeks[r.week_num] = { status: r.status || '', days: r.days || {}, testing: r.testing || [], dbId: r.id }; });
   } else if (scR?.value?.error) {
     console.warn('sc_weeks load failed:', scR.value.error.message);
   }
@@ -4512,7 +4502,7 @@ function editSession(id) {
   document.getElementById('metricAccDec').value = ((parseInt(s.acc)||0) + (parseInt(s.dec)||0)) || '';
   document.getElementById('gdMinus').value = s.gdMinus || '';
   document.getElementById('gdPlus').value  = s.gdPlus  || '';
-  document.getElementById('sessionActivation').value = s.activation || '';
+  currentActivation = s.activation || ''; // field removed from form; value preserved on save
   // Load attached media
   sessionAttachments.warmup = (s.warmupMedia || []).map(id => state.media.find(m => m.id === id)).filter(Boolean);
   sessionAttachments.session = (s.sessionMedia || []).map(id => state.media.find(m => m.id === id)).filter(Boolean);
@@ -4554,6 +4544,7 @@ function clearSessionForm() {
   renderAttachedMedia('session');
   currentExercises = [];
   renderExercises();
+  currentActivation = '';
   currentPrePost = [];
   renderPrePost();
   currentTesting = [];
@@ -4672,7 +4663,7 @@ async function saveSession() {
     testing: currentTesting.map(t => ({ ...t })),
     gdMinus: document.getElementById('gdMinus').value,
     gdPlus:  document.getElementById('gdPlus').value,
-    activation: document.getElementById('sessionActivation').value,
+    activation: currentActivation, // field removed from form; preserved from existing value
     notes: document.getElementById('sessionNotes').value,
   };
 
@@ -5882,6 +5873,7 @@ let pickerSelections = new Set();
 // ── TESTING ──
 const TEST_TYPES = ['Nordic', 'CMJ', 'DJ', 'SJ', '10-5', 'Hip Ad/Ab 60', 'Hip Ad/Ab 0'];
 let currentTesting = []; // [{ test, notes }]
+let currentActivation = ''; // legacy session activation theme — preserved, not edited in-form
 
 function renderTestingChips() {
   const chipHost = document.getElementById('testingChips');
@@ -9348,7 +9340,7 @@ function dayEntries(v) { const ord = { pre: 0, post: 1 }; return dayEntriesRaw(v
 function dayPhase(v, phase) { return dayEntries(v).find(e => e.phase === phase) || null; }
 
 function currentSeasonSC() { return document.getElementById('seasonSelect')?.value || '2025-26'; }
-function scWeekToDB(weekNum, w) { return { user_id: currentUser.id, season: currentSeasonSC(), week_num: weekNum, status: w.status || null, days: w.days || {}, updated_at: new Date().toISOString() }; }
+function scWeekToDB(weekNum, w) { return { user_id: currentUser.id, season: currentSeasonSC(), week_num: weekNum, status: w.status || null, days: w.days || {}, testing: w.testing || [], updated_at: new Date().toISOString() }; }
 async function saveScWeekDB(weekNum, w) {
   setSyncStatus('syncing');
   const { data, error } = await sb.from('sc_weeks').upsert(scWeekToDB(weekNum, w), { onConflict: 'user_id,season,week_num' }).select().single();
@@ -9419,7 +9411,7 @@ function renderScWeekPlanner() {
       : `<span style="font-size:10px;color:var(--text3);font-family:'Anton',sans-serif;letter-spacing:1px">—</span>`;
     const hl = w === curWk ? 'rgba(0,212,255,0.06)' : '';
     rows += `<div id="scwk-row-${w}" onclick="openScWeek(${w})" style="display:grid;grid-template-columns:118px 92px 1fr;gap:10px;align-items:center;padding:6px 10px;border-top:1px solid var(--border);cursor:pointer;background:${hl}" onmouseover="this.style.background='var(--surface3)'" onmouseout="this.style.background='${hl}'">
-        <div><span style="font-family:'JetBrains Mono',monospace;font-weight:700;font-size:12px">W${w}</span> <span style="font-size:10px;color:var(--text3)">${dates}</span></div>
+        <div><span style="font-family:'JetBrains Mono',monospace;font-weight:700;font-size:12px">W${w}</span> <span style="font-size:10px;color:var(--text3)">${dates}</span>${(wk.testing && wk.testing.length) ? ` <span title="${escapeAttr(wk.testing.map(t => t.test).join(', '))}" style="font-size:10px">🧪</span>` : ''}</div>
         <div>${statusPill}</div>
         <div style="display:flex;gap:4px">${dayCells}</div>
       </div>`;
@@ -9469,8 +9461,8 @@ let scWeekDraft = { status: '', days: {}, dbId: undefined };
 
 function openScWeek(weekNum) {
   editingScWeekNum = weekNum;
-  const existing = state.scWeeks[weekNum] || { status: '', days: {} };
-  scWeekDraft = { status: existing.status || '', days: JSON.parse(JSON.stringify(existing.days || {})), dbId: existing.dbId };
+  const existing = state.scWeeks[weekNum] || { status: '', days: {}, testing: [] };
+  scWeekDraft = { status: existing.status || '', days: JSON.parse(JSON.stringify(existing.days || {})), testing: JSON.parse(JSON.stringify(existing.testing || [])), dbId: existing.dbId };
   const start = getWeekStart(weekNum);
   const end = new Date(start); end.setDate(end.getDate() + 6);
   document.getElementById('scWeekModalTitle').textContent = `Week ${weekNum} · ${MONTHS_SHORT[start.getMonth()]} ${start.getDate()} – ${MONTHS_SHORT[end.getMonth()]} ${end.getDate()}`;
@@ -9503,7 +9495,30 @@ function renderScWeekEditor() {
       ${SC_PHASES.map(p => slotRow(dn, p.key)).join('')}
     </div>`;
   }).join('');
+  renderScWeekTesting();
 }
+function renderScWeekTesting() {
+  const chips = document.getElementById('scWeekTestChips');
+  const notes = document.getElementById('scWeekTestNotes');
+  if (!chips || !notes) return;
+  const sel = new Set((scWeekDraft.testing || []).map(t => t.test));
+  chips.innerHTML = TEST_TYPES.map(t => {
+    const on = sel.has(t);
+    return `<button type="button" onclick="toggleScWeekTest('${escapeAttr(t)}')" style="padding:4px 10px;border-radius:3px;border:1px solid ${on ? 'var(--accent)' : 'var(--border)'};background:${on ? 'rgba(0,212,255,0.15)' : 'transparent'};color:${on ? 'var(--accent)' : 'var(--text2)'};font-family:'Anton',sans-serif;font-weight:700;letter-spacing:.5px;font-size:12px;cursor:pointer">${on ? '✓ ' : ''}${t}</button>`;
+  }).join('');
+  notes.innerHTML = (scWeekDraft.testing || []).map((t, i) => `
+    <div style="display:grid;grid-template-columns:130px 1fr;gap:8px;align-items:center;margin-bottom:5px">
+      <span style="font-family:'Anton',sans-serif;font-weight:700;letter-spacing:.5px;font-size:12px">${escapeAttr(t.test)}</span>
+      <input type="text" placeholder="Result / notes (optional)" value="${escapeAttr(t.notes || '')}" oninput="updateScWeekTestNote(${i},this.value)" style="font-size:12px;padding:5px 8px">
+    </div>`).join('');
+}
+function toggleScWeekTest(test) {
+  scWeekDraft.testing = scWeekDraft.testing || [];
+  const i = scWeekDraft.testing.findIndex(t => t.test === test);
+  if (i === -1) scWeekDraft.testing.push({ test, notes: '' }); else scWeekDraft.testing.splice(i, 1);
+  renderScWeekTesting();
+}
+function updateScWeekTestNote(i, v) { if (scWeekDraft.testing[i]) scWeekDraft.testing[i].notes = v; }
 function setScWeekStatus(k) { scWeekDraft.status = scWeekDraft.status === k ? '' : k; renderScWeekEditor(); }
 function scEnsureDayArray(dn) { if (!Array.isArray(scWeekDraft.days[dn])) scWeekDraft.days[dn] = dayEntriesRaw(scWeekDraft.days[dn]); return scWeekDraft.days[dn]; }
 function scGetPhase(dn, phase) { const arr = Array.isArray(scWeekDraft.days[dn]) ? scWeekDraft.days[dn] : dayEntriesRaw(scWeekDraft.days[dn]); return arr.find(e => e.phase === phase) || { phase, lift: '', load: '' }; }
@@ -9514,7 +9529,8 @@ function setScWeekPhaseLoad(dn, phase, v) { scSetPhase(dn, phase, 'load', v); }
 async function saveScWeek() {
   const cleanDays = {};
   Object.keys(scWeekDraft.days || {}).forEach(dn => { const arr = dayEntries(scWeekDraft.days[dn]); if (arr.length) cleanDays[dn] = arr; });
-  state.scWeeks[editingScWeekNum] = { status: scWeekDraft.status, days: cleanDays, dbId: scWeekDraft.dbId };
+  const testing = (scWeekDraft.testing || []).filter(t => t.test);
+  state.scWeeks[editingScWeekNum] = { status: scWeekDraft.status, days: cleanDays, testing, dbId: scWeekDraft.dbId };
   const ok = await saveScWeekDB(editingScWeekNum, state.scWeeks[editingScWeekNum]);
   if (!ok) { alert('Save failed — check your connection.'); return; }
   closeModal('scWeekModal');
