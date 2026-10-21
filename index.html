@@ -1891,9 +1891,9 @@
     <div class="year-legend" style="margin-top:16px" id="yearLegendField"></div>
     <div class="year-legend" style="margin-top:8px" id="yearLegendMdi">
       <span style="font-family:'Anton',sans-serif;letter-spacing:1.5px;color:var(--text3);font-size:11px;margin-right:8px">MATCH ⚽:</span>
-      <span style="display:inline-flex;align-items:center;gap:4px;margin-right:10px"><span style="width:14px;height:14px;background:#ffffff;border:1px solid #888;border-radius:2px"></span>Home</span>
-      <span style="display:inline-flex;align-items:center;gap:4px;margin-right:10px"><span style="width:14px;height:14px;background:#fdd835;border:1px solid #888;border-radius:2px"></span>Away</span>
-      <span style="display:inline-flex;align-items:center;gap:4px"><span style="width:14px;height:14px;background:#bdbdbd;border:1px solid #888;border-radius:2px"></span>Neutral</span>
+      <span style="display:inline-flex;align-items:center;gap:4px;margin-right:10px"><span style="width:14px;height:14px;background:#e24b4a;border:1px solid #888;border-radius:2px"></span>Home</span>
+      <span style="display:inline-flex;align-items:center;gap:4px;margin-right:10px"><span style="width:14px;height:14px;background:#7f77dd;border:1px solid #888;border-radius:2px"></span>Away</span>
+      <span style="display:inline-flex;align-items:center;gap:4px"><span style="width:14px;height:14px;background:#9e9e9e;border:1px solid #888;border-radius:2px"></span>Neutral</span>
     </div>
   </div>
 
@@ -2902,14 +2902,9 @@
         <label>Week load status</label>
         <div id="scWeekStatusBtns" style="display:flex;gap:6px"></div>
       </div>
-      <div class="form-group" style="margin-bottom:16px">
-        <label>Lift type per day</label>
-        <div id="scWeekDays"></div>
-      </div>
       <div class="form-group">
-        <label>Testing this week <span style="color:var(--text3);font-size:10px;font-weight:400;letter-spacing:0">— select any tests run</span></label>
-        <div id="scWeekTestChips" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px"></div>
-        <div id="scWeekTestNotes"></div>
+        <label>Lift type &amp; testing per day</label>
+        <div id="scWeekDays"></div>
       </div>
     </div>
     <div class="modal-footer">
@@ -3063,7 +3058,7 @@ async function loadAllData() {
   // S&C weekly plan — { [weekNum]: { status, days:{Mon:lift,…}, dbId } } (non-fatal)
   state.scWeeks = {};
   if (scR && scR.status === 'fulfilled' && !scR.value.error) {
-    (scR.value.data || []).forEach(r => { state.scWeeks[r.week_num] = { status: r.status || '', days: r.days || {}, testing: r.testing || [], dbId: r.id }; });
+    (scR.value.data || []).forEach(r => { state.scWeeks[r.week_num] = { status: r.status || '', days: r.days || {}, testing: (r.testing && !Array.isArray(r.testing)) ? r.testing : {}, dbId: r.id }; });
   } else if (scR?.value?.error) {
     console.warn('sc_weeks load failed:', scR.value.error.message);
   }
@@ -3522,9 +3517,9 @@ function renderYear() {
 
       if (isGame) {
         cell.classList.add('game');
-        // Venue highlight: White = Home, Yellow = Away (Neutral = light grey)
+        // Venue highlight: Home = red, Away = purple, Neutral = grey
         const venue = game.venue || 'Home';
-        const bg = venue === 'Away' ? '#fdd835' : venue === 'Neutral' ? '#bdbdbd' : '#ffffff';
+        const bg = venue === 'Away' ? '#7f77dd' : venue === 'Neutral' ? '#9e9e9e' : '#e24b4a';
         cell.style.background = bg;
         cell.style.borderColor = '#888';
         cell.style.cssText += 'display:flex;align-items:center;justify-content:center;overflow:hidden;';
@@ -3540,7 +3535,7 @@ function renderYear() {
           img.onerror = function(){ this.replaceWith(document.createTextNode('⚽')); };
           cell.appendChild(img);
         } else {
-          cell.style.cssText += 'font-size:9px;color:#222;';
+          cell.style.cssText += 'font-size:9px;color:#fff;';
           cell.textContent = '⚽';
         }
       } else if (sessions.length > 0) {
@@ -9340,7 +9335,7 @@ function dayEntries(v) { const ord = { pre: 0, post: 1 }; return dayEntriesRaw(v
 function dayPhase(v, phase) { return dayEntries(v).find(e => e.phase === phase) || null; }
 
 function currentSeasonSC() { return document.getElementById('seasonSelect')?.value || '2025-26'; }
-function scWeekToDB(weekNum, w) { return { user_id: currentUser.id, season: currentSeasonSC(), week_num: weekNum, status: w.status || null, days: w.days || {}, testing: w.testing || [], updated_at: new Date().toISOString() }; }
+function scWeekToDB(weekNum, w) { return { user_id: currentUser.id, season: currentSeasonSC(), week_num: weekNum, status: w.status || null, days: w.days || {}, testing: w.testing || {}, updated_at: new Date().toISOString() }; }
 async function saveScWeekDB(weekNum, w) {
   setSyncStatus('syncing');
   const { data, error } = await sb.from('sc_weeks').upsert(scWeekToDB(weekNum, w), { onConflict: 'user_id,season,week_num' }).select().single();
@@ -9411,7 +9406,7 @@ function renderScWeekPlanner() {
       : `<span style="font-size:10px;color:var(--text3);font-family:'Anton',sans-serif;letter-spacing:1px">—</span>`;
     const hl = w === curWk ? 'rgba(0,212,255,0.06)' : '';
     rows += `<div id="scwk-row-${w}" onclick="openScWeek(${w})" style="display:grid;grid-template-columns:118px 92px 1fr;gap:10px;align-items:center;padding:6px 10px;border-top:1px solid var(--border);cursor:pointer;background:${hl}" onmouseover="this.style.background='var(--surface3)'" onmouseout="this.style.background='${hl}'">
-        <div><span style="font-family:'JetBrains Mono',monospace;font-weight:700;font-size:12px">W${w}</span> <span style="font-size:10px;color:var(--text3)">${dates}</span>${(wk.testing && wk.testing.length) ? ` <span title="${escapeAttr(wk.testing.map(t => t.test).join(', '))}" style="font-size:10px">🧪</span>` : ''}</div>
+        <div><span style="font-family:'JetBrains Mono',monospace;font-weight:700;font-size:12px">W${w}</span> <span style="font-size:10px;color:var(--text3)">${dates}</span>${(() => { const tests = Object.values(wk.testing || {}).flat().map(t => t && t.test).filter(Boolean); return tests.length ? ` <span title="${escapeAttr([...new Set(tests)].join(', '))}" style="font-size:10px">🧪</span>` : ''; })()}</div>
         <div>${statusPill}</div>
         <div style="display:flex;gap:4px">${dayCells}</div>
       </div>`;
@@ -9461,8 +9456,9 @@ let scWeekDraft = { status: '', days: {}, dbId: undefined };
 
 function openScWeek(weekNum) {
   editingScWeekNum = weekNum;
-  const existing = state.scWeeks[weekNum] || { status: '', days: {}, testing: [] };
-  scWeekDraft = { status: existing.status || '', days: JSON.parse(JSON.stringify(existing.days || {})), testing: JSON.parse(JSON.stringify(existing.testing || [])), dbId: existing.dbId };
+  const existing = state.scWeeks[weekNum] || { status: '', days: {}, testing: {} };
+  const exTesting = (existing.testing && !Array.isArray(existing.testing)) ? existing.testing : {};
+  scWeekDraft = { status: existing.status || '', days: JSON.parse(JSON.stringify(existing.days || {})), testing: JSON.parse(JSON.stringify(exTesting)), dbId: existing.dbId };
   const start = getWeekStart(weekNum);
   const end = new Date(start); end.setDate(end.getDate() + 6);
   document.getElementById('scWeekModalTitle').textContent = `Week ${weekNum} · ${MONTHS_SHORT[start.getMonth()]} ${start.getDate()} – ${MONTHS_SHORT[end.getMonth()]} ${end.getDate()}`;
@@ -9493,32 +9489,22 @@ function renderScWeekEditor() {
     return `<div style="border-top:1px solid var(--border);padding:6px 0">
       <div style="font-size:12px;margin-bottom:3px"><span style="font-family:'Anton',sans-serif;letter-spacing:.5px">${dn}</span> <span style="font-size:10px;color:var(--text3)">${d.getDate()}</span>${isMatch ? ' <span style="color:var(--game)" title="Match">⚽</span>' : ''}</div>
       ${SC_PHASES.map(p => slotRow(dn, p.key)).join('')}
+      ${testRow(dn)}
     </div>`;
   }).join('');
-  renderScWeekTesting();
 }
-function renderScWeekTesting() {
-  const chips = document.getElementById('scWeekTestChips');
-  const notes = document.getElementById('scWeekTestNotes');
-  if (!chips || !notes) return;
-  const sel = new Set((scWeekDraft.testing || []).map(t => t.test));
-  chips.innerHTML = TEST_TYPES.map(t => {
-    const on = sel.has(t);
-    return `<button type="button" onclick="toggleScWeekTest('${escapeAttr(t)}')" style="padding:4px 10px;border-radius:3px;border:1px solid ${on ? 'var(--accent)' : 'var(--border)'};background:${on ? 'rgba(0,212,255,0.15)' : 'transparent'};color:${on ? 'var(--accent)' : 'var(--text2)'};font-family:'Anton',sans-serif;font-weight:700;letter-spacing:.5px;font-size:12px;cursor:pointer">${on ? '✓ ' : ''}${t}</button>`;
+function testRow(dn) {
+  const sel = (scWeekDraft.testing && scWeekDraft.testing[dn]) || [];
+  const selSet = new Set(sel.map(t => t.test));
+  const chips = TEST_TYPES.map(t => { const on = selSet.has(t);
+    return `<button type="button" onclick="toggleScDayTest('${dn}','${escapeAttr(t)}')" style="padding:2px 7px;border-radius:3px;border:1px solid ${on ? 'var(--accent)' : 'var(--border)'};background:${on ? 'rgba(0,212,255,0.15)' : 'transparent'};color:${on ? 'var(--accent)' : 'var(--text3)'};font-family:'Anton',sans-serif;font-weight:700;letter-spacing:.3px;font-size:9px;cursor:pointer">${on ? '✓' : ''}${t}</button>`;
   }).join('');
-  notes.innerHTML = (scWeekDraft.testing || []).map((t, i) => `
-    <div style="display:grid;grid-template-columns:130px 1fr;gap:8px;align-items:center;margin-bottom:5px">
-      <span style="font-family:'Anton',sans-serif;font-weight:700;letter-spacing:.5px;font-size:12px">${escapeAttr(t.test)}</span>
-      <input type="text" placeholder="Result / notes (optional)" value="${escapeAttr(t.notes || '')}" oninput="updateScWeekTestNote(${i},this.value)" style="font-size:12px;padding:5px 8px">
-    </div>`).join('');
+  const notes = sel.map((t, i) => `<div style="display:grid;grid-template-columns:96px 1fr;gap:6px;align-items:center;margin-top:3px"><span style="font-size:10px;color:var(--accent)">${escapeAttr(t.test)}</span><input type="text" value="${escapeAttr(t.notes || '')}" placeholder="result / note" oninput="updateScDayTestNote('${dn}',${i},this.value)" style="font-size:10px;padding:3px 6px"></div>`).join('');
+  return `<div style="padding:4px 0 2px 10px"><div style="font-size:9px;color:var(--text3);font-family:'Anton',sans-serif;letter-spacing:.5px;margin-bottom:3px">TESTING</div><div style="display:flex;flex-wrap:wrap;gap:4px">${chips}</div>${notes}</div>`;
 }
-function toggleScWeekTest(test) {
-  scWeekDraft.testing = scWeekDraft.testing || [];
-  const i = scWeekDraft.testing.findIndex(t => t.test === test);
-  if (i === -1) scWeekDraft.testing.push({ test, notes: '' }); else scWeekDraft.testing.splice(i, 1);
-  renderScWeekTesting();
-}
-function updateScWeekTestNote(i, v) { if (scWeekDraft.testing[i]) scWeekDraft.testing[i].notes = v; }
+function scDayTests(dn) { if (!scWeekDraft.testing) scWeekDraft.testing = {}; if (!Array.isArray(scWeekDraft.testing[dn])) scWeekDraft.testing[dn] = []; return scWeekDraft.testing[dn]; }
+function toggleScDayTest(dn, test) { const arr = scDayTests(dn); const i = arr.findIndex(t => t.test === test); if (i === -1) arr.push({ test, notes: '' }); else arr.splice(i, 1); renderScWeekEditor(); }
+function updateScDayTestNote(dn, i, v) { const arr = scDayTests(dn); if (arr[i]) arr[i].notes = v; }
 function setScWeekStatus(k) { scWeekDraft.status = scWeekDraft.status === k ? '' : k; renderScWeekEditor(); }
 function scEnsureDayArray(dn) { if (!Array.isArray(scWeekDraft.days[dn])) scWeekDraft.days[dn] = dayEntriesRaw(scWeekDraft.days[dn]); return scWeekDraft.days[dn]; }
 function scGetPhase(dn, phase) { const arr = Array.isArray(scWeekDraft.days[dn]) ? scWeekDraft.days[dn] : dayEntriesRaw(scWeekDraft.days[dn]); return arr.find(e => e.phase === phase) || { phase, lift: '', load: '' }; }
@@ -9529,7 +9515,8 @@ function setScWeekPhaseLoad(dn, phase, v) { scSetPhase(dn, phase, 'load', v); }
 async function saveScWeek() {
   const cleanDays = {};
   Object.keys(scWeekDraft.days || {}).forEach(dn => { const arr = dayEntries(scWeekDraft.days[dn]); if (arr.length) cleanDays[dn] = arr; });
-  const testing = (scWeekDraft.testing || []).filter(t => t.test);
+  const testing = {};
+  Object.keys(scWeekDraft.testing || {}).forEach(dn => { const a = (scWeekDraft.testing[dn] || []).filter(t => t.test); if (a.length) testing[dn] = a; });
   state.scWeeks[editingScWeekNum] = { status: scWeekDraft.status, days: cleanDays, testing, dbId: scWeekDraft.dbId };
   const ok = await saveScWeekDB(editingScWeekNum, state.scWeeks[editingScWeekNum]);
   if (!ok) { alert('Save failed — check your connection.'); return; }
