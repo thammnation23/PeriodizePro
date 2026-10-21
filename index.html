@@ -3375,13 +3375,22 @@ function getTypeColor(type) {
 // Use this wherever a swatch or filled cell shows the type (annual plan cells,
 // small swatches next to type labels). Border-left lines and text colour keep
 // using getTypeColor so a single hex always works.
+// Exactly 3 stripes of each colour, scaled to the element (non-repeating), so
+// a cell never fills with too many thin bands to read. bw:aw keeps the ratio.
+function stripe3(base, accent, bw, aw) {
+  const unit = (bw || 3) + (aw || 1), total = 3 * unit;
+  const stops = [];
+  for (let i = 0; i < 3; i++) {
+    const s = (i * unit) / total * 100, mid = (i * unit + bw) / total * 100, e = ((i + 1) * unit) / total * 100;
+    stops.push(`${base} ${s.toFixed(2)}% ${mid.toFixed(2)}%`, `${accent} ${mid.toFixed(2)}% ${e.toFixed(2)}%`);
+  }
+  return `linear-gradient(0deg, ${stops.join(', ')})`;
+}
+
 // Background CSS for a type OBJECT { color, stripeColor, stripeBase, stripeAccent }
 function typeObjBackground(t) {
   if (t && t.stripeColor) {
-    const base = t.color || '#888780';
-    const bw   = parseInt(t.stripeBase)   || 3;
-    const aw   = parseInt(t.stripeAccent) || 1;
-    return `repeating-linear-gradient(0deg, ${base} 0 ${bw}px, ${t.stripeColor} ${bw}px ${bw + aw}px)`;
+    return stripe3(t.color || '#888780', t.stripeColor, parseInt(t.stripeBase) || 3, parseInt(t.stripeAccent) || 1);
   }
   return t?.color || '#888780';
 }
@@ -3391,8 +3400,8 @@ function getTypeBackground(type) {
   const config = (getSessionTypes() || []).find(t => t.name === type);
   if (config?.stripeColor) return typeObjBackground(config);
   // Hardcoded fallback for Intensive / Extensive when settings have no stripe info
-  if (type === 'Extensive') return 'repeating-linear-gradient(0deg, #2eb86b 0 3px, #fdd835 3px 4px)';
-  if (type === 'Intensive') return 'repeating-linear-gradient(0deg, #81c784 0 3px, #1976d2 3px 4px)';
+  if (type === 'Extensive') return stripe3('#2eb86b', '#fdd835', 3, 1);
+  if (type === 'Intensive') return stripe3('#81c784', '#1976d2', 3, 1);
   return getTypeColor(type);
 }
 function getTypeClass(type) {
@@ -9769,11 +9778,51 @@ function renderOpponentList() {
             ${o.badge_url ? `<img src="${escapeAttr(o.badge_url)}" style="width:24px;height:24px;object-fit:contain" onerror="this.outerHTML='⚽'">` : '<span title="No logo" style="color:var(--text3)">⚽</span>'}
           </div>
           <span style="flex:1">${o.name}</span>
-          ${o.badge_url ? '' : '<span style="font-size:9px;color:var(--text3);font-family:\'Anton\',sans-serif;letter-spacing:1px">NO LOGO</span>'}
+          <button class="btn btn-ghost btn-sm" style="padding:2px 8px;font-size:10px" onclick="uploadTeamLogo('${o.id}')" title="Upload a logo image for this team">${o.badge_url ? '↻ Replace' : '⬆ Upload'}</button>
         </div>
       `).join('')}
     </div>
   `;
+}
+
+// Upload a logo image for a team — downscaled to a small PNG and stored on the
+// opponent's badge_url (used everywhere the crest shows).
+function uploadTeamLogo(oppId) {
+  const opp = (state.opponents || []).find(o => o.id === oppId);
+  if (!opp) return;
+  const inp = document.createElement('input');
+  inp.type = 'file';
+  inp.accept = 'image/png,image/jpeg,image/webp,image/svg+xml';
+  inp.onchange = () => {
+    const file = inp.files && inp.files[0];
+    if (!file) return;
+    if (file.size > 3 * 1024 * 1024) { alert('Please choose an image under 3 MB.'); return; }
+    const reader = new FileReader();
+    reader.onload = () => {
+      const img = new Image();
+      img.onload = async () => {
+        const max = 128;
+        const scale = Math.min(1, max / Math.max(img.width, img.height));
+        const cw = Math.max(1, Math.round(img.width * scale)), ch = Math.max(1, Math.round(img.height * scale));
+        const canvas = document.createElement('canvas'); canvas.width = cw; canvas.height = ch;
+        canvas.getContext('2d').drawImage(img, 0, 0, cw, ch);
+        let dataUrl;
+        try { dataUrl = canvas.toDataURL('image/png'); }
+        catch (e) { dataUrl = reader.result; } // tainted canvas fallback (e.g. SVG)
+        setSyncStatus('syncing');
+        const { error } = await sb.from('opponents').update({ badge_url: dataUrl }).eq('id', oppId);
+        setSyncStatus(error ? 'error' : 'ok');
+        if (error) { alert('Upload failed: ' + error.message); return; }
+        opp.badge_url = dataUrl;
+        renderOpponentList();
+        ['renderWeek', 'renderMonth', 'renderYear'].forEach(fn => { if (typeof window[fn] === 'function') try { window[fn](); } catch (e) {} });
+      };
+      img.onerror = () => alert('Could not read that image. Try a PNG or JPG.');
+      img.src = reader.result;
+    };
+    reader.readAsDataURL(file);
+  };
+  inp.click();
 }
 
 // Look up each team's crest from TheSportsDB and save it. Matches the MLS team
