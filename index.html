@@ -2523,6 +2523,35 @@
   </div>
 </div>
 
+<!-- ═══ TRAVEL DAY MODAL ═══ -->
+<div class="modal-overlay" id="travelModal">
+  <div class="modal" style="width:440px">
+    <div class="modal-header">
+      <div class="modal-title" id="travelModalTitle">Travel</div>
+      <button class="modal-close" onclick="closeModal('travelModal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group" style="margin-bottom:18px">
+        <label>Travelling this day? · how</label>
+        <div style="font-size:11px;color:var(--text3);margin:-2px 0 10px">Pick a mode to mark it a travel day. Tap again to clear.</div>
+        <div id="travelModeChips" style="display:flex;flex-wrap:wrap;gap:8px"></div>
+      </div>
+      <div class="form-group" style="margin-bottom:18px">
+        <label>Direction <span style="color:var(--text3);font-size:10px">— optional</span></label>
+        <div id="travelDirChips" style="display:flex;flex-wrap:wrap;gap:8px;margin-top:4px"></div>
+      </div>
+      <div class="form-group">
+        <label>Note <span style="color:var(--text3);font-size:10px">— destination, flight #, departure time…</span></label>
+        <input type="text" id="travelNote" placeholder="e.g. → Portland, depart 9am">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="clearTravelDay()">Clear</button>
+      <button class="btn btn-primary" onclick="saveTravelDay()">Save</button>
+    </div>
+  </div>
+</div>
+
 <!-- ═══ DAY MODAL (month click) ═══ -->
 <!-- ═══ ADD DRILL MODAL ═══ -->
 <div class="modal-overlay" id="addMediaModal">
@@ -3018,6 +3047,15 @@ function applySeasonStart() {
   currentWeek = getCurrentWeekNum();
 }
 const DAYS = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+// Per-day travel: how the squad moves that day. Presence of an entry = travelling.
+const TRAVEL_MODES = [
+  { key: 'Flight', icon: '✈', color: '#4aa3e2' },
+  { key: 'Bus',    icon: '🚌', color: '#e2a44a' },
+  { key: 'Train',  icon: '🚆', color: '#9e7fdd' },
+  { key: 'Car',    icon: '🚗', color: '#5dcaa5' },
+];
+const TRAVEL_DIRS = ['Outbound', 'Return', 'Round-trip'];
+function travelModeCfg(mode) { return TRAVEL_MODES.find(m => m.key === mode) || null; }
 const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
 const MONTHS_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
@@ -3104,6 +3142,7 @@ async function loadAllData() {
         focus:    ws.focus,
         gymTheme: ws.gym_theme,
         notes:    ws.notes,
+        travel:   (ws.travel && typeof ws.travel === 'object' && !Array.isArray(ws.travel)) ? ws.travel : {},
         dbId:     ws.id,
       };
     });
@@ -3283,6 +3322,7 @@ async function saveWeekSettingsDB(weekNum, wsObj) {
     focus:     wsObj.focus    || null,
     gym_theme: wsObj.gymTheme || null,
     notes:     wsObj.notes    || null,
+    travel:    wsObj.travel   || {},
   };
   if (wsObj.dbId) row.id = wsObj.dbId;
   const { data, error } = await sb.from('week_settings').upsert(row, { onConflict: 'user_id,week_num,season' }).select().single();
@@ -4246,6 +4286,7 @@ function renderWeek() {
         <span class="week-day-date">${d.getDate()} ${MONTHS_SHORT[d.getMonth()]}</span>
       </div>
       <div class="week-day-body">
+        ${buildTravelChipHTML(currentWeek, di)}
         ${scChip}
         ${sessionsHTML}
         <button class="add-session-btn" onclick="openAddSessionOnDate('${dateStr}')">＋ Add</button>
@@ -4253,6 +4294,111 @@ function renderWeek() {
     `;
     container.appendChild(card);
   }
+}
+
+// ── Per-day travel chip / add-button on the week day card ──
+function buildTravelChipHTML(weekNum, di) {
+  const dayName = DAYS[di];
+  const t = state.weekSettings[weekNum]?.travel?.[dayName];
+  if (t && t.mode) {
+    const m = travelModeCfg(t.mode) || { icon: '🧳', color: '#888780' };
+    const dirTxt  = t.dir  ? ' · ' + t.dir  : '';
+    const noteTxt = t.note ? ' · ' + t.note : '';
+    const full = `Travel: ${t.mode}${dirTxt}${noteTxt}`;
+    return `<div onclick="openTravelDay(${weekNum},${di})" title="${escapeAttr(full)} — click to edit"
+      style="cursor:pointer;margin-bottom:6px;display:inline-flex;align-items:center;gap:5px;max-width:100%;
+             font-family:'Anton',sans-serif;font-size:10px;letter-spacing:.5px;padding:3px 8px;border-radius:4px;
+             background:${m.color}22;color:${m.color};border:1px solid ${m.color}66;">
+      <span style="font-size:12px">${m.icon}</span>
+      <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeAttr(t.mode.toUpperCase())}${t.dir ? ' · ' + escapeAttr(t.dir.toUpperCase()) : ''}${t.note ? ' · ' + escapeAttr(t.note) : ''}</span>
+    </div>`;
+  }
+  return `<button onclick="openTravelDay(${weekNum},${di})" title="Mark a travel day"
+    style="margin-bottom:6px;background:transparent;border:1px dashed var(--border);color:var(--text3);
+           font-size:10px;letter-spacing:.5px;padding:3px 8px;border-radius:4px;cursor:pointer;">✈ Travel</button>`;
+}
+
+let travelEditWeek = null, travelEditDi = null, travelEditMode = '', travelEditDir = '';
+
+function openTravelDay(weekNum, di) {
+  travelEditWeek = weekNum;
+  travelEditDi   = di;
+  const dayName = DAYS[di];
+  const existing = state.weekSettings[weekNum]?.travel?.[dayName] || {};
+  travelEditMode = existing.mode || '';
+  travelEditDir  = existing.dir  || '';
+
+  const ws = getWeekStart(weekNum);
+  const d  = new Date(ws); d.setDate(d.getDate() + di);
+  document.getElementById('travelModalTitle').textContent =
+    'Travel · ' + dayName + ' ' + d.getDate() + ' ' + MONTHS_SHORT[d.getMonth()];
+  document.getElementById('travelNote').value = existing.note || '';
+
+  renderTravelChips();
+  openModal('travelModal');
+}
+
+function renderTravelChips() {
+  const modeBox = document.getElementById('travelModeChips');
+  modeBox.innerHTML = TRAVEL_MODES.map(m => {
+    const on = travelEditMode === m.key;
+    return `<div onclick="selectTravelMode('${m.key}')"
+      style="cursor:pointer;display:inline-flex;align-items:center;gap:6px;padding:8px 12px;border-radius:8px;
+             font-family:'Anton',sans-serif;font-size:13px;letter-spacing:.5px;
+             background:${on ? m.color + '33' : 'var(--surface2)'};color:${on ? m.color : 'var(--text2)'};
+             border:1.5px solid ${on ? m.color : 'var(--border)'};">
+      <span style="font-size:16px">${m.icon}</span>${m.key.toUpperCase()}</div>`;
+  }).join('');
+
+  const dirBox = document.getElementById('travelDirChips');
+  const dirDisabled = !travelEditMode;
+  dirBox.style.opacity = dirDisabled ? '0.4' : '1';
+  dirBox.style.pointerEvents = dirDisabled ? 'none' : 'auto';
+  dirBox.innerHTML = TRAVEL_DIRS.map(dir => {
+    const on = travelEditDir === dir;
+    return `<div onclick="selectTravelDir('${dir}')"
+      style="cursor:pointer;padding:7px 12px;border-radius:8px;font-size:12px;font-weight:600;
+             background:${on ? 'var(--accent)' : 'var(--surface2)'};color:${on ? '#0b1220' : 'var(--text2)'};
+             border:1.5px solid ${on ? 'var(--accent)' : 'var(--border)'};">${dir}</div>`;
+  }).join('');
+}
+
+function selectTravelMode(mode) {
+  travelEditMode = (travelEditMode === mode) ? '' : mode;  // tap again to clear
+  if (!travelEditMode) travelEditDir = '';
+  renderTravelChips();
+}
+function selectTravelDir(dir) {
+  travelEditDir = (travelEditDir === dir) ? '' : dir;
+  renderTravelChips();
+}
+
+async function saveTravelDay() {
+  const weekNum = travelEditWeek, dayName = DAYS[travelEditDi];
+  if (!state.weekSettings[weekNum]) state.weekSettings[weekNum] = {};
+  if (!state.weekSettings[weekNum].travel) state.weekSettings[weekNum].travel = {};
+  const note = document.getElementById('travelNote').value.trim();
+
+  if (!travelEditMode) {
+    delete state.weekSettings[weekNum].travel[dayName];       // no mode = not travelling
+  } else {
+    state.weekSettings[weekNum].travel[dayName] = {
+      mode: travelEditMode,
+      dir:  travelEditDir || '',
+      note,
+    };
+  }
+  closeModal('travelModal');
+  renderWeek();
+  await saveWeekSettingsDB(weekNum, state.weekSettings[weekNum]);
+}
+
+async function clearTravelDay() {
+  const weekNum = travelEditWeek, dayName = DAYS[travelEditDi];
+  if (state.weekSettings[weekNum]?.travel) delete state.weekSettings[weekNum].travel[dayName];
+  closeModal('travelModal');
+  renderWeek();
+  if (state.weekSettings[weekNum]) await saveWeekSettingsDB(weekNum, state.weekSettings[weekNum]);
 }
 
 function fmtNum(n) {
