@@ -9582,20 +9582,29 @@ function renderScWeekPlanner() {
     const dates = `${MONTHS_SHORT[start.getMonth()]} ${start.getDate()}–${MONTHS_SHORT[end.getMonth()]} ${end.getDate()}`;
     const dayCells = DAYS.map((dn, di) => {
       const d = new Date(start); d.setDate(d.getDate() + di);
-      const isMatch = state.games.some(g => g.date === formatDate(d));
+      const game = state.games.find(g => g.date === formatDate(d));
+      const isMatch = !!game;
+      const vPre = game ? (game.venue === 'Away' ? '@' : game.venue === 'Neutral' ? 'vs' : 'v') : '';
       const entries = dayEntries(wk.days?.[dn]);
       const pre = entries.find(e => e.phase === 'pre');
       const post = entries.find(e => e.phase === 'post');
-      const tip = `${dn}${isMatch ? ' · MATCH' : ''}` + (entries.length ? entries.map(e => ` · ${phaseLabel(e.phase)}: ${liftByKey(e.lift).label}${e.load ? ' (' + e.load + ')' : ''}`).join('') : ' · no S&C');
+      const tip = `${dn}${isMatch ? ' · MATCH ' + vPre + ' ' + (game.opponent || 'TBD') : ''}` + (entries.length ? entries.map(e => ` · ${phaseLabel(e.phase)}: ${liftByKey(e.lift).label}${e.load ? ' (' + e.load + ')' : ''}`).join('') : ' · no S&C');
+      // Match days name the opponent (crest + venue prefix) rather than just a ball.
+      let matchLine = '';
+      if (game) {
+        const opp = state.opponents.find(o => o.name && game.opponent && o.name.toLowerCase() === game.opponent.toLowerCase());
+        const crest = opp?.badge_url ? `<img src="${escapeAttr(opp.badge_url)}" style="width:11px;height:11px;object-fit:contain;flex-shrink:0" onerror="this.style.display='none'">` : '';
+        matchLine = `<div style="display:flex;align-items:center;justify-content:center;gap:3px;font-family:'Anton',sans-serif;font-size:8.5px;letter-spacing:.3px;line-height:1.1;color:var(--game);min-width:0"><span style="flex-shrink:0">${vPre}</span>${crest}<span style="overflow:hidden;white-space:nowrap;text-overflow:ellipsis">${escapeAttr((game.opponent || 'TBD').toUpperCase())}</span></div>`;
+      }
       // Two stacked segments: Activation (top) and Gym (bottom).
       const seg = (e) => { const lf = liftByKey(e?.lift); const on = !!lf.key;
         return `<div style="flex:1;min-height:26px;display:flex;align-items:center;justify-content:center;text-align:center;border-radius:2px;padding:3px 5px;background:${on ? lf.color + '2e' : 'transparent'};border:1px solid ${on ? lf.color : 'var(--border)'};color:${on ? lf.color : 'var(--text3)'};font-family:'Anton',sans-serif;font-size:12px;font-weight:700;letter-spacing:.2px;line-height:1.12;overflow-wrap:break-word">${on ? escapeAttr(lf.label) : ''}</div>`; };
       const body = entries.length
         ? `<div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:2px">${seg(pre)}${seg(post)}</div>`
         : `<div style="flex:1;display:flex;align-items:center;justify-content:center;color:var(--text3);font-size:12px;border:1px solid var(--border);border-radius:3px;min-height:44px">·</div>`;
-      // Date label (day of month) on top of each cell, with the match ball inline.
-      const dateHdr = `<div style="font-size:9px;line-height:1.2;text-align:center;font-family:'JetBrains Mono',monospace;color:${isMatch ? 'var(--game)' : 'var(--text3)'}">${MONTHS_SHORT[d.getMonth()]} ${d.getDate()}${isMatch ? ' ⚽' : ''}</div>`;
-      return `<div title="${escapeAttr(tip)}" style="position:relative;flex:1;min-width:0;min-height:54px;display:flex;flex-direction:column;gap:1px">${dateHdr}${body}</div>`;
+      // Date label (day of month) on top of each cell; opponent named below on match days.
+      const dateHdr = `<div style="font-size:9px;line-height:1.2;text-align:center;font-family:'JetBrains Mono',monospace;color:${isMatch ? 'var(--game)' : 'var(--text3)'}">${MONTHS_SHORT[d.getMonth()]} ${d.getDate()}</div>`;
+      return `<div title="${escapeAttr(tip)}" style="position:relative;flex:1;min-width:0;min-height:54px;display:flex;flex-direction:column;gap:1px">${dateHdr}${matchLine}${body}</div>`;
     }).join('');
     const statusPill = st
       ? `<span style="font-family:'Anton',sans-serif;font-size:10px;letter-spacing:1px;padding:2px 8px;border-radius:3px;background:${st.color}22;color:${st.color}">${st.label.toUpperCase()}</span>`
@@ -9713,9 +9722,15 @@ function renderScWeekEditor() {
   };
   document.getElementById('scWeekDays').innerHTML = DAYS.map((dn, di) => {
     const d = new Date(start); d.setDate(d.getDate() + di);
-    const isMatch = state.games.some(g => g.date === formatDate(d));
+    const game = state.games.find(g => g.date === formatDate(d));
+    const matchTag = game ? (() => {
+      const vPre = game.venue === 'Away' ? '@' : game.venue === 'Neutral' ? 'vs' : 'v';
+      const opp = state.opponents.find(o => o.name && game.opponent && o.name.toLowerCase() === game.opponent.toLowerCase());
+      const crest = opp?.badge_url ? `<img src="${escapeAttr(opp.badge_url)}" style="width:13px;height:13px;object-fit:contain;vertical-align:-2px;margin:0 2px" onerror="this.style.display='none'">` : ' ';
+      return `<span style="color:var(--game);font-family:'Anton',sans-serif;letter-spacing:.5px;font-size:10px"> · ${vPre}${crest}${escapeAttr((game.opponent || 'TBD').toUpperCase())}</span>`;
+    })() : '';
     return `<div style="border-top:1px solid var(--border);padding:6px 0">
-      <div style="font-size:12px;margin-bottom:3px"><span style="font-family:'Anton',sans-serif;letter-spacing:.5px">${dn}</span> <span style="font-size:10px;color:var(--text3)">${d.getDate()}</span>${isMatch ? ' <span style="color:var(--game)" title="Match">⚽</span>' : ''}</div>
+      <div style="font-size:12px;margin-bottom:3px"><span style="font-family:'Anton',sans-serif;letter-spacing:.5px">${dn}</span> <span style="font-size:10px;color:var(--text3)">${d.getDate()}</span>${matchTag}</div>
       ${SC_PHASES.map(p => slotRow(dn, p.key)).join('')}
       ${testRow(dn)}
     </div>`;
