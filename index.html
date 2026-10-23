@@ -4037,7 +4037,7 @@ function buildSessionCardHTML(s) {
   return `
     <div class="session-card int-${typeClass} ${s.type === 'Game' ? 'game-card' : ''}" style="border-left-color:${typeColor}" onclick="event.stopPropagation();editSession('${s.id}')">
       <div class="session-card-header">
-        <span class="session-type">${swatchHtml}<span style="color:${typeColor};-webkit-text-stroke:0.6px #0b0d11;paint-order:stroke fill">${typeLabel}</span></span>
+        <span class="session-type"><span style="background:${typeColor};color:${textOnColor(typeColor)};padding:2px 9px;border-radius:5px;border:1px solid rgba(0,0,0,0.16)">${s.type || 'Session'}</span>${s.type2 ? `<span style="color:var(--text3);margin:0 4px;font-weight:400">+</span><span style="background:${typeColor2};color:${textOnColor(typeColor2)};padding:2px 8px;border-radius:5px;border:1px solid rgba(0,0,0,0.16)">${s.type2}</span>` : ''}</span>
         <span class="session-duration">${s.duration ? s.duration + 'm' : '—'}</span>
       </div>
       ${s.principle ? `<div style="font-size:11px;color:var(--text2);margin-bottom:6px;">${s.principle}</div>` : ''}
