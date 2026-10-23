@@ -7,7 +7,39 @@
 <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;500;600;700;800;900&family=Barlow:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&family=Anton&display=swap" rel="stylesheet">
 <style>
 
+  /* Light theme (default). Structural tokens are light; the semantic accent
+     colours are darkened so they stay readable as text/badges on white. */
   :root {
+    --bg: #f3f5f8;
+    --surface: #ffffff;
+    --surface2: #eceff4;
+    --surface3: #e0e5ec;
+    --border: #d5dbe3;
+    --border2: #c0c8d3;
+    --text: #1a1e26;
+    --text2: #566070;
+    --text3: #8792a1;
+    --accent: #0094c2;
+    --accent2: #006f90;
+    --green: #0a9d57;
+    --green2: #0a7a43;
+    --red: #e23b5a;
+    --orange: #d9690a;
+    --yellow: #b8880a;
+    --purple: #7a4ddb;
+    --game: #e23b5a;
+    --game-bg: rgba(226,59,90,0.10);
+    --high: #e23b5a;
+    --med: #d9690a;
+    --low: #0a9d57;
+    --radius: 6px;
+    --radius2: 10px;
+    --shadow: 0 1px 3px rgba(16,24,40,0.06);
+    --shadow-lg: 0 12px 40px rgba(16,24,40,0.16);
+  }
+
+  /* Dark theme — dormant; set <html data-theme="dark"> to restore. */
+  :root[data-theme="dark"] {
     --bg: #0a0c10;
     --surface: #111318;
     --surface2: #181b22;
@@ -30,8 +62,8 @@
     --high: #ff4d6d;
     --med: #ff9100;
     --low: #00e676;
-    --radius: 6px;
-    --radius2: 10px;
+    --shadow: none;
+    --shadow-lg: 0 12px 40px rgba(0,0,0,0.5);
   }
 
   * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -57,6 +89,7 @@
     position: sticky;
     top: 0;
     z-index: 100;
+    box-shadow: var(--shadow);
   }
   .logo {
     font-family: 'Anton', sans-serif;
@@ -531,7 +564,7 @@
     max-width: 95vw;
     max-height: 90vh;
     overflow-y: auto;
-    box-shadow: 0 24px 80px rgba(0,0,0,0.6);
+    box-shadow: var(--shadow-lg);
   }
   .modal-header {
     display: flex;
@@ -1036,7 +1069,7 @@
     pointer-events: none;
     display: none;
     min-width: 160px;
-    box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+    box-shadow: var(--shadow-lg);
   }
   .tooltip.show { display: block; }
   .tooltip-title {
@@ -1170,7 +1203,7 @@
     cursor: default;
     position: relative;
   }
-  .lib-card:hover { border-color: var(--border2); transform: translateY(-1px); box-shadow: 0 8px 24px rgba(0,0,0,0.3); }
+  .lib-card:hover { border-color: var(--border2); transform: translateY(-1px); box-shadow: 0 8px 20px rgba(16,24,40,0.12); }
   .lib-card.selectable { cursor: pointer; }
   .lib-card.selectable:hover { border-color: var(--accent); }
   .lib-card.selected { border-color: var(--accent); background: rgba(0,212,255,0.04); }
@@ -1658,7 +1691,7 @@
     position: fixed; z-index: 600;
     background: var(--surface); border: 1px solid var(--border2);
     border-radius: var(--radius2); padding: 14px;
-    box-shadow: 0 16px 48px rgba(0,0,0,0.55);
+    box-shadow: var(--shadow-lg);
     min-width: 230px; display: none;
   }
   .day-popover.open { display: block; animation: popIn 0.12s ease; }
@@ -1710,7 +1743,7 @@
     padding: 40px;
     width: 100%;
     max-width: 400px;
-    box-shadow: 0 32px 80px rgba(0,0,0,0.5);
+    box-shadow: var(--shadow-lg);
   }
   .auth-logo {
     font-family: 'Anton', sans-serif;
@@ -10100,7 +10133,8 @@ function renderMorphocycle() {
           <div style="font-size:12.5px;line-height:1.55;color:var(--text2)">${d.body}</div>
           ${noteHtml}
           ${principlesHtml ? subHead('MICRO &amp; MESO PRINCIPLES', col) + `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:4px 18px">${principlesHtml}</div>` : ''}
-          ${frameworkHtml ? subHead('EXAMPLE SESSION FRAMEWORK', col) + `<div>${frameworkHtml}</div>` : ''}
+          ${subHead('EXAMPLE SESSION FRAMEWORK', col)}
+          <div style="font-size:11px;color:var(--text3);font-style:italic;padding:4px 0;border-top:1px solid var(--border)">To be defined.</div>
         </div>
       </div>`;
   }).join('');
