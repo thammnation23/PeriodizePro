@@ -2933,6 +2933,7 @@
       <div class="form-group" style="margin-bottom:16px">
         <label>Week load status</label>
         <div id="scWeekStatusBtns" style="display:flex;gap:6px"></div>
+        <div id="scWeekRx" style="display:none"></div>
       </div>
       <div class="form-group">
         <label>Lift type &amp; testing per day</label>
@@ -9436,13 +9437,24 @@ const METHODOLOGY_SECTIONS = [
 // ══════════════════════════════════════════════════════
 // Week load status + per-day lift types for the weekly S&C planner.
 // Week load statuses are user-editable (stored in app_settings.sc_statuses).
+// Each carries an `rx` — the recommended loading for that week type, shown as a
+// reminder when planning a week and on the Strength reference card.
 const DEFAULT_SC_STATUSES = [
-  { key:'load',     label:'Load',     color:'#e24b4a' },
-  { key:'maintain', label:'Maintain', color:'#378add' },
-  { key:'deload',   label:'Deload',   color:'#5dcaa5' },
+  { key:'load',     label:'Overload', color:'#e24b4a', rx:'Peak week — push volume & intensity above the prior week. ~4–6 sets × 3–6 reps @ 80–92% 1RM. Highest weekly tonnage; accept accumulated fatigue.' },
+  { key:'maintain', label:'Maintain', color:'#378add', rx:'Hold adaptation at ~60–70% of an overload week. ~2–3 sets × 3–5 reps @ 80–85%. Enough stimulus to retain, not to accumulate fatigue.' },
+  { key:'deload',   label:'Deload',   color:'#5dcaa5', rx:'Flush fatigue — ~40–50% of overload volume @ 60–75%. 1–2 sharp sets, high quality. Prioritise recovery into the next build.' },
 ];
+// Fallback recommended-loading text by status key, so a status that shares a
+// known key still shows guidance even if its saved config predates the rx field.
+const SC_STATUS_RX = {
+  load:     DEFAULT_SC_STATUSES[0].rx,
+  overload: DEFAULT_SC_STATUSES[0].rx,
+  maintain: DEFAULT_SC_STATUSES[1].rx,
+  deload:   DEFAULT_SC_STATUSES[2].rx,
+};
 function getScStatuses() { const c = state.settings?.sc_statuses; return (Array.isArray(c) && c.length) ? c : DEFAULT_SC_STATUSES; }
 function statusCfg(k) { return k ? getScStatuses().find(s => s.key === k) : null; }
+function statusRx(s) { if (!s) return ''; return s.rx || SC_STATUS_RX[s.key] || ''; }
 
 // Lift types are user-editable (stored in app_settings.sc_lifts); these are the
 // defaults. The blank "off" entry is implicit and prepended by allScLifts().
@@ -9590,12 +9602,18 @@ function renderScLiftLegend() {
   if (!host) return;
   const lifts = getScLifts().map(l =>
     `<span style="display:inline-flex;align-items:center;gap:5px;font-size:11px;color:var(--text2)"><span style="width:18px;height:14px;border-radius:3px;background:${l.color}33;border:1px solid ${l.color};display:inline-flex;align-items:center;justify-content:center;font-family:'Anton',sans-serif;font-size:7px;color:${l.color}">${l.short}</span>${l.label}</span>`).join('');
-  const stats = getScStatuses().map(s =>
-    `<span style="display:inline-flex;align-items:center;gap:5px;font-size:11px;color:var(--text2)"><span style="width:14px;height:9px;border-radius:2px;background:${s.color}"></span>${s.label}</span>`).join('');
+  // Week status + its recommended loading (the per-week-type loading reminder).
+  const stats = getScStatuses().map(s => {
+    const rx = statusRx(s);
+    return `<div style="display:flex;gap:9px;align-items:flex-start">
+      <span style="flex-shrink:0;margin-top:2px;font-family:'Anton',sans-serif;letter-spacing:.5px;font-size:10px;padding:2px 8px;border-radius:3px;background:${s.color}22;color:${s.color};border:1px solid ${s.color}66">${escapeAttr(s.label.toUpperCase())}</span>
+      ${rx ? `<span style="font-size:11px;line-height:1.4;color:var(--text2)">${escapeAttr(rx)}</span>` : ''}
+    </div>`;
+  }).join('');
   host.innerHTML = `
     <div style="display:flex;flex-wrap:wrap;gap:22px;align-items:flex-start;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:12px 14px">
-      <div><div style="font-family:'Anton',sans-serif;letter-spacing:1px;font-size:10px;color:var(--text3);margin-bottom:7px">WEEK STATUS</div><div style="display:flex;gap:14px;flex-wrap:wrap">${stats}</div></div>
-      <div style="flex:1;min-width:260px"><div style="font-family:'Anton',sans-serif;letter-spacing:1px;font-size:10px;color:var(--text3);margin-bottom:7px">LIFT TYPES</div><div style="display:flex;gap:14px;flex-wrap:wrap">${lifts}</div></div>
+      <div style="flex:1;min-width:300px"><div style="font-family:'Anton',sans-serif;letter-spacing:1px;font-size:10px;color:var(--text3);margin-bottom:9px">WEEK STATUS · RECOMMENDED LOADING</div><div style="display:flex;flex-direction:column;gap:9px">${stats}</div></div>
+      <div style="flex:1;min-width:260px"><div style="font-family:'Anton',sans-serif;letter-spacing:1px;font-size:10px;color:var(--text3);margin-bottom:9px">LIFT TYPES</div><div style="display:flex;gap:14px;flex-wrap:wrap">${lifts}</div></div>
     </div>`;
 }
 
@@ -9620,6 +9638,19 @@ function renderScWeekEditor() {
     const on = scWeekDraft.status === s.key;
     return `<button type="button" onclick="setScWeekStatus('${s.key}')" style="flex:1;padding:8px;border-radius:6px;border:1px solid ${on ? s.color : 'var(--border)'};background:${on ? s.color + '22' : 'transparent'};color:${on ? s.color : 'var(--text2)'};font-family:'Anton',sans-serif;letter-spacing:1px;font-size:12px;cursor:pointer">${s.label}</button>`;
   }).join('');
+  // Recommended-loading reminder for the selected week type.
+  const rxBox = document.getElementById('scWeekRx');
+  if (rxBox) {
+    const st = statusCfg(scWeekDraft.status);
+    const rx = statusRx(st);
+    if (st && rx) {
+      rxBox.style.display = 'block';
+      rxBox.style.cssText = `display:block;margin-top:8px;padding:8px 11px;border-radius:6px;background:${st.color}14;border:1px solid ${st.color}44;border-left:3px solid ${st.color}`;
+      rxBox.innerHTML = `<div style="font-family:'Anton',sans-serif;letter-spacing:1px;font-size:9px;color:${st.color};margin-bottom:3px">RECOMMENDED LOADING · ${escapeAttr(st.label.toUpperCase())}</div><div style="font-size:11.5px;line-height:1.45;color:var(--text2)">${escapeAttr(rx)}</div>`;
+    } else {
+      rxBox.style.display = 'none';
+    }
+  }
   const start = getWeekStart(editingScWeekNum);
   const slotRow = (dn, phase) => {
     const e = scGetPhase(dn, phase);
@@ -9768,20 +9799,24 @@ function renderScStatusEditor() {
   const host = document.getElementById('scStatusRows');
   if (!host) return;
   host.innerHTML = scStatusDraft.map((s, i) => `
-    <div style="display:grid;grid-template-columns:1fr 40px 28px;gap:8px;align-items:center;margin-bottom:6px">
-      <input type="text" value="${escapeAttr(s.label)}" placeholder="Status name" oninput="updateScStatusField(${i},'label',this.value)">
-      <input type="color" value="${s.color && s.color.startsWith('#') ? s.color : '#888780'}" oninput="updateScStatusField(${i},'color',this.value)" style="width:40px;height:30px;padding:0;border:1px solid var(--border);background:none;cursor:pointer">
-      <span class="exercise-remove" onclick="removeScStatusRow(${i})" title="Remove">✕</span>
+    <div style="border:1px solid var(--border);border-radius:6px;padding:8px;margin-bottom:8px">
+      <div style="display:grid;grid-template-columns:1fr 40px 28px;gap:8px;align-items:center;margin-bottom:6px">
+        <input type="text" value="${escapeAttr(s.label)}" placeholder="Status name" oninput="updateScStatusField(${i},'label',this.value)">
+        <input type="color" value="${s.color && s.color.startsWith('#') ? s.color : '#888780'}" oninput="updateScStatusField(${i},'color',this.value)" style="width:40px;height:30px;padding:0;border:1px solid var(--border);background:none;cursor:pointer">
+        <span class="exercise-remove" onclick="removeScStatusRow(${i})" title="Remove">✕</span>
+      </div>
+      <textarea placeholder="Recommended loading — sets × reps @ %, volume vs overload, intent…" oninput="updateScStatusField(${i},'rx',this.value)" style="width:100%;box-sizing:border-box;font-size:11px;min-height:48px;resize:vertical">${escapeAttr(s.rx || statusRx(s) || '')}</textarea>
     </div>`).join('');
 }
 function updateScStatusField(i, f, v) { if (scStatusDraft[i]) scStatusDraft[i][f] = v; }
-function addScStatusRow() { scStatusDraft.push({ key: '', label: '', color: '#888780' }); renderScStatusEditor(); }
+function addScStatusRow() { scStatusDraft.push({ key: '', label: '', color: '#888780', rx: '' }); renderScStatusEditor(); }
 function removeScStatusRow(i) { scStatusDraft.splice(i, 1); renderScStatusEditor(); }
 async function saveScStatuses() {
   const list = scStatusDraft.filter(s => s.label && s.label.trim()).map(s => ({
     key: s.key || slugifyLift(s.label),
     label: s.label.trim(),
     color: s.color || '#888780',
+    rx: (s.rx || '').trim(),
   }));
   if (!list.length) { alert('Keep at least one status.'); return; }
   const seen = new Set(); list.forEach(s => { while (seen.has(s.key)) s.key += '_'; seen.add(s.key); });
