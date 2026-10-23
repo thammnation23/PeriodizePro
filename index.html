@@ -1880,6 +1880,7 @@
   <div class="nav-tab" onclick="switchTab('squad')">👥 Squad</div>
   <div class="nav-tab" onclick="switchTab('strength')">💪 Strength</div>
   <div class="nav-tab" onclick="switchTab('library')">📚 Drill Library</div>
+  <div class="nav-tab" onclick="switchTab('morphocycle')">🔄 Morphocycle</div>
   <div class="nav-tab" onclick="switchTab('methodology')">📖 Methodology</div>
   <div class="nav-tab" onclick="switchTab('settings')">⚙ Settings</div>
 </nav>
@@ -2026,6 +2027,17 @@
     </div>
     <div class="lib-cat-tabs" id="libCatTabs"></div>
     <div class="lib-grid" id="libGrid"></div>
+  </div>
+
+  <!-- ── MORPHOCYCLE VIEW ── -->
+  <div id="view-morphocycle" class="view">
+    <div style="max-width:980px">
+      <div style="margin-bottom:18px">
+        <h2 style="margin:0;font-family:'Anton',sans-serif;letter-spacing:2px;font-size:24px">MORPHOCYCLE</h2>
+        <div style="font-size:11px;color:var(--text3);font-family:'Anton',sans-serif;letter-spacing:1px;margin-top:2px">The weekly pattern · what each day type is and its emphasis</div>
+      </div>
+      <div id="morphoContent"></div>
+    </div>
   </div>
 
   <!-- ── METHODOLOGY VIEW ── -->
@@ -3460,6 +3472,7 @@ function switchTab(tab) {
   if (tab === 'squad')    renderSquad();
   if (tab === 'strength') renderStrength();
   if (tab === 'review')   renderWeekReview();
+  if (tab === 'morphocycle') renderMorphocycle();
   if (tab === 'methodology') renderMethodology();
   if (tab === 'library')  renderLibrary();
   if (tab === 'settings') renderSettings();
@@ -9863,6 +9876,218 @@ async function saveScStatuses() {
   closeModal('scStatusModal');
   renderStrength();
   try { renderWeek(); } catch (e) {}
+}
+
+// ── MORPHOCYCLE REFERENCE ──
+// The weekly training pattern (Tactical Periodization). Each day type is a
+// distinct sub-dynamic, placed around match day. Descriptions are editorial;
+// colours/stripes are pulled live from the configured session types so the
+// page always matches the Annual-plan palette.
+const MORPHO_DAYS = [
+  { type:'Strength', md:'Tension day · classically MD-4',
+    tagline:'Muscular tension — force, accel / decel, duels.',
+    body:'The strength / tension acquisition day. Dominated by high-tension actions — eccentric &amp; concentric contractions, accelerations, decelerations, jumps, changes of direction and 1v1 duels. Played in smaller spaces with fewer players so efforts are frequent and forceful, kept short with generous recovery so quality never drops.',
+    note:'Combine <b>fundamental</b> (analytical, eccentric, maximal tension) with <b>complementary</b> (game-based meso / micro principles). Develop Yap / Taz activation and recovery synergy.',
+    principles:[
+      'Maximum extensibility → accel / decel focus',
+      'More individual focus',
+      'Combative / competitive',
+      'Low–medium complexity',
+      'Low–medium density',
+      'Shorter working intervals',
+    ],
+    framework:[
+      ['Activation','Mobility, CNS primer, accel / decel prep + short sprints'],
+      ['Gym — strength','Heavy lower / full-body — 3–6 × 2–5, long recovery'],
+      ['Field — combative','1v1 / 2v2 duels in small spaces — high force, long rest'],
+      ['Finishing','Short accel–decel, change of direction, box finishing'],
+      ['Cool-down','Regen + mobility'],
+    ] },
+  { type:'Endurance', md:'Duration day · classically MD-3',
+    tagline:'The big day — continuity &amp; collective organisation.',
+    body:'The largest acquisition day of the week. Bigger spaces, more players and game-situations closest to the real match, run for longer durations to train the endurance of <i>playing</i> — repeated sub-dynamics and collective organisation under fatigue. Highest total volume of the week.',
+    principles:[
+      'Collective organisation — whole-team',
+      'High complexity (full game structures)',
+      'High density &amp; volume (biggest day)',
+      'Larger spaces, more players',
+      'Longer working intervals',
+      'Closest to competition',
+    ],
+    framework:[
+      ['Warm-up','Rondo / possession activation'],
+      ['Main — large SSG','Big-sided game-situations, long intervals'],
+      ['Positional play','Full-pitch patterns, collective organisation'],
+      ['Conditioned game','Match-like scenarios under fatigue'],
+      ['Cool-down','Mobility'],
+    ] },
+  { type:'Re-Entry', md:'Return to play · individualised',
+    tagline:'Reintegration — bridging rehab back to full training.',
+    body:'For players returning from injury or absence. A controlled, progressive re-exposure to the week’s demands — volume, intensity, change-of-direction and contact — before rejoining full team training. Criteria-led, not calendar-led, and run alongside the team week rather than in place of it.',
+    principles:[
+      'Individualised &amp; criteria-led',
+      'Progressive exposure to volume &amp; contact',
+      'Rebuild change-of-direction tolerance',
+      'Modified complexity &amp; density',
+      'Objective return markers (GPS, strength)',
+      'Runs alongside the team week',
+    ],
+    framework:[
+      ['Prep','Movement screen + targeted activation'],
+      ['Capacity','Linear + multidirectional running to GPS targets'],
+      ['Skill / contact','Graded ball work, duels, controlled contact'],
+      ['Integration','Short blocks with the team as tolerated'],
+      ['Monitor','Symptom / load check'],
+    ] },
+  { type:'Tactical', md:'Speed / velocity emphasis · often MD-2',
+    tagline:'Speed of decision and execution.',
+    body:'A tactical acquisition day centred on fast actions — reduced spaces, few players, quick decisions and high-speed execution over short durations with plenty of recovery. Sharpens the collective in a reactive, high-tempo context without carrying fatigue into match day.',
+    principles:[
+      'Speed of decision &amp; execution',
+      'Reduced spaces, few players',
+      'High speed / low volume',
+      'Short working intervals, long recovery',
+      'Low–medium density',
+      'Reactive &amp; high-tempo',
+    ],
+    framework:[
+      ['Activation','Neural primer + fast feet / reactions'],
+      ['Speed','Max-velocity runs &amp; accel, long recovery'],
+      ['Small-sided','2v2 / 3v3 fast transitions, short bouts'],
+      ['Finishing','Quick-combination finishing'],
+      ['Cool-down','Mobility'],
+    ] },
+  { type:'Hybrid', md:'Mixed emphasis · flexible',
+    tagline:'Blends more than one sub-dynamic.',
+    body:'A blended day combining sub-dynamics — e.g. some tension with some duration, or speed with tactical. Used when the calendar compresses the week (two games, travel) or when no single dominant stimulus is wanted. Loads are balanced so no one quality is fully taxed.',
+    principles:[
+      'Blends two sub-dynamics',
+      'Balanced load — no quality fully taxed',
+      'Congested weeks / travel',
+      'Medium complexity &amp; density',
+      'Flexible spaces &amp; intervals',
+    ],
+    framework:[
+      ['Activation','General primer'],
+      ['Block A','Dominant quality 1 (e.g. tension)'],
+      ['Block B','Dominant quality 2 (e.g. speed or duration)'],
+      ['Game','Mixed-demand conditioned game'],
+      ['Cool-down','Mobility'],
+    ] },
+  { type:'Activation', md:'Pre-match · MD-1',
+    tagline:'Prime for the match — sharp, short, low fatigue.',
+    body:'The day before the game (and the pre-session primer within a day). Low complexity and volume, high speed — activation drills, set-pieces, short sharp actions and a nervous-system primer. The aim is readiness and crispness for match day, never fatigue.',
+    principles:[
+      'Prime, not fatigue',
+      'Low volume / high speed',
+      'Set-pieces &amp; patterns',
+      'Low complexity, low density',
+      'Short sharp actions',
+      'Match readiness',
+    ],
+    framework:[
+      ['Activation','Mobility + CNS primer'],
+      ['Speed','Short sprints, reactions'],
+      ['Patterns','Attacking / defensive shape walk-throughs'],
+      ['Set-pieces','Attacking &amp; defending routines'],
+      ['Finish','Light finishing — crisp, short'],
+    ] },
+  { type:'Recovery', md:'Post-match · MD+1 / MD+2',
+    tagline:'Regenerate — restore after the match.',
+    body:'The day(s) after a match. Active recovery and regeneration for players who played (mobility, low-intensity work, bike / pool), with compensatory top-up training for those who didn’t. Prioritises restoring the squad before the next build begins.',
+    principles:[
+      'Regeneration for players who played',
+      'Compensatory top-up for non-players',
+      'Low intensity / low complexity',
+      'Mobility &amp; aerobic flush',
+      'Individualised by minutes played',
+    ],
+    framework:[
+      ['Players (90′)','Pool / bike flush, mobility, soft tissue'],
+      ['Part / non-players','Compensatory conditioning + game-based top-up'],
+      ['All','Mobility + recovery protocols'],
+    ] },
+];
+// Classic acquisition-day arc across the week, anchored to match day (MD).
+const MORPHO_ARC = [
+  { lbl:'MD+1', type:'Recovery' },
+  { lbl:'MD-4', type:'Strength' },
+  { lbl:'MD-3', type:'Endurance' },
+  { lbl:'MD-2', type:'Tactical' },
+  { lbl:'MD-1', type:'Activation' },
+  { lbl:'MD',   type:'Game', game:true },
+];
+
+function renderMorphocycle() {
+  const host = document.getElementById('morphoContent');
+  if (!host) return;
+
+  const intro = `
+    <div style="margin-bottom:18px;padding:16px 18px;border-left:4px solid var(--accent);background:linear-gradient(90deg,rgba(0,212,255,0.08),rgba(0,212,255,0.01));border-radius:0 var(--radius) var(--radius) 0">
+      <div style="font-size:13px;line-height:1.6;color:var(--text2)">
+        The <b style="color:var(--text)">morphocycle</b> is the repeating weekly training pattern. Rather than chasing isolated fitness, each day carries a distinct <b style="color:var(--text)">sub-dynamic</b> — a dominant character of effort — placed around match day (<b style="color:var(--text)">MD</b>) so the squad alternates between tension, duration and speed and arrives fresh. The classic acquisition days sit <b style="color:var(--text)">MD-4 → MD-3 → MD-2</b>, bookended by recovery after the game and activation before the next.
+      </div>
+    </div>`;
+
+  // Week arc strip
+  const arc = `
+    <div style="margin-bottom:22px">
+      <div style="font-family:'Anton',sans-serif;letter-spacing:1px;font-size:10px;color:var(--text3);margin-bottom:9px">CLASSIC WEEK ARC</div>
+      <div style="display:flex;flex-wrap:wrap;align-items:stretch;gap:6px">
+        ${MORPHO_ARC.map((a, i) => {
+          const col = a.game ? 'var(--game)' : getTypeColor(a.type);
+          const bg  = a.game ? '#e8412c' : getTypeBackground(a.type);
+          return `<div style="display:flex;align-items:center;gap:6px">
+            <div style="min-width:92px;text-align:center;border-radius:var(--radius);border:1px solid ${col}66;overflow:hidden;background:var(--surface2)">
+              <div style="height:8px;background:${bg}"></div>
+              <div style="padding:6px 8px">
+                <div style="font-family:'JetBrains Mono',monospace;font-weight:700;font-size:11px;color:${col}">${a.lbl}</div>
+                <div style="font-size:10px;color:var(--text2);margin-top:1px">${a.type}</div>
+              </div>
+            </div>
+            ${i < MORPHO_ARC.length - 1 ? `<span style="color:var(--text3);font-size:13px">→</span>` : ''}
+          </div>`;
+        }).join('')}
+      </div>
+      <div style="font-size:10px;color:var(--text3);margin-top:7px">Re-Entry and Hybrid aren’t fixed to a slot — the coach places them as the week and squad demand.</div>
+    </div>`;
+
+  // Day-type cards — description, key concept, principles, example framework.
+  const subHead = (t, col) => `<div style="font-family:'Anton',sans-serif;letter-spacing:1px;font-size:9.5px;color:${col};margin:12px 0 7px">${t}</div>`;
+  const cards = MORPHO_DAYS.map(d => {
+    const col = getTypeColor(d.type);
+    const bg  = getTypeBackground(d.type);
+    const noteHtml = d.note
+      ? `<div style="margin:2px 0 4px;padding:9px 12px;border-radius:6px;background:${col}14;border:1px solid ${col}44;border-left:3px solid ${col};font-size:12px;line-height:1.5;color:var(--text2)">${d.note}</div>`
+      : '';
+    const principlesHtml = (d.principles || []).map(p =>
+      `<div style="display:flex;align-items:flex-start;gap:8px;font-size:12px;line-height:1.4;color:var(--text2)"><span style="color:${col};flex-shrink:0;margin-top:1px">▸</span><span>${p}</span></div>`).join('');
+    const frameworkHtml = (d.framework || []).map((f, i) =>
+      `<div style="display:grid;grid-template-columns:20px 128px 1fr;gap:8px;align-items:baseline;padding:4px 0;border-top:1px solid var(--border)">
+        <span style="font-family:'JetBrains Mono',monospace;font-size:11px;color:${col}">${i + 1}</span>
+        <span style="font-family:'Anton',sans-serif;letter-spacing:.3px;font-size:11px;color:var(--text)">${f[0]}</span>
+        <span style="font-size:11.5px;line-height:1.4;color:var(--text2)">${f[1]}</span>
+      </div>`).join('');
+    return `
+      <div style="display:flex;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;margin-bottom:12px">
+        <div style="width:10px;background:${bg};flex-shrink:0"></div>
+        <div style="flex:1;padding:14px 16px;min-width:0">
+          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:4px">
+            <span style="font-family:'Anton',sans-serif;letter-spacing:1px;font-size:17px;color:${col}">${d.type.toUpperCase()}</span>
+            <span style="font-size:10px;letter-spacing:.5px;color:var(--text3);font-family:'Anton',sans-serif">${d.md}</span>
+          </div>
+          <div style="font-size:12.5px;color:var(--text);font-weight:600;margin-bottom:6px">${d.tagline}</div>
+          <div style="font-size:12.5px;line-height:1.55;color:var(--text2)">${d.body}</div>
+          ${noteHtml}
+          ${principlesHtml ? subHead('MICRO &amp; MESO PRINCIPLES', col) + `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:4px 18px">${principlesHtml}</div>` : ''}
+          ${frameworkHtml ? subHead('EXAMPLE SESSION FRAMEWORK', col) + `<div>${frameworkHtml}</div>` : ''}
+        </div>
+      </div>`;
+  }).join('');
+
+  host.innerHTML = intro + arc +
+    `<div style="font-family:'Anton',sans-serif;letter-spacing:1px;font-size:10px;color:var(--text3);margin-bottom:10px">DAY TYPES</div>` +
+    cards;
 }
 
 function renderMethodology() {
