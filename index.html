@@ -2582,6 +2582,26 @@
   </div>
 </div>
 
+<!-- ═══ SEASON PHASES MODAL ═══ -->
+<div class="modal-overlay" id="seasonPhasesModal">
+  <div class="modal" style="width:620px">
+    <div class="modal-header">
+      <div class="modal-title">Season Phases</div>
+      <button class="modal-close" onclick="closeModal('seasonPhasesModal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div style="font-size:12px;color:var(--text3);margin-bottom:10px">Define date ranges for each part of the season. They show as a band on the Annual plan.</div>
+      <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px" id="seasonPhasePresets"></div>
+      <div id="seasonPhaseRows"></div>
+      <button class="btn btn-ghost btn-sm" style="margin-top:4px" onclick="addSeasonPhaseRow('','')">＋ Add custom phase</button>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('seasonPhasesModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveSeasonPhases()">Save</button>
+    </div>
+  </div>
+</div>
+
 <!-- ═══ DAY MODAL (month click) ═══ -->
 <!-- ═══ ADD DRILL MODAL ═══ -->
 <div class="modal-overlay" id="addMediaModal">
@@ -3684,6 +3704,36 @@ function renderYear() {
   grid.appendChild(table);
   container.appendChild(grid);
 
+  // ── Season Phase band (Preseason / Regular Season / breaks / Playoffs…) ──
+  const phaseRow = document.createElement('div');
+  phaseRow.style.cssText = 'display:grid;grid-template-columns:70px 1fr;gap:2px;min-width:900px;margin-top:8px;';
+  const phaseLbl = document.createElement('div');
+  phaseLbl.className = 'year-label';
+  phaseLbl.textContent = 'Season';
+  phaseLbl.style.fontSize = '9px';
+  phaseRow.appendChild(phaseLbl);
+  const band = document.createElement('div');
+  band.style.cssText = 'display:flex;gap:2px;cursor:pointer;';
+  band.title = 'Click to set season phases';
+  band.onclick = openSeasonPhases;
+  const weekPhases = [];
+  for (let w = 1; w <= 52; w++) weekPhases.push(phaseForDate(formatDate(getWeekStart(w))));
+  let wi = 0;
+  while (wi < 52) {
+    const p = weekPhases[wi];
+    const key = p ? p.name + '|' + p.start : '';
+    let wj = wi; while (wj + 1 < 52 && ((weekPhases[wj + 1] ? weekPhases[wj + 1].name + '|' + weekPhases[wj + 1].start : '') === key)) wj++;
+    const span = wj - wi + 1;
+    const seg = document.createElement('div');
+    seg.style.cssText = `flex:${span} 1 0;min-width:0;height:18px;border-radius:3px;background:${p ? p.color : 'var(--surface2)'};display:flex;align-items:center;justify-content:center;overflow:hidden;`;
+    if (p) seg.innerHTML = `<span style="font-family:'Anton',sans-serif;font-size:9px;letter-spacing:.5px;color:${textOnColor(p.color)};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding:0 4px">${escapeAttr(p.name.toUpperCase())}</span>`;
+    seg.title = p ? `${p.name} · ${p.start} → ${p.end}` : 'No phase set — click to add';
+    band.appendChild(seg);
+    wi = wj + 1;
+  }
+  phaseRow.appendChild(band);
+  container.appendChild(phaseRow);
+
   // ── Gym Phase row ──
   const gymRow = document.createElement('div');
   gymRow.style.cssText = 'display:grid;grid-template-columns:70px repeat(52,minmax(14px,1fr));gap:2px;min-width:900px;margin-top:4px;';
@@ -3987,7 +4037,7 @@ function buildSessionCardHTML(s) {
   return `
     <div class="session-card int-${typeClass} ${s.type === 'Game' ? 'game-card' : ''}" style="border-left-color:${typeColor}" onclick="event.stopPropagation();editSession('${s.id}')">
       <div class="session-card-header">
-        <span class="session-type">${swatchHtml}<span style="color:${typeColor}">${typeLabel}</span></span>
+        <span class="session-type">${swatchHtml}<span style="color:${typeColor};-webkit-text-stroke:0.6px #0b0d11;paint-order:stroke fill">${typeLabel}</span></span>
         <span class="session-duration">${s.duration ? s.duration + 'm' : '—'}</span>
       </div>
       ${s.principle ? `<div style="font-size:11px;color:var(--text2);margin-bottom:6px;">${s.principle}</div>` : ''}
@@ -6504,6 +6554,74 @@ const DEFAULT_GYM_PHASES = [
   { name: 'Realisation',     color: '#e24b4a' },
   { name: 'Deload',          color: '#5dcaa5' },
 ];
+
+// Season phases — named date ranges (Preseason, Regular Season, breaks, etc.)
+// the user sets, shown as a band on the Annual plan. Stored in
+// app_settings.season_phases as [{name, start, end, color}].
+const SEASON_PHASE_PRESETS = [
+  { name: 'Preseason',      color: '#f5a623' },
+  { name: 'Regular Season', color: '#0094c2' },
+  { name: 'Summer Break',   color: '#e2a44a' },
+  { name: 'Winter Break',   color: '#7a4ddb' },
+  { name: 'Off-Season',     color: '#8792a1' },
+  { name: 'Playoffs',       color: '#e23b5a' },
+];
+function getSeasonPhases() { const c = state.settings?.season_phases; return Array.isArray(c) ? c : []; }
+// The phase segment covering a date (inclusive), or null.
+function phaseForDate(dateStr) {
+  if (!dateStr) return null;
+  return getSeasonPhases().find(p => p.start && p.end && dateStr >= p.start && dateStr <= p.end) || null;
+}
+// Readable text colour (black/white) for a given background hex.
+function textOnColor(hex) {
+  const h = (hex || '').replace('#', ''); if (h.length < 6) return '#111';
+  const r = parseInt(h.slice(0, 2), 16), g = parseInt(h.slice(2, 4), 16), b = parseInt(h.slice(4, 6), 16);
+  return (0.299 * r + 0.587 * g + 0.114 * b) > 150 ? '#111' : '#fff';
+}
+
+// ── Season-phases editor (date ranges saved to app_settings.season_phases) ──
+let seasonPhasesDraft = [];
+function openSeasonPhases() {
+  seasonPhasesDraft = getSeasonPhases().map(p => ({ ...p }));
+  document.getElementById('seasonPhasePresets').innerHTML = SEASON_PHASE_PRESETS.map(pr =>
+    `<button class="btn btn-ghost btn-sm" onclick="addSeasonPhaseRow('${escapeAttr(pr.name)}','${pr.color}')" style="border-color:${pr.color}66;color:${pr.color}">＋ ${pr.name}</button>`).join('');
+  renderSeasonPhasesEditor();
+  openModal('seasonPhasesModal');
+}
+function renderSeasonPhasesEditor() {
+  const host = document.getElementById('seasonPhaseRows');
+  if (!host) return;
+  if (!seasonPhasesDraft.length) { host.innerHTML = '<div style="font-size:12px;color:var(--text3);padding:6px 0 10px">No phases yet — add one from a preset above, or a custom phase below.</div>'; return; }
+  host.innerHTML = `<div style="display:grid;grid-template-columns:1.3fr 1fr 1fr 34px 26px;gap:8px;font-size:9px;letter-spacing:.5px;color:var(--text3);font-family:'Anton',sans-serif;margin-bottom:5px"><span>PHASE</span><span>START</span><span>END</span><span></span><span></span></div>` +
+    seasonPhasesDraft.map((p, i) => `
+    <div style="display:grid;grid-template-columns:1.3fr 1fr 1fr 34px 26px;gap:8px;align-items:center;margin-bottom:6px">
+      <input type="text" value="${escapeAttr(p.name || '')}" placeholder="Phase name" oninput="updateSeasonPhaseField(${i},'name',this.value)">
+      <input type="date" value="${escapeAttr(p.start || '')}" oninput="updateSeasonPhaseField(${i},'start',this.value)">
+      <input type="date" value="${escapeAttr(p.end || '')}" oninput="updateSeasonPhaseField(${i},'end',this.value)">
+      <input type="color" value="${p.color && p.color.startsWith('#') ? p.color : '#888780'}" oninput="updateSeasonPhaseField(${i},'color',this.value)" style="width:34px;height:30px;padding:0;border:1px solid var(--border);background:none;cursor:pointer">
+      <span class="exercise-remove" onclick="removeSeasonPhaseRow(${i})" title="Remove">✕</span>
+    </div>`).join('');
+}
+function addSeasonPhaseRow(name, color) { seasonPhasesDraft.push({ name: name || '', start: '', end: '', color: color || '#888780' }); renderSeasonPhasesEditor(); }
+function updateSeasonPhaseField(i, f, v) { if (seasonPhasesDraft[i]) seasonPhasesDraft[i][f] = v; }
+function removeSeasonPhaseRow(i) { seasonPhasesDraft.splice(i, 1); renderSeasonPhasesEditor(); }
+async function saveSeasonPhases() {
+  const list = seasonPhasesDraft.filter(p => p.name && p.name.trim() && p.start && p.end)
+    .map(p => ({ name: p.name.trim(), start: p.start, end: p.end, color: p.color || '#888780' }))
+    .sort((a, b) => a.start.localeCompare(b.start));
+  setSyncStatus('syncing');
+  let res;
+  if (state.settings?.id) {
+    res = await sb.from('app_settings').update({ season_phases: list, updated_at: new Date().toISOString() }).eq('id', state.settings.id).select().single();
+  } else {
+    res = await sb.from('app_settings').upsert({ season_phases: list, updated_at: new Date().toISOString() }).select().single();
+  }
+  setSyncStatus(res.error ? 'error' : 'ok');
+  if (res.error) { alert('Save failed: ' + res.error.message); return; }
+  state.settings = res.data;
+  closeModal('seasonPhasesModal');
+  renderYear();
+}
 
 // Get current session types (from state.settings or defaults)
 function getSessionTypes() {
