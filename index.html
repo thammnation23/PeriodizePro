@@ -1924,7 +1924,10 @@
 
   <!-- ── YEAR VIEW ── -->
   <div id="view-year" class="view active">
-    <p class="section-title">Annual Plan · 52 Weeks</p>
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+      <p class="section-title" style="margin:0">Annual Plan · 52 Weeks</p>
+      <button class="btn btn-ghost btn-sm" onclick="openSeasonPhases()" title="Set Preseason, Regular Season, breaks, Playoffs…">＋ Season Phases</button>
+    </div>
     <div id="yearGrid"></div>
     <div class="year-legend" style="margin-top:16px" id="yearLegendField"></div>
     <div class="year-legend" style="margin-top:10px" id="yearLegendMdi">
