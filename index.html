@@ -1907,16 +1907,16 @@
 
 <!-- ═══ NAV ═══ -->
 <nav class="nav">
-  <div class="nav-tab active" onclick="switchTab('year')">📅 Annual Plan</div>
-  <div class="nav-tab" onclick="switchTab('month')">🗓 Month</div>
-  <div class="nav-tab" onclick="switchTab('week')">⚡ Week</div>
-  <div class="nav-tab" onclick="switchTab('review')">🔁 Week Review</div>
-  <div class="nav-tab" onclick="switchTab('squad')">👥 Squad</div>
-  <div class="nav-tab" onclick="switchTab('strength')">💪 Strength</div>
-  <div class="nav-tab" onclick="switchTab('library')">📚 Drill Library</div>
-  <div class="nav-tab" onclick="switchTab('morphocycle')">🔄 Morphocycle</div>
-  <div class="nav-tab" onclick="switchTab('methodology')">📖 Methodology</div>
-  <div class="nav-tab" onclick="switchTab('settings')">⚙ Settings</div>
+  <div class="nav-tab active" onclick="switchTab('year')">Annual Plan</div>
+  <div class="nav-tab" onclick="switchTab('month')">Month</div>
+  <div class="nav-tab" onclick="switchTab('week')">Week</div>
+  <div class="nav-tab" onclick="switchTab('review')">Week Review</div>
+  <div class="nav-tab" onclick="switchTab('squad')">Squad</div>
+  <div class="nav-tab" onclick="switchTab('strength')">Strength</div>
+  <div class="nav-tab" onclick="switchTab('library')">Drill Library</div>
+  <div class="nav-tab" onclick="switchTab('morphocycle')">Morphocycle</div>
+  <div class="nav-tab" onclick="switchTab('methodology')">Methodology</div>
+  <div class="nav-tab" onclick="switchTab('settings')">Settings</div>
 </nav>
 
 <!-- ═══ MAIN ═══ -->
@@ -2038,8 +2038,8 @@
         <div style="font-size:11px;color:var(--text3);font-family:'Anton',sans-serif;letter-spacing:1px;margin-top:2px">Annual periodization · session type per day · loading ideas</div>
       </div>
       <div style="display:flex;gap:8px;flex-wrap:wrap">
-        <button class="btn btn-ghost btn-sm" onclick="openScLiftsModal()" title="Add / rename / recolor your lift types">🏷 Lift types</button>
-        <button class="btn btn-ghost btn-sm" onclick="openScStatusModal()" title="Rename / recolor the week load statuses">🎨 Statuses</button>
+        <button class="btn btn-ghost btn-sm" onclick="openScLiftsModal()" title="Add / rename / recolor your lift types">Lift types</button>
+        <button class="btn btn-ghost btn-sm" onclick="openScStatusModal()" title="Rename / recolor the week load statuses">Statuses</button>
         <button class="btn btn-ghost btn-sm" onclick="jumpToCurrentScWeek()" title="Scroll to the current week">⌖ Current week</button>
         <button class="btn btn-ghost btn-sm" onclick="toggleScFullYear()" title="Toggle between season window and all 52 weeks">⇄ Full year</button>
         <button class="btn btn-ghost btn-sm" onclick="applyDefaultScPattern()" title="Fill every empty week with a default weekly template you can then tweak">⚙ Default template</button>
@@ -2169,7 +2169,7 @@
         </div>
         <div style="display:flex;gap:10px;align-items:center;margin-bottom:8px;flex-wrap:wrap">
           <button class="btn btn-primary btn-sm" onclick="seedMlsOpponents()">⬇ Seed MLS Teams</button>
-          <button class="btn btn-ghost btn-sm" onclick="refreshTeamLogos()">🖼 Refresh Logos</button>
+          <button class="btn btn-ghost btn-sm" onclick="refreshTeamLogos()">Refresh Logos</button>
           <button class="btn btn-primary btn-sm" onclick="importMyTeamSchedule()">📅 Import My Schedule</button>
           <span id="seedStatus" style="font-size:11px;color:var(--text3);font-family:'Anton',sans-serif;letter-spacing:1px"></span>
         </div>
@@ -2294,7 +2294,7 @@
       <hr class="section-divider">
       <div class="subsection-label">Warm Up Media</div>
       <div style="display:flex;gap:10px;margin-bottom:10px;">
-        <button class="btn btn-ghost btn-sm" onclick="openPicker('warmup')">📚 Pick from Library</button>
+        <button class="btn btn-ghost btn-sm" onclick="openPicker('warmup')">Pick from Library</button>
         <button class="btn btn-ghost btn-sm" onclick="openQuickAdd('warmup')">＋ Quick Add URL</button>
       </div>
       <div class="attached-media-strip" id="warmupAttached"></div>
@@ -2302,7 +2302,7 @@
       <hr class="section-divider">
       <div class="subsection-label">Session Plan Media</div>
       <div style="display:flex;gap:10px;margin-bottom:10px;">
-        <button class="btn btn-ghost btn-sm" onclick="openPicker('session')">📚 Pick from Library</button>
+        <button class="btn btn-ghost btn-sm" onclick="openPicker('session')">Pick from Library</button>
         <button class="btn btn-ghost btn-sm" onclick="openQuickAdd('session')">＋ Quick Add URL</button>
       </div>
       <div class="attached-media-strip" id="sessionAttached"></div>
@@ -3512,8 +3512,7 @@ function switchTab(tab) {
   document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
   document.getElementById('view-' + tab).classList.add('active');
   document.querySelectorAll('.nav-tab').forEach(t => {
-    const match = tab === 'library' ? 'drill' : tab === 'squad' ? '👥 squad' : tab === 'methodology' ? '📖 methodology' : tab === 'review' ? '🔁 week review' : tab;
-    if (t.textContent.toLowerCase().includes(match)) t.classList.add('active');
+    if ((t.getAttribute('onclick') || '').includes(`switchTab('${tab}')`)) t.classList.add('active');
   });
   if (tab === 'year')     renderYear();
   if (tab === 'month')    renderMonth();
@@ -4289,7 +4288,7 @@ function renderWeek() {
   if (ws.gymPhase) {
     const c = getGymPhaseColorFromSettings(ws.gymPhase);
     gymBadge.style.cssText += `background:${c}22;border:1px solid ${c}55;color:${c};display:inline-flex;`;
-    gymBadge.textContent = '🏋 ' + ws.gymPhase;
+    gymBadge.textContent = ws.gymPhase;
   } else {
     gymBadge.style.display = 'none';
   }
@@ -4307,7 +4306,7 @@ function renderWeek() {
   const scStatus = statusCfg(state.scWeeks[currentWeek]?.status);
   if (scStatus) {
     scBadge.style.cssText = `font-family:'Anton',sans-serif;font-size:13px;font-weight:700;padding:4px 12px;border-radius:var(--radius);letter-spacing:1px;cursor:pointer;background:${scStatus.color}22;border:1px solid ${scStatus.color}55;color:${scStatus.color};display:inline-flex;`;
-    scBadge.textContent = '💪 ' + scStatus.label;
+    scBadge.textContent = scStatus.label;
   } else {
     scBadge.style.display = 'none';
   }
@@ -4340,7 +4339,7 @@ function renderWeek() {
     const scChip = scEntries.length
       ? `<div style="margin-bottom:6px;display:flex;flex-wrap:wrap;gap:4px">${scEntries.map(e => {
           const lf = liftByKey(e.lift);
-          return `<span onclick="openScWeek(${currentWeek})" title="${escapeAttr(phaseLabel(e.phase) + ': ' + lf.label + (e.load ? ' · ' + e.load : ''))} — click week for details" style="cursor:pointer;display:inline-flex;align-items:center;gap:4px;font-family:'Anton',sans-serif;font-size:9px;letter-spacing:.5px;padding:2px 7px;border-radius:3px;background:${lf.color}80;color:var(--text);border:1px solid ${lf.color}">🏋 ${escapeAttr(phaseLabel(e.phase))}: ${escapeAttr(lf.label)}${e.load ? ` · ${escapeAttr(e.load)}` : ''}</span>`;
+          return `<span onclick="openScWeek(${currentWeek})" title="${escapeAttr(phaseLabel(e.phase) + ': ' + lf.label + (e.load ? ' · ' + e.load : ''))} — click week for details" style="cursor:pointer;display:inline-flex;align-items:center;gap:4px;font-family:'Anton',sans-serif;font-size:9px;letter-spacing:.5px;padding:2px 7px;border-radius:3px;background:${lf.color}80;color:var(--text);border:1px solid ${lf.color}">${escapeAttr(phaseLabel(e.phase))}: ${escapeAttr(lf.label)}${e.load ? ` · ${escapeAttr(e.load)}` : ''}</span>`;
         }).join('')}</div>`
       : '';
 
@@ -5427,7 +5426,7 @@ function openDayPanel(dateStr) {
 
   document.getElementById('dayPanelTitle').textContent = formatDisplay(dateStr);
   document.getElementById('dayPanelWeek').textContent =
-    `Week ${weekNum}${ws.type ? ' · ' + ws.type : ''}${ws.gymPhase ? ' · 🏋 ' + ws.gymPhase : ''}`;
+    `Week ${weekNum}${ws.type ? ' · ' + ws.type : ''}${ws.gymPhase ? ' · ' + ws.gymPhase : ''}`;
 
   const sessions = state.sessions.filter(s => s.date === dateStr);
   const game = state.games.find(g => g.date === dateStr);
@@ -5763,7 +5762,7 @@ function buildLibCard(m) {
 
   // Meta line: team · date · usage
   const metaParts = [];
-  if (m.team) metaParts.push('🏷 ' + m.team);
+  if (m.team) metaParts.push(m.team);
   if (m.dateAdded) metaParts.push(formatDisplay(m.dateAdded));
   if (usageCount) metaParts.push(`Used ${usageCount}×`);
   const metaLine = metaParts.join(' · ');
@@ -6073,7 +6072,7 @@ function openMediaDetail(id) {
     <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:12px">
       <span class="lib-tag ${cfg.cls}">${cfg.icon} ${cfg.label}</span>
       ${intensityTag}
-      ${m.team ? `<span style="font-family:'Anton',sans-serif;font-size:11px;font-weight:700;letter-spacing:1px;color:var(--text2);background:var(--surface3);padding:2px 8px;border-radius:3px">🏷 ${m.team}</span>` : ''}
+      ${m.team ? `<span style="font-family:'Anton',sans-serif;font-size:11px;font-weight:700;letter-spacing:1px;color:var(--text2);background:var(--surface3);padding:2px 8px;border-radius:3px">${m.team}</span>` : ''}
       ${m.dateAdded ? `<span style="font-size:11px;color:var(--text3);font-family:'JetBrains Mono',monospace">${formatDisplay(m.dateAdded)}</span>` : ''}
     </div>
     ${tags ? `<div class="lib-card-tags" style="margin-bottom:12px">${tags}</div>` : ''}
@@ -6226,9 +6225,9 @@ function renderExercises() {
     // If a library drill is attached, show its title (read-only) + an unlink button.
     // Otherwise show an inline URL input that saves like any other field.
     const linkLine = drill
-      ? `<button class="exercise-link-btn has-link" onclick="openPicker('exercise:${i}')" title="Change library drill">📚 ${escapeAttr(drill.title || 'Drill')}</button>
+      ? `<button class="exercise-link-btn has-link" onclick="openPicker('exercise:${i}')" title="Change library drill">${escapeAttr(drill.title || 'Drill')}</button>
          <button class="exercise-link-btn" onclick="clearExerciseLink(${i})" title="Remove link">✕ unlink</button>`
-      : `<button class="exercise-link-btn" onclick="openPicker('exercise:${i}')" title="Pick from Drill Library">📚 Library</button>
+      : `<button class="exercise-link-btn" onclick="openPicker('exercise:${i}')" title="Pick from Drill Library">Library</button>
          <input type="url" placeholder="…or paste a link (YouTube, Drive, etc.)" value="${escapeAttr(ex.url || '')}" oninput="updateExerciseField(${i},'url',this.value)">
          <select class="exercise-cat-select" onchange="updateExerciseField(${i},'category',this.value)" title="Drill Library category used when this link is saved">${drillCatOptions(ex.category || 'technical')}</select>`;
     return `
