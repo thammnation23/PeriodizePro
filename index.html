@@ -4472,6 +4472,22 @@ function exportWeekPDF() {
   const titleExtra = [ws.type, ws.gymPhase].filter(Boolean).join(' · ');
   const esc = escapeAttr;
 
+  // S&C week load status + its recommended-loading prescription (banner row).
+  const scStatus = statusCfg(state.scWeeks?.[w]?.status);
+  const scRx = statusRx(scStatus);
+  const BORD0 = 'border:1px solid #2b2b2b;';
+  const scRxCell = scStatus
+    ? (scRx
+        ? `<span style="color:${scStatus.color};font-family:'Anton',sans-serif;letter-spacing:.5px;margin-right:8px;white-space:nowrap">RECOMMENDED LOADING</span>${escapeAttr(scRx)}`
+        : 'Recommended loading not set for this week type.')
+    : '';
+  const scBanner = scStatus
+    ? `<tr><td colspan="9" style="padding:0;${BORD0}"><div style="display:flex;align-items:stretch">
+        <div style="background:${scStatus.color};color:#000;font-family:'Anton',sans-serif;font-size:12px;letter-spacing:1px;padding:5px 13px;display:flex;align-items:center;white-space:nowrap">S&amp;C WEEK · ${escapeAttr(scStatus.label.toUpperCase())}</div>
+        <div style="flex:1;background:#111;color:#e6eaf0;font-family:Arial,sans-serif;font-size:10px;line-height:1.35;padding:4px 13px;display:flex;align-items:center">${scRxCell}</div>
+      </div></td></tr>`
+    : '';
+
   // Shared cell styles
   const BORD = 'border:1px solid #2b2b2b;';
   const LBL  = `background:#000;color:#f5901e;font-family:'Anton',sans-serif;letter-spacing:.5px;text-transform:uppercase;font-size:10.5px;text-align:right;padding:5px 8px;${BORD}`;
@@ -4543,6 +4559,7 @@ function exportWeekPDF() {
       MICRO CYCLE LOADING PATTERNS · WEEK ${w}<span style="font-size:12px;font-weight:400"> &nbsp;|&nbsp; ${rangeStr}${titleExtra ? ' · ' + esc(titleExtra) : ''}</span>
     </td>
   </tr>
+  ${scBanner}
   <tr><td style="background:#000;${BORD}"></td>${dayHeader}<td style="background:#000;color:#f5901e;text-align:center;font-family:'Anton',sans-serif;font-size:12px;${BORD}">Total</td></tr>
   <tr><td style="${LBL}">Duration &amp; Intensity</td>${durRow}<td style="background:#333;${BORD}"></td></tr>
   <tr><td style="${LBL}">Recommended Session Type</td>${focusRow}<td style="background:#333;${BORD}"></td></tr>
