@@ -3106,6 +3106,32 @@ const TRAVEL_MODES = [
 ];
 const TRAVEL_DIRS = ['Outbound', 'Return', 'Round-trip'];
 function travelModeCfg(mode) { return TRAVEL_MODES.find(m => m.key === mode) || null; }
+
+// Match-day relative label (morphocycle) for a date, derived from entered
+// fixtures: "MD" on a match, "MD-n" counting down to the next match, "MD+n"
+// counting up from the last. The day right after a match stays MD+1 even with a
+// next match a few days out; lead-up days within a week count down (MD-n).
+function mdLabel(dateStr) {
+  const dates = (state.games || []).map(g => g.date).filter(Boolean);
+  if (!dates.length || !dateStr) return '';
+  const DAY = 86400000;
+  const d = new Date(dateStr + 'T00:00:00');
+  let nextDiff = Infinity, prevDiff = Infinity, onMatch = false;
+  dates.forEach(ds => {
+    const diff = Math.round((new Date(ds + 'T00:00:00') - d) / DAY);
+    if (diff === 0) onMatch = true;
+    else if (diff > 0) nextDiff = Math.min(nextDiff, diff);
+    else prevDiff = Math.min(prevDiff, -diff);
+  });
+  if (onMatch) return 'MD';
+  const hasNext = nextDiff !== Infinity, hasPrev = prevDiff !== Infinity;
+  if (hasPrev && prevDiff === 1 && (!hasNext || nextDiff >= 3)) return 'MD+1';
+  if (hasNext && nextDiff <= 6) return 'MD-' + nextDiff;
+  if (hasPrev) return 'MD+' + prevDiff;
+  if (hasNext) return 'MD-' + nextDiff;
+  return '';
+}
+function mdColor(md) { return !md ? '#8792a1' : md === 'MD' ? '#e23b5a' : md[2] === '+' ? '#0a9d57' : '#0094c2'; }
 const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
 const MONTHS_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
@@ -4330,9 +4356,12 @@ function renderWeek() {
         }).join('')}</div>`
       : '';
 
+    const md = mdLabel(dateStr);
+    const mdTag = md ? `<span title="Match-day relative" style="font-family:'Anton',sans-serif;font-size:9px;letter-spacing:.5px;padding:1px 6px;border-radius:3px;background:${mdColor(md)}22;color:${mdColor(md)};border:1px solid ${mdColor(md)}66">${md}</span>` : '';
     card.innerHTML = `
       <div class="week-day-header">
         <span class="week-day-name">${DAYS[di]}</span>
+        ${mdTag}
         ${buildSquadBadgeHTML(dateStr)}
         <span class="week-day-date">${d.getDate()} ${MONTHS_SHORT[d.getMonth()]}</span>
       </div>
@@ -9636,7 +9665,9 @@ function renderScWeekPlanner() {
         ? `<div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:2px">${seg(pre)}${seg(post)}</div>`
         : `<div style="flex:1;display:flex;align-items:center;justify-content:center;color:var(--text3);font-size:12px;border:1px solid var(--border);border-radius:3px;min-height:44px">·</div>`;
       // Date label (day of month) on top of each cell; opponent named below on match days.
-      const dateHdr = `<div style="font-size:9px;line-height:1.2;text-align:center;font-family:'JetBrains Mono',monospace;color:${isMatch ? 'var(--game)' : 'var(--text3)'}">${MONTHS_SHORT[d.getMonth()]} ${d.getDate()}</div>`;
+      const md = mdLabel(formatDate(d));
+      const mdInline = (!isMatch && md) ? ` <span style="color:${mdColor(md)};font-weight:700">${md}</span>` : '';
+      const dateHdr = `<div style="font-size:9px;line-height:1.2;text-align:center;font-family:'JetBrains Mono',monospace;color:${isMatch ? 'var(--game)' : 'var(--text3)'}">${MONTHS_SHORT[d.getMonth()]} ${d.getDate()}${mdInline}</div>`;
       return `<div title="${escapeAttr(tip)}" style="position:relative;flex:1;min-width:0;min-height:54px;display:flex;flex-direction:column;gap:1px">${dateHdr}${matchLine}${body}</div>`;
     }).join('');
     const statusPill = st
