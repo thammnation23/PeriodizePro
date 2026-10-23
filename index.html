@@ -2312,22 +2312,6 @@
       <div class="exercise-list" id="exerciseList"></div>
       <button class="btn btn-ghost btn-sm" style="margin-top:8px" onclick="addExerciseRow()">＋ Add Exercise</button>
 
-      <hr class="section-divider">
-      <div class="form-group" style="margin-bottom:16px">
-        <label>GD Code <span style="color:var(--text3);font-size:10px;font-weight:400;letter-spacing:0">— Goal Difference context</span></label>
-        <div style="display:flex;align-items:center;gap:10px">
-          <div style="display:flex;align-items:center;gap:8px;flex:1;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:6px 12px">
-            <span style="font-family:'Anton',sans-serif;font-weight:700;font-size:16px;color:var(--game)">−</span>
-            <input type="number" id="gdMinus" placeholder="0" min="0" max="20" style="border:none;background:transparent;width:50px;font-family:'JetBrains Mono',monospace;font-size:15px;color:var(--game);text-align:center;padding:0">
-          </div>
-          <span style="font-family:'Anton',sans-serif;font-size:13px;color:var(--text3);letter-spacing:1px">GD</span>
-          <div style="display:flex;align-items:center;gap:8px;flex:1;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:6px 12px">
-            <span style="font-family:'Anton',sans-serif;font-weight:700;font-size:16px;color:var(--green)">+</span>
-            <input type="number" id="gdPlus" placeholder="0" min="0" max="20" style="border:none;background:transparent;width:50px;font-family:'JetBrains Mono',monospace;font-size:15px;color:var(--green);text-align:center;padding:0">
-          </div>
-        </div>
-        <div style="font-size:11px;color:var(--text3);margin-top:5px;font-family:'Anton',sans-serif;letter-spacing:0.5px">e.g. GD −2 / +3 → session designed for teams losing by 2 to winning by 3</div>
-      </div>
 
       <div class="form-group">
         <label>Notes</label>
@@ -3107,31 +3091,33 @@ const TRAVEL_MODES = [
 const TRAVEL_DIRS = ['Outbound', 'Return', 'Round-trip'];
 function travelModeCfg(mode) { return TRAVEL_MODES.find(m => m.key === mode) || null; }
 
-// Match-day relative label (morphocycle) for a date, derived from entered
-// fixtures: "MD" on a match, "MD-n" counting down to the next match, "MD+n"
-// counting up from the last. The day right after a match stays MD+1 even with a
-// next match a few days out; lead-up days within a week count down (MD-n).
-function mdLabel(dateStr) {
+// Match-day relatives (morphocycle) from entered fixtures: days since the last
+// match (+) and days to the next (-). Both are shown together, e.g. "+3/-4".
+function mdParts(dateStr) {
   const dates = (state.games || []).map(g => g.date).filter(Boolean);
-  if (!dates.length || !dateStr) return '';
+  if (!dates.length || !dateStr) return null;
   const DAY = 86400000;
   const d = new Date(dateStr + 'T00:00:00');
-  let nextDiff = Infinity, prevDiff = Infinity, onMatch = false;
-  dates.forEach(ds => {
-    const diff = Math.round((new Date(ds + 'T00:00:00') - d) / DAY);
-    if (diff === 0) onMatch = true;
-    else if (diff > 0) nextDiff = Math.min(nextDiff, diff);
-    else prevDiff = Math.min(prevDiff, -diff);
-  });
-  if (onMatch) return 'MD';
-  const hasNext = nextDiff !== Infinity, hasPrev = prevDiff !== Infinity;
-  if (hasPrev && prevDiff === 1 && (!hasNext || nextDiff >= 3)) return 'MD+1';
-  if (hasNext && nextDiff <= 6) return 'MD-' + nextDiff;
-  if (hasPrev) return 'MD+' + prevDiff;
-  if (hasNext) return 'MD-' + nextDiff;
-  return '';
+  let next = Infinity, prev = Infinity, onMatch = false;
+  dates.forEach(ds => { const diff = Math.round((new Date(ds + 'T00:00:00') - d) / DAY);
+    if (diff === 0) onMatch = true; else if (diff > 0) next = Math.min(next, diff); else prev = Math.min(prev, -diff); });
+  return { onMatch, prev: prev === Infinity ? null : prev, next: next === Infinity ? null : next };
 }
-function mdColor(md) { return !md ? '#8792a1' : md === 'MD' ? '#e23b5a' : md[2] === '+' ? '#0a9d57' : '#0094c2'; }
+// Coloured inner HTML: "MD" on a match, else "+P/-N" (green + / blue −). '' when no fixtures.
+function mdInner(dateStr) {
+  const p = mdParts(dateStr); if (!p) return '';
+  if (p.onMatch) return `<span style="color:#e23b5a">MD</span>`;
+  const bits = [];
+  if (p.prev != null) bits.push(`<span style="color:#0a9d57">+${p.prev}</span>`);
+  if (p.next != null) bits.push(`<span style="color:#0094c2">-${p.next}</span>`);
+  return bits.join(`<span style="color:var(--text3)">/</span>`);
+}
+function mdTitle(dateStr) {
+  const p = mdParts(dateStr); if (!p) return '';
+  if (p.onMatch) return 'Match day';
+  const a = []; if (p.prev != null) a.push(p.prev + 'd since last match'); if (p.next != null) a.push(p.next + 'd to next match');
+  return a.join(' · ');
+}
 const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
 const MONTHS_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
@@ -4198,12 +4184,14 @@ function renderMonth() {
     const scStatus = statusCfg(state.scWeeks[weekNum]?.status);
     const scEntries = dayEntries(state.scWeeks[weekNum]?.days?.[scDn]);
     const scLiftRow = scEntries.length
-      ? `<div style="display:flex;flex-wrap:wrap;gap:3px;margin-top:3px">${scEntries.map(e => { const lf = liftByKey(e.lift);
-          return `<span title="${escapeAttr(phaseLabel(e.phase) + ': ' + lf.label + (e.load ? ' · ' + e.load : ''))}" style="font-family:'Anton',sans-serif;font-size:8px;font-weight:700;letter-spacing:.3px;padding:1px 5px;border-radius:2px;background:${lf.color}2e;color:${lf.color};border:1px solid ${lf.color}">${lf.short}</span>`; }).join('')}</div>`
+      ? `<div style="display:flex;flex-direction:column;align-items:flex-start;gap:2px;margin-top:3px">${scEntries.map(e => { const lf = liftByKey(e.lift); const ph = e.phase === 'pre' ? 'ACT' : 'GYM';
+          return `<span title="${escapeAttr(phaseLabel(e.phase) + ': ' + lf.label + (e.load ? ' · ' + e.load : ''))}" style="display:inline-flex;align-items:center;gap:4px;max-width:100%;font-family:'Anton',sans-serif;font-size:9px;font-weight:700;letter-spacing:.3px;padding:2px 6px;border-radius:3px;background:${lf.color}80;color:var(--text);border:1px solid ${lf.color}"><span style="font-size:8px;opacity:.75">${ph}</span><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeAttr(lf.label)}</span></span>`; }).join('')}</div>`
       : '';
+    const monthMdI = mdInner(dateStr);
+    const monthMdTag = monthMdI ? `<span title="${escapeAttr(mdTitle(dateStr))}" style="font-family:'Anton',sans-serif;font-size:8.5px;letter-spacing:.3px;padding:0 5px;border-radius:3px;background:var(--surface2);border:1px solid var(--border)">${monthMdI}</span>` : '';
     cell.innerHTML = `
       <div class="month-day-header-row">
-        <div class="month-day-num">${d.getDate()}</div>
+        <div style="display:flex;align-items:center;gap:5px"><div class="month-day-num">${d.getDate()}</div>${monthMdTag}</div>
         ${buildSquadBadgeHTML(dateStr)}
         <div style="display:flex;align-items:center;gap:4px">
           ${scStatus ? `<span title="S&C week: ${scStatus.label}" style="width:8px;height:8px;border-radius:50%;background:${scStatus.color};display:inline-block"></span>` : ''}
@@ -4352,12 +4340,12 @@ function renderWeek() {
     const scChip = scEntries.length
       ? `<div style="margin-bottom:6px;display:flex;flex-wrap:wrap;gap:4px">${scEntries.map(e => {
           const lf = liftByKey(e.lift);
-          return `<span onclick="openScWeek(${currentWeek})" title="${escapeAttr(phaseLabel(e.phase) + ': ' + lf.label + (e.load ? ' · ' + e.load : ''))} — click week for details" style="cursor:pointer;display:inline-flex;align-items:center;gap:4px;font-family:'Anton',sans-serif;font-size:9px;letter-spacing:.5px;padding:2px 7px;border-radius:3px;background:${lf.color}22;color:${lf.color};border:1px solid ${lf.color}55">🏋 ${escapeAttr(phaseLabel(e.phase))}: ${escapeAttr(lf.label)}${e.load ? ` · ${escapeAttr(e.load)}` : ''}</span>`;
+          return `<span onclick="openScWeek(${currentWeek})" title="${escapeAttr(phaseLabel(e.phase) + ': ' + lf.label + (e.load ? ' · ' + e.load : ''))} — click week for details" style="cursor:pointer;display:inline-flex;align-items:center;gap:4px;font-family:'Anton',sans-serif;font-size:9px;letter-spacing:.5px;padding:2px 7px;border-radius:3px;background:${lf.color}80;color:var(--text);border:1px solid ${lf.color}">🏋 ${escapeAttr(phaseLabel(e.phase))}: ${escapeAttr(lf.label)}${e.load ? ` · ${escapeAttr(e.load)}` : ''}</span>`;
         }).join('')}</div>`
       : '';
 
-    const md = mdLabel(dateStr);
-    const mdTag = md ? `<span title="Match-day relative" style="font-family:'Anton',sans-serif;font-size:9px;letter-spacing:.5px;padding:1px 6px;border-radius:3px;background:${mdColor(md)}22;color:${mdColor(md)};border:1px solid ${mdColor(md)}66">${md}</span>` : '';
+    const mdI = mdInner(dateStr);
+    const mdTag = mdI ? `<span title="${escapeAttr(mdTitle(dateStr))}" style="font-family:'Anton',sans-serif;font-size:9px;letter-spacing:.3px;padding:1px 6px;border-radius:3px;background:var(--surface2);border:1px solid var(--border)">${mdI}</span>` : '';
     card.innerHTML = `
       <div class="week-day-header">
         <span class="week-day-name">${DAYS[di]}</span>
@@ -4741,8 +4729,8 @@ function editSession(id) {
   document.getElementById('metricSD').value = s.sd || '';
   // Combined Acc/Dec field — sum legacy acc + dec values for display
   document.getElementById('metricAccDec').value = ((parseInt(s.acc)||0) + (parseInt(s.dec)||0)) || '';
-  document.getElementById('gdMinus').value = s.gdMinus || '';
-  document.getElementById('gdPlus').value  = s.gdPlus  || '';
+  currentGdMinus = s.gdMinus || '';
+  currentGdPlus  = s.gdPlus  || '';
   currentActivation = s.activation || ''; // field removed from form; value preserved on save
   // Load attached media
   sessionAttachments.warmup = (s.warmupMedia || []).map(id => state.media.find(m => m.id === id)).filter(Boolean);
@@ -4770,10 +4758,12 @@ function editSession(id) {
 }
 
 function clearSessionForm() {
-  ['sessionDate','sessionDuration','sessionPrinciple','metricTD','metricHSR','metricSD','metricAccDec','sessionNotes','gdMinus','gdPlus','sessionActivation'].forEach(id => {
+  ['sessionDate','sessionDuration','sessionPrinciple','metricTD','metricHSR','metricSD','metricAccDec','sessionNotes','sessionActivation'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.value = '';
   });
+  currentGdMinus = '';
+  currentGdPlus = '';
   document.getElementById('sessionComplexity').value = '';
   document.getElementById('intensityRange').value = 5;
   updateIntensity(5);
@@ -4902,8 +4892,8 @@ async function saveSession() {
       .filter(p => p.description?.trim() || p.type)
       .map(p => ({ ...p })),
     testing: currentTesting.map(t => ({ ...t })),
-    gdMinus: document.getElementById('gdMinus').value,
-    gdPlus:  document.getElementById('gdPlus').value,
+    gdMinus: currentGdMinus,
+    gdPlus:  currentGdPlus,
     activation: currentActivation, // field removed from form; preserved from existing value
     notes: document.getElementById('sessionNotes').value,
   };
@@ -6116,6 +6106,8 @@ let pickerSelections = new Set();
 const TEST_TYPES = ['Nordic', 'CMJ', 'DJ', 'SJ', '10-5', 'Hip Ad/Ab 60', 'Hip Ad/Ab 0'];
 let currentTesting = []; // [{ test, notes }]
 let currentActivation = ''; // legacy session activation theme — preserved, not edited in-form
+let currentGdMinus = '';    // legacy GD code — preserved, no longer edited in-form (MD± is auto)
+let currentGdPlus = '';
 
 function renderTestingChips() {
   const chipHost = document.getElementById('testingChips');
@@ -9665,8 +9657,8 @@ function renderScWeekPlanner() {
         ? `<div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:2px">${seg(pre)}${seg(post)}</div>`
         : `<div style="flex:1;display:flex;align-items:center;justify-content:center;color:var(--text3);font-size:12px;border:1px solid var(--border);border-radius:3px;min-height:44px">·</div>`;
       // Date label (day of month) on top of each cell; opponent named below on match days.
-      const md = mdLabel(formatDate(d));
-      const mdInline = (!isMatch && md) ? ` <span style="color:${mdColor(md)};font-weight:700">${md}</span>` : '';
+      const mdI = mdInner(formatDate(d));
+      const mdInline = (!isMatch && mdI) ? ` ${mdI}` : '';
       const dateHdr = `<div style="font-size:9px;line-height:1.2;text-align:center;font-family:'JetBrains Mono',monospace;color:${isMatch ? 'var(--game)' : 'var(--text3)'}">${MONTHS_SHORT[d.getMonth()]} ${d.getDate()}${mdInline}</div>`;
       return `<div title="${escapeAttr(tip)}" style="position:relative;flex:1;min-width:0;min-height:54px;display:flex;flex-direction:column;gap:1px">${dateHdr}${matchLine}${body}</div>`;
     }).join('');
