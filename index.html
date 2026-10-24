@@ -3623,25 +3623,29 @@ function renderYear() {
     cell.className = 'year-week-num';
     cell.textContent = w;
     cell.title = 'Jump to Week ' + w;
+    // Highlight the week number for international-window weeks.
+    const ws0 = getWeekStart(w); const we0 = new Date(ws0); we0.setDate(we0.getDate() + 6);
+    const win0 = getIntlWindows().find(x => x.start && x.end && x.start <= formatDate(we0) && x.end >= formatDate(ws0));
+    if (win0) {
+      cell.style.cssText = `background:${INTL_COLOR};color:#fff;border-radius:3px;font-weight:700;`;
+      cell.title = `W${w} · International window${win0.label ? ' · ' + win0.label : ''}`;
+    }
     cell.addEventListener('click', () => { currentWeek = w; switchTab('week'); });
     weekNumRow.appendChild(cell);
   }
   table.appendChild(weekNumRow);
 
-  // Season phase + international window per day cell (di × week) — used to border
-  // the boundary of each range without touching the cell fill.
-  const phaseAt = [], intlAt = [];
+  // Season phase per day cell (di × week) — used to border the boundary of each
+  // phase range without touching the cell fill.
+  const phaseAt = [];
   for (let di = 0; di < 7; di++) {
-    phaseAt[di] = []; intlAt[di] = [];
+    phaseAt[di] = [];
     for (let w = 1; w <= 52; w++) {
       const d = new Date(getWeekStart(w)); d.setDate(d.getDate() + di);
-      const ds = formatDate(d);
-      phaseAt[di][w] = phaseForDate(ds);
-      intlAt[di][w] = intlForDate(ds);
+      phaseAt[di][w] = phaseForDate(formatDate(d));
     }
   }
   const samePhase = (a, b) => (a ? '|' + a.name + '|' + a.start : '') === (b ? '|' + b.name + '|' + b.start : '');
-  const sameIntl  = (a, b) => (a ? '|' + a.start + '|' + a.end : '') === (b ? '|' + b.start + '|' + b.end : '');
 
   // Rows 3–9: Mon–Sun — intensity bars
   DAYS.forEach((dayName, di) => {
@@ -3714,12 +3718,10 @@ function renderYear() {
         cell.style.cssText = 'background:var(--surface2);height:28px;border-radius:3px;cursor:pointer;';
       }
 
-      // Season phase + international window boundaries — border only the outer
-      // edges of each range via inset box-shadow (fill + layout untouched).
-      // Phase shadows listed first so they sit on top where edges coincide;
-      // international windows are teal.
+      // Season phase boundary — border only the outer edges of the phase range
+      // via inset box-shadow (fill + layout untouched). International windows
+      // are shown via the week-number highlight + the labelled Intl band below.
       const ph = phaseAt[di][w];
-      const iw = intlAt[di][w];
       const sh = [];
       if (ph) {
         const c = ph.color;
@@ -3728,13 +3730,6 @@ function renderYear() {
         if (w === 1  || !samePhase(phaseAt[di][w - 1], ph)) sh.push(`inset 2px 0 0 0 ${c}`);
         if (w === 52 || !samePhase(phaseAt[di][w + 1], ph)) sh.push(`inset -2px 0 0 0 ${c}`);
         cell.dataset.phase = ph.name;
-      }
-      if (iw) {
-        const c = INTL_COLOR;
-        if (di === 0 || !sameIntl(intlAt[di - 1][w], iw)) sh.push(`inset 0 2px 0 0 ${c}`);
-        if (di === 6 || !sameIntl(intlAt[di + 1][w], iw)) sh.push(`inset 0 -2px 0 0 ${c}`);
-        if (w === 1  || !sameIntl(intlAt[di][w - 1], iw)) sh.push(`inset 2px 0 0 0 ${c}`);
-        if (w === 52 || !sameIntl(intlAt[di][w + 1], iw)) sh.push(`inset -2px 0 0 0 ${c}`);
       }
       if (sh.length) cell.style.boxShadow = sh.join(', ');
 
@@ -3754,26 +3749,39 @@ function renderYear() {
   grid.appendChild(table);
   container.appendChild(grid);
 
-  // ── International windows row (separate layer from phases) ──
+  // ── International windows band (separate layer from phases) — a labelled
+  // teal bar aligned to the weeks it covers. ──
   const intlRow = document.createElement('div');
-  intlRow.style.cssText = 'display:grid;grid-template-columns:70px repeat(52,minmax(14px,1fr));gap:2px;min-width:900px;margin-top:8px;';
+  intlRow.style.cssText = 'display:grid;grid-template-columns:70px 1fr;gap:2px;min-width:900px;margin-top:8px;';
   const intlLbl = document.createElement('div');
   intlLbl.className = 'year-label';
-  intlLbl.textContent = 'Intl';
-  intlLbl.style.cssText += 'font-size:9px;color:' + INTL_COLOR + ';cursor:pointer;';
+  intlLbl.textContent = 'INTL';
+  intlLbl.style.cssText += 'font-size:9px;color:' + INTL_COLOR + ';cursor:pointer;font-weight:700;';
   intlLbl.title = 'International windows — click to edit';
   intlLbl.onclick = openSeasonPhases;
   intlRow.appendChild(intlLbl);
+  const intlBand = document.createElement('div');
+  intlBand.style.cssText = 'display:flex;gap:2px;cursor:pointer;';
+  intlBand.onclick = openSeasonPhases;
+  const weekWin = [];
   for (let w = 1; w <= 52; w++) {
     const ws = getWeekStart(w); const we = new Date(ws); we.setDate(we.getDate() + 6);
-    const wsS = formatDate(ws), weS = formatDate(we);
-    const win = getIntlWindows().find(x => x.start && x.end && x.start <= weS && x.end >= wsS);
-    const cell = document.createElement('div');
-    cell.style.cssText = `height:9px;border-radius:2px;background:${win ? INTL_COLOR : 'var(--surface2)'};cursor:pointer;`;
-    cell.title = win ? `International window${win.label ? ' · ' + win.label : ''} · ${win.start} → ${win.end}` : `W${w} · no international window — click to add`;
-    cell.onclick = openSeasonPhases;
-    intlRow.appendChild(cell);
+    weekWin.push(getIntlWindows().find(x => x.start && x.end && x.start <= formatDate(we) && x.end >= formatDate(ws)) || null);
   }
+  let iw2 = 0;
+  while (iw2 < 52) {
+    const win = weekWin[iw2];
+    const key = win ? win.start + '|' + win.end : '';
+    let jw = iw2; while (jw + 1 < 52 && ((weekWin[jw + 1] ? weekWin[jw + 1].start + '|' + weekWin[jw + 1].end : '') === key)) jw++;
+    const span = jw - iw2 + 1;
+    const seg = document.createElement('div');
+    seg.style.cssText = `flex:${span} 1 0;min-width:0;height:16px;border-radius:3px;background:${win ? INTL_COLOR : 'var(--surface2)'};display:flex;align-items:center;justify-content:center;overflow:hidden;`;
+    if (win) seg.innerHTML = `<span style="font-family:'Anton',sans-serif;font-size:9px;letter-spacing:.5px;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding:0 5px">${escapeAttr((win.label || 'INTL WINDOW').toUpperCase())}</span>`;
+    seg.title = win ? `International window${win.label ? ' · ' + win.label : ''} · ${win.start} → ${win.end}` : 'No international window — click to add';
+    intlBand.appendChild(seg);
+    iw2 = jw + 1;
+  }
+  intlRow.appendChild(intlBand);
   container.appendChild(intlRow);
 
   // ── Gym Phase row ──
@@ -3867,7 +3875,7 @@ function renderYear() {
   if (phaseLegend) {
     const phases = getSeasonPhases();
     const intl = getIntlWindows();
-    const intlLegend = intl.length ? `<span class="legend-item" title="International windows"><span class="legend-dot" style="background:transparent;border:2px solid ${INTL_COLOR}"></span>Intl window</span>` : '';
+    const intlLegend = intl.length ? `<span class="legend-item" title="International windows"><span class="legend-dot" style="background:${INTL_COLOR}"></span>Intl window</span>` : '';
     phaseLegend.innerHTML = (phases.length || intl.length)
       ? `<span style="font-family:'Anton',sans-serif;letter-spacing:1.5px;color:var(--text3);font-size:12px;margin-right:8px">SEASON:</span>` +
         phases.map(p => `<span class="legend-item" title="${escapeAttr(p.start + ' → ' + p.end)}"><span class="legend-dot" style="background:transparent;border:2px solid ${p.color}"></span>${escapeAttr(p.name)}</span>`).join('') +
@@ -6615,12 +6623,12 @@ const DEFAULT_GYM_PHASES = [
 // the user sets, shown as a band on the Annual plan. Stored in
 // app_settings.season_phases as [{name, start, end, color}].
 const SEASON_PHASE_PRESETS = [
-  { name: 'Preseason',      color: '#f5a623' },
-  { name: 'Regular Season', color: '#0094c2' },
-  { name: 'Summer Break',   color: '#e2a44a' },
-  { name: 'Winter Break',   color: '#7a4ddb' },
-  { name: 'Off-Season',     color: '#8792a1' },
-  { name: 'Playoffs',       color: '#e23b5a' },
+  { name: 'Preseason',      color: '#f5a623' },  // amber
+  { name: 'Regular Season', color: '#1f6feb' },  // blue
+  { name: 'Summer Break',   color: '#e8503a' },  // red-orange
+  { name: 'Winter Break',   color: '#8b5cf6' },  // purple
+  { name: 'Off-Season',     color: '#64748b' },  // slate
+  { name: 'Playoffs',       color: '#db2777' },  // magenta
 ];
 function getSeasonPhases() { const c = state.settings?.season_phases; return Array.isArray(c) ? c : []; }
 // The phase segment covering a date (inclusive), or null.
