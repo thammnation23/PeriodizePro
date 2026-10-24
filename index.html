@@ -2238,6 +2238,10 @@
         <div class="chip chip-none active" onclick="selectChip(this,'type2','')">None</div>
       </div>
 
+      <div id="offDayHint" style="display:none;margin:10px 0;padding:9px 12px;border-radius:var(--radius);background:rgba(100,116,139,0.12);border:1px solid rgba(100,116,139,0.4);border-left:3px solid #64748b;font-size:12px;line-height:1.5;color:var(--text2)">
+        <b style="color:var(--text)">Off Day</b> — team load is set to 0. You can still add <b>Notes</b> below, mark individuals <b>RTP / Modified</b> in the Squad roster, or add a separate session on this day for anyone training.
+      </div>
+
       <div class="form-grid">
         <div class="form-group">
           <label>Date</label>
@@ -4815,6 +4819,32 @@ function selectChip(el, key, val) {
   parent.querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
   el.classList.add('active');
   chipSelections[key] = val;
+  if (key === 'type' || key === 'type2') syncOffDayForm();
+}
+
+// "Off Day" — zero + lock the team load fields (notes and squad roster stay
+// editable so individuals can still be set to RTP / a separate session).
+function syncOffDayForm() {
+  const isOff = chipSelections['type'] === 'Off Day' || chipSelections['type2'] === 'Off Day';
+  const hint = document.getElementById('offDayHint');
+  if (hint) hint.style.display = isOff ? 'block' : 'none';
+  ['sessionDuration', 'metricTD', 'metricHSR', 'metricSD', 'metricAccDec'].forEach(id => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    if (isOff) el.value = '0';
+    el.disabled = isOff;
+    el.style.opacity = isOff ? '0.45' : '';
+  });
+  const range = document.getElementById('intensityRange');
+  if (range) {
+    range.disabled = isOff;
+    range.style.opacity = isOff ? '0.45' : '';
+    if (isOff) {
+      range.value = range.min || 1;
+      const iv = document.getElementById('intensityVal'); if (iv) iv.textContent = '0';
+      const il = document.getElementById('intensityLabel'); if (il) { il.textContent = 'Off'; il.style.color = 'var(--text3)'; }
+    }
+  }
 }
 
 // ── ADD SESSION ──
@@ -5037,6 +5067,12 @@ async function saveSession() {
     activation: currentActivation, // field removed from form; preserved from existing value
     notes: document.getElementById('sessionNotes').value,
   };
+
+  // Off Day — zero the team load regardless of the (locked) inputs; notes kept.
+  if (session.type === 'Off Day' || session.type2 === 'Off Day') {
+    session.duration = '0'; session.intensity = '0';
+    session.td = '0'; session.hsr = '0'; session.sd = '0'; session.acc = '0'; session.dec = '0';
+  }
 
   if (editingSessionId) {
     const idx = state.sessions.findIndex(s => s.id === editingSessionId);
@@ -7027,6 +7063,7 @@ function rebuildSessionTypeChips() {
       c.classList.toggle('active', val === current2);
     });
   }
+  syncOffDayForm();
 }
 
 // ══════════════════════════════════════════════════════
@@ -7119,6 +7156,12 @@ async function saveDayPopover() {
         warmupMedia: [], sessionMedia: [],
         gdMinus:'', gdPlus:'', activation:'', notes:'',
       };
+
+  // Off Day — zero the team load; notes preserved.
+  if (session.type === 'Off Day' || session.type2 === 'Off Day') {
+    session.duration = '0'; session.intensity = '0';
+    session.td = '0'; session.hsr = '0'; session.sd = '0'; session.acc = '0'; session.dec = '0';
+  }
 
   if (existing) {
     const idx = state.sessions.findIndex(s => s.id === existing.id);
