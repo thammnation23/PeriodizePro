@@ -3696,19 +3696,15 @@ function renderYear() {
       } else if (sessions.length > 0) {
         const s = sessions[0];
         const bg1 = getTypeBackground(s.type);
-        const c2  = s.type2 ? getTypeColor(s.type2) : null;
 
         cell.style.cssText = 'position:relative;overflow:hidden;height:28px;border-radius:3px;cursor:pointer;';
 
-        if (c2) {
-          // Diagonal split — base background (may be striped) plus a solid triangle for type2
+        if (s.type2) {
+          // Diagonal split — each half keeps its own background (striped if the
+          // type is striped): primary fills the cell, secondary a bottom-right triangle.
           cell.style.background = bg1;
           const tri = document.createElement('div');
-          tri.style.cssText = `
-            position:absolute;bottom:0;right:0;width:0;height:0;
-            border-style:solid;border-width:0 0 28px 28px;
-            border-color:transparent transparent ${c2} transparent;
-          `;
+          tri.style.cssText = `position:absolute;inset:0;background:${getTypeBackground(s.type2)};clip-path:polygon(100% 0%, 100% 100%, 0% 100%);`;
           cell.appendChild(tri);
         } else {
           // Solid colour or striped background depending on type
