@@ -1936,6 +1936,7 @@
       <span class="legend-item"><span class="legend-dot" style="background:#7f77dd"></span>Away</span>
       <span class="legend-item"><span class="legend-dot" style="background:#9e9e9e"></span>Neutral</span>
     </div>
+    <div class="year-legend" style="margin-top:10px" id="yearLegendPhases"></div>
   </div>
 
   <!-- ── MONTH VIEW ── -->
@@ -3620,6 +3621,18 @@ function renderYear() {
   }
   table.appendChild(weekNumRow);
 
+  // Season phase per day cell (di × week) — used to border the boundary of each
+  // phase range without touching the cell fill.
+  const phaseAt = [];
+  for (let di = 0; di < 7; di++) {
+    phaseAt[di] = [];
+    for (let w = 1; w <= 52; w++) {
+      const d = new Date(getWeekStart(w)); d.setDate(d.getDate() + di);
+      phaseAt[di][w] = phaseForDate(formatDate(d));
+    }
+  }
+  const samePhase = (a, b) => (a ? '|' + a.name + '|' + a.start : '') === (b ? '|' + b.name + '|' + b.start : '');
+
   // Rows 3–9: Mon–Sun — intensity bars
   DAYS.forEach((dayName, di) => {
     const row = document.createElement('div');
@@ -3691,6 +3704,19 @@ function renderYear() {
         cell.style.cssText = 'background:var(--surface2);height:28px;border-radius:3px;cursor:pointer;';
       }
 
+      // Season phase boundary — border only the outer edges of the phase range,
+      // via inset box-shadow so the cell fill and layout are untouched.
+      const ph = phaseAt[di][w];
+      if (ph) {
+        const c = ph.color, sh = [];
+        if (di === 0     || !samePhase(phaseAt[di - 1][w], ph)) sh.push(`inset 0 2px 0 0 ${c}`);
+        if (di === 6     || !samePhase(phaseAt[di + 1][w], ph)) sh.push(`inset 0 -2px 0 0 ${c}`);
+        if (w === 1      || !samePhase(phaseAt[di][w - 1], ph)) sh.push(`inset 2px 0 0 0 ${c}`);
+        if (w === 52     || !samePhase(phaseAt[di][w + 1], ph)) sh.push(`inset -2px 0 0 0 ${c}`);
+        if (sh.length) cell.style.boxShadow = sh.join(', ');
+        cell.dataset.phase = ph.name;
+      }
+
       // Click — open day type popover
       cell.addEventListener('mouseenter', (e) => showTooltip(e, w, dateStr, sessions, isGame));
       cell.addEventListener('mouseleave', hideTooltip);
@@ -3706,36 +3732,6 @@ function renderYear() {
 
   grid.appendChild(table);
   container.appendChild(grid);
-
-  // ── Season Phase band (Preseason / Regular Season / breaks / Playoffs…) ──
-  const phaseRow = document.createElement('div');
-  phaseRow.style.cssText = 'display:grid;grid-template-columns:70px 1fr;gap:2px;min-width:900px;margin-top:8px;';
-  const phaseLbl = document.createElement('div');
-  phaseLbl.className = 'year-label';
-  phaseLbl.textContent = 'Season';
-  phaseLbl.style.fontSize = '9px';
-  phaseRow.appendChild(phaseLbl);
-  const band = document.createElement('div');
-  band.style.cssText = 'display:flex;gap:2px;cursor:pointer;';
-  band.title = 'Click to set season phases';
-  band.onclick = openSeasonPhases;
-  const weekPhases = [];
-  for (let w = 1; w <= 52; w++) weekPhases.push(phaseForDate(formatDate(getWeekStart(w))));
-  let wi = 0;
-  while (wi < 52) {
-    const p = weekPhases[wi];
-    const key = p ? p.name + '|' + p.start : '';
-    let wj = wi; while (wj + 1 < 52 && ((weekPhases[wj + 1] ? weekPhases[wj + 1].name + '|' + weekPhases[wj + 1].start : '') === key)) wj++;
-    const span = wj - wi + 1;
-    const seg = document.createElement('div');
-    seg.style.cssText = `flex:${span} 1 0;min-width:0;height:18px;border-radius:3px;background:${p ? p.color : 'var(--surface2)'};display:flex;align-items:center;justify-content:center;overflow:hidden;`;
-    if (p) seg.innerHTML = `<span style="font-family:'Anton',sans-serif;font-size:9px;letter-spacing:.5px;color:${textOnColor(p.color)};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding:0 4px">${escapeAttr(p.name.toUpperCase())}</span>`;
-    seg.title = p ? `${p.name} · ${p.start} → ${p.end}` : 'No phase set — click to add';
-    band.appendChild(seg);
-    wi = wj + 1;
-  }
-  phaseRow.appendChild(band);
-  container.appendChild(phaseRow);
 
   // ── Gym Phase row ──
   const gymRow = document.createElement('div');
@@ -3821,6 +3817,17 @@ function renderYear() {
     fieldLegend.innerHTML = getSessionTypes().map(t =>
       `<div class="legend-item"><div class="legend-dot" style="background:${typeObjBackground(t)}"></div> ${t.name}</div>`
     ).join('') + `<div class="legend-item"><div class="legend-dot" style="background:var(--surface3)"></div> Rest</div>`;
+  }
+
+  // ── Season-phase legend (the border colours around the grid) ──
+  const phaseLegend = document.getElementById('yearLegendPhases');
+  if (phaseLegend) {
+    const phases = getSeasonPhases();
+    phaseLegend.innerHTML = phases.length
+      ? `<span style="font-family:'Anton',sans-serif;letter-spacing:1.5px;color:var(--text3);font-size:12px;margin-right:8px">SEASON:</span>` +
+        phases.map(p => `<span class="legend-item" title="${escapeAttr(p.start + ' → ' + p.end)}"><span class="legend-dot" style="background:transparent;border:2px solid ${p.color}"></span>${escapeAttr(p.name)}</span>`).join('') +
+        `<button class="btn btn-ghost btn-sm" style="margin-left:4px" onclick="openSeasonPhases()">Edit</button>`
+      : `<span style="font-size:11px;color:var(--text3)">No season phases set — <span style="color:var(--accent);cursor:pointer;text-decoration:underline" onclick="openSeasonPhases()">add date ranges</span> to outline Preseason, Regular Season, breaks, Playoffs on the grid.</span>`;
   }
 }
 
