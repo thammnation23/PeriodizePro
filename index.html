@@ -3749,6 +3749,37 @@ function renderYear() {
   grid.appendChild(table);
   container.appendChild(grid);
 
+  // ── Season phase band (labelled bar, aligned to the weeks it covers) ──
+  const phaseRow = document.createElement('div');
+  phaseRow.style.cssText = 'display:grid;grid-template-columns:70px 1fr;gap:2px;min-width:900px;margin-top:8px;';
+  const phaseLbl = document.createElement('div');
+  phaseLbl.className = 'year-label';
+  phaseLbl.textContent = 'SEASON';
+  phaseLbl.style.cssText += 'font-size:9px;cursor:pointer;font-weight:700;';
+  phaseLbl.title = 'Season phases — click to edit';
+  phaseLbl.onclick = openSeasonPhases;
+  phaseRow.appendChild(phaseLbl);
+  const phaseBand = document.createElement('div');
+  phaseBand.style.cssText = 'display:flex;gap:2px;cursor:pointer;';
+  phaseBand.onclick = openSeasonPhases;
+  const weekPhases = [];
+  for (let w = 1; w <= 52; w++) weekPhases.push(phaseForDate(formatDate(getWeekStart(w))));
+  let pwi = 0;
+  while (pwi < 52) {
+    const p = weekPhases[pwi];
+    const key = p ? p.name + '|' + p.start : '';
+    let pwj = pwi; while (pwj + 1 < 52 && ((weekPhases[pwj + 1] ? weekPhases[pwj + 1].name + '|' + weekPhases[pwj + 1].start : '') === key)) pwj++;
+    const span = pwj - pwi + 1;
+    const seg = document.createElement('div');
+    seg.style.cssText = `flex:${span} 1 0;min-width:0;height:18px;border-radius:3px;background:${p ? p.color : 'var(--surface2)'};display:flex;align-items:center;justify-content:center;overflow:hidden;`;
+    if (p) seg.innerHTML = `<span style="font-family:'Anton',sans-serif;font-size:9px;letter-spacing:.5px;color:${textOnColor(p.color)};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding:0 4px">${escapeAttr(p.name.toUpperCase())}</span>`;
+    seg.title = p ? `${p.name} · ${p.start} → ${p.end}` : 'No phase set — click to add';
+    phaseBand.appendChild(seg);
+    pwi = pwj + 1;
+  }
+  phaseRow.appendChild(phaseBand);
+  container.appendChild(phaseRow);
+
   // ── International windows band (separate layer from phases) — a labelled
   // teal bar aligned to the weeks it covers. ──
   const intlRow = document.createElement('div');
