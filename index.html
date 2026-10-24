@@ -2590,14 +2590,21 @@
 <div class="modal-overlay" id="seasonPhasesModal">
   <div class="modal" style="width:620px">
     <div class="modal-header">
-      <div class="modal-title">Season Phases</div>
+      <div class="modal-title">Season Calendar</div>
       <button class="modal-close" onclick="closeModal('seasonPhasesModal')">✕</button>
     </div>
     <div class="modal-body">
-      <div style="font-size:12px;color:var(--text3);margin-bottom:10px">Define date ranges for each part of the season. They show as a band on the Annual plan.</div>
+      <div style="font-family:'Anton',sans-serif;letter-spacing:1px;font-size:11px;color:var(--text3);margin-bottom:6px">SEASON PHASES</div>
+      <div style="font-size:12px;color:var(--text3);margin-bottom:10px">Date ranges for each part of the season — outlined on the Annual grid.</div>
       <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px" id="seasonPhasePresets"></div>
       <div id="seasonPhaseRows"></div>
       <button class="btn btn-ghost btn-sm" style="margin-top:4px" onclick="addSeasonPhaseRow('','')">＋ Add custom phase</button>
+
+      <hr class="section-divider" style="margin:16px 0">
+      <div style="font-family:'Anton',sans-serif;letter-spacing:1px;font-size:11px;color:#14a39a;margin-bottom:6px">INTERNATIONAL WINDOWS</div>
+      <div style="font-size:12px;color:var(--text3);margin-bottom:10px">Separate from phases — marked on the Annual plan so you know when players are away on international duty.</div>
+      <div id="intlWindowRows"></div>
+      <button class="btn btn-ghost btn-sm" style="margin-top:4px" onclick="addIntlWindowRow()">＋ Add international window</button>
     </div>
     <div class="modal-footer">
       <button class="btn btn-ghost" onclick="closeModal('seasonPhasesModal')">Cancel</button>
@@ -3732,6 +3739,28 @@ function renderYear() {
 
   grid.appendChild(table);
   container.appendChild(grid);
+
+  // ── International windows row (separate layer from phases) ──
+  const intlRow = document.createElement('div');
+  intlRow.style.cssText = 'display:grid;grid-template-columns:70px repeat(52,minmax(14px,1fr));gap:2px;min-width:900px;margin-top:8px;';
+  const intlLbl = document.createElement('div');
+  intlLbl.className = 'year-label';
+  intlLbl.textContent = 'Intl';
+  intlLbl.style.cssText += 'font-size:9px;color:' + INTL_COLOR + ';cursor:pointer;';
+  intlLbl.title = 'International windows — click to edit';
+  intlLbl.onclick = openSeasonPhases;
+  intlRow.appendChild(intlLbl);
+  for (let w = 1; w <= 52; w++) {
+    const ws = getWeekStart(w); const we = new Date(ws); we.setDate(we.getDate() + 6);
+    const wsS = formatDate(ws), weS = formatDate(we);
+    const win = getIntlWindows().find(x => x.start && x.end && x.start <= weS && x.end >= wsS);
+    const cell = document.createElement('div');
+    cell.style.cssText = `height:9px;border-radius:2px;background:${win ? INTL_COLOR : 'var(--surface2)'};cursor:pointer;`;
+    cell.title = win ? `International window${win.label ? ' · ' + win.label : ''} · ${win.start} → ${win.end}` : `W${w} · no international window — click to add`;
+    cell.onclick = openSeasonPhases;
+    intlRow.appendChild(cell);
+  }
+  container.appendChild(intlRow);
 
   // ── Gym Phase row ──
   const gymRow = document.createElement('div');
@@ -6582,6 +6611,13 @@ function phaseForDate(dateStr) {
   if (!dateStr) return null;
   return getSeasonPhases().find(p => p.start && p.end && dateStr >= p.start && dateStr <= p.end) || null;
 }
+// International windows — a separate calendar layer (does not affect phases).
+const INTL_COLOR = '#14a39a';
+function getIntlWindows() { const c = state.settings?.intl_windows; return Array.isArray(c) ? c : []; }
+function intlForDate(dateStr) {
+  if (!dateStr) return null;
+  return getIntlWindows().find(w => w.start && w.end && dateStr >= w.start && dateStr <= w.end) || null;
+}
 // Readable text colour (black/white) for a given background hex.
 function textOnColor(hex) {
   const h = (hex || '').replace('#', ''); if (h.length < 6) return '#111';
@@ -6591,13 +6627,32 @@ function textOnColor(hex) {
 
 // ── Season-phases editor (date ranges saved to app_settings.season_phases) ──
 let seasonPhasesDraft = [];
+let intlWindowsDraft = [];
 function openSeasonPhases() {
   seasonPhasesDraft = getSeasonPhases().map(p => ({ ...p }));
+  intlWindowsDraft = getIntlWindows().map(w => ({ ...w }));
   document.getElementById('seasonPhasePresets').innerHTML = SEASON_PHASE_PRESETS.map(pr =>
     `<button class="btn btn-ghost btn-sm" onclick="addSeasonPhaseRow('${escapeAttr(pr.name)}','${pr.color}')" style="border-color:${pr.color}66;color:${pr.color}">＋ ${pr.name}</button>`).join('');
   renderSeasonPhasesEditor();
+  renderIntlWindowsEditor();
   openModal('seasonPhasesModal');
 }
+function renderIntlWindowsEditor() {
+  const host = document.getElementById('intlWindowRows');
+  if (!host) return;
+  if (!intlWindowsDraft.length) { host.innerHTML = '<div style="font-size:12px;color:var(--text3);padding:4px 0 8px">No international windows yet.</div>'; return; }
+  host.innerHTML = `<div style="display:grid;grid-template-columns:1.3fr 1fr 1fr 26px;gap:8px;font-size:9px;letter-spacing:.5px;color:var(--text3);font-family:'Anton',sans-serif;margin-bottom:5px"><span>LABEL</span><span>START</span><span>END</span><span></span></div>` +
+    intlWindowsDraft.map((w, i) => `
+    <div style="display:grid;grid-template-columns:1.3fr 1fr 1fr 26px;gap:8px;align-items:center;margin-bottom:6px">
+      <input type="text" value="${escapeAttr(w.label || '')}" placeholder="e.g. Sept FIFA window" oninput="updateIntlWindowField(${i},'label',this.value)">
+      <input type="date" value="${escapeAttr(w.start || '')}" oninput="updateIntlWindowField(${i},'start',this.value)">
+      <input type="date" value="${escapeAttr(w.end || '')}" oninput="updateIntlWindowField(${i},'end',this.value)">
+      <span class="exercise-remove" onclick="removeIntlWindowRow(${i})" title="Remove">✕</span>
+    </div>`).join('');
+}
+function addIntlWindowRow() { intlWindowsDraft.push({ label: '', start: '', end: '' }); renderIntlWindowsEditor(); }
+function updateIntlWindowField(i, f, v) { if (intlWindowsDraft[i]) intlWindowsDraft[i][f] = v; }
+function removeIntlWindowRow(i) { intlWindowsDraft.splice(i, 1); renderIntlWindowsEditor(); }
 function renderSeasonPhasesEditor() {
   const host = document.getElementById('seasonPhaseRows');
   if (!host) return;
@@ -6619,12 +6674,16 @@ async function saveSeasonPhases() {
   const list = seasonPhasesDraft.filter(p => p.name && p.name.trim() && p.start && p.end)
     .map(p => ({ name: p.name.trim(), start: p.start, end: p.end, color: p.color || '#888780' }))
     .sort((a, b) => a.start.localeCompare(b.start));
+  const intl = intlWindowsDraft.filter(w => w.start && w.end)
+    .map(w => ({ label: (w.label || '').trim(), start: w.start, end: w.end }))
+    .sort((a, b) => a.start.localeCompare(b.start));
   setSyncStatus('syncing');
+  const payload = { season_phases: list, intl_windows: intl, updated_at: new Date().toISOString() };
   let res;
   if (state.settings?.id) {
-    res = await sb.from('app_settings').update({ season_phases: list, updated_at: new Date().toISOString() }).eq('id', state.settings.id).select().single();
+    res = await sb.from('app_settings').update(payload).eq('id', state.settings.id).select().single();
   } else {
-    res = await sb.from('app_settings').upsert({ season_phases: list, updated_at: new Date().toISOString() }).select().single();
+    res = await sb.from('app_settings').upsert(payload).select().single();
   }
   setSyncStatus(res.error ? 'error' : 'ok');
   if (res.error) { alert('Save failed: ' + res.error.message); return; }
