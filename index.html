@@ -7422,11 +7422,16 @@ const MLS_TEAMS = [
   { name: 'Vancouver Whitecaps',    lat: 49.2768, lng: -123.1119 },
 ];
 
-// Look up a team's coordinates by (case-insensitive) name match
+// Look up a team's coordinates by name. Tries an exact (case-insensitive)
+// match first, then a normalised match so TheSportsDB's official spellings
+// ("Inter Miami CF", "Seattle Sounders FC") still resolve to our friendly
+// entries ("Inter Miami", "Seattle Sounders").
 function getTeamCoords(name) {
   if (!name) return null;
   const n = name.toLowerCase().trim();
-  return MLS_TEAMS.find(t => t.name.toLowerCase() === n) || null;
+  return MLS_TEAMS.find(t => t.name.toLowerCase() === n)
+      || MLS_TEAMS.find(t => normalizeTeamName(t.name) === normalizeTeamName(name))
+      || null;
 }
 
 // Haversine great-circle distance in km between two lat/lng points
@@ -7548,6 +7553,38 @@ function onTeamPicked() {
 }
 
 // ── IMPORT MY TEAM'S MLS SCHEDULE ──
+
+// Normalise a club name so friendly names ("Inter Miami") line up with
+// TheSportsDB's official spelling ("Inter Miami CF"): strip diacritics,
+// punctuation and the generic club-type tokens (FC/CF/SC/AFC) that differ
+// between our picker list and the feed.
+function normalizeTeamName(s) {
+  return (s || '')
+    .toLowerCase()
+    .normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .replace(/[.\-’'`]/g, '')
+    .replace(/\b(fc|cf|sc|afc)\b/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+// Resolve a (possibly friendly) team name to a TheSportsDB team record.
+// Exact normalised match wins; otherwise accept a single team whose
+// normalised name is a prefix of / prefixed by ours. Ambiguity → null
+// (we never guess between two plausible teams).
+function resolveSportsdbTeam(teamName, teams) {
+  const target = normalizeTeamName(teamName);
+  if (!target) return null;
+  const exact = teams.filter(t => normalizeTeamName(t.strTeam) === target);
+  if (exact.length === 1) return exact[0];
+  if (exact.length > 1) return null;
+  const partial = teams.filter(t => {
+    const n = normalizeTeamName(t.strTeam);
+    return n && (n.startsWith(target) || target.startsWith(n));
+  });
+  return partial.length === 1 ? partial[0] : null;
+}
+
 async function importMyTeamSchedule() {
   const teamName = state.settings?.team_name;
   if (!teamName || teamName === '__other__') {
@@ -7565,7 +7602,24 @@ async function importMyTeamSchedule() {
   )) return;
 
   try {
-    setStatus(`Fetching ${teamName} schedule…`);
+    // Resolve my team to its TheSportsDB id first so we can match season
+    // events by team id (immune to name-spelling differences) instead of by
+    // the exact friendly name, which fails for the many clubs whose official
+    // name carries a suffix ("Inter Miami" vs feed "Inter Miami CF").
+    setStatus('Looking up your team on TheSportsDB…');
+    let myTeamId = null, canonicalName = teamName;
+    try {
+      const teamsResp = await fetch(`${SPORTSDB_BASE}/search_all_teams.php?l=American%20Major%20League%20Soccer`);
+      const teamsJson = await teamsResp.json();
+      const teamRec = resolveSportsdbTeam(teamName, teamsJson.teams || []);
+      if (teamRec) { myTeamId = teamRec.idTeam; canonicalName = teamRec.strTeam; }
+    } catch (e) {
+      console.warn('[Import] Team-id lookup failed, falling back to name match:', e);
+    }
+    console.log(`[Import] Resolved "${teamName}" → ${myTeamId ? `id ${myTeamId} ("${canonicalName}")` : 'no id (name-match fallback)'}`);
+    const isMyTeam = (id, name) => myTeamId ? id === myTeamId : normalizeTeamName(name) === normalizeTeamName(teamName);
+
+    setStatus(`Fetching ${canonicalName} schedule…`);
 
     let allMatches = [];
     let totalSeasonEvents = 0;
@@ -7582,23 +7636,22 @@ async function importMyTeamSchedule() {
         if (e.strAwayTeam) sampleTeamNames.add(e.strAwayTeam);
       });
       const events = allEvents.filter(e =>
-        e.strHomeTeam?.toLowerCase() === teamName.toLowerCase() ||
-        e.strAwayTeam?.toLowerCase() === teamName.toLowerCase()
+        isMyTeam(e.idHomeTeam, e.strHomeTeam) || isMyTeam(e.idAwayTeam, e.strAwayTeam)
       );
-      console.log(`[Import] ${season}: ${allEvents.length} season events · ${events.length} matched "${teamName}"`);
+      console.log(`[Import] ${season}: ${allEvents.length} season events · ${events.length} matched`);
       allMatches = allMatches.concat(events);
     }
 
     console.log(`[Import] Total events across ${seasons.length} seasons: ${totalSeasonEvents}`);
     console.log(`[Import] Sample team names returned by API:`, Array.from(sampleTeamNames).sort());
-    console.log(`[Import] Looking for: "${teamName}" (case-insensitive exact match)`);
 
     if (allMatches.length === 0) {
-      const sampleList = Array.from(sampleTeamNames).sort().slice(0, 10).join(', ');
+      const sampleList = Array.from(sampleTeamNames).sort().slice(0, 12).join(', ');
       alert(
         `No matches found for "${teamName}" across ${seasons.length} seasons.\n\n` +
-        `TheSportsDB returned ${totalSeasonEvents} total events. Check the Console for the full team list — your team name in Settings must match TheSportsDB spelling exactly.\n\n` +
-        `Sample names returned: ${sampleList}…`
+        (totalSeasonEvents === 0
+          ? `TheSportsDB returned 0 events — the season feed came back empty, so the API may not have these seasons loaded yet or is rate-limiting. Try again in a minute.`
+          : `TheSportsDB returned ${totalSeasonEvents} events but none were tagged to your team. Teams seen in the feed: ${sampleList}…`)
       );
       setStatus('');
       return;
@@ -7612,16 +7665,21 @@ async function importMyTeamSchedule() {
     let created = 0, skipped = 0;
 
     for (const ev of allMatches) {
-      const isHome = ev.strHomeTeam.toLowerCase() === teamName.toLowerCase();
+      const isHome = isMyTeam(ev.idHomeTeam, ev.strHomeTeam);
       const oppName = isHome ? ev.strAwayTeam : ev.strHomeTeam;
+      const oppId   = isHome ? ev.idAwayTeam : ev.idHomeTeam;
       const date    = (ev.strTimestamp || ev.dateEvent || '').slice(0, 10);
-      if (!date) { skipped++; continue; }
+      if (!date || !oppName) { skipped++; continue; }
 
       const key = `${date}|${oppName.toLowerCase()}`;
       if (existing.has(key)) { skipped++; continue; }
 
-      // Find matching opponent record for opponent_id
-      const oppRec = (state.opponents || []).find(o => o.name.toLowerCase() === oppName.toLowerCase());
+      // Find matching opponent record for opponent_id — prefer the external
+      // id (set by the ELO seed), fall back to a normalised name match.
+      const oppRec = (state.opponents || []).find(o =>
+        (oppId && o.external_id === oppId) ||
+        normalizeTeamName(o.name) === normalizeTeamName(oppName)
+      );
       const oppCoords = getTeamCoords(oppName);
       const venue = isHome ? 'Home' : 'Away';
 
