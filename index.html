@@ -4952,11 +4952,25 @@ function clearSessionForm() {
   renderTestingChips();
 }
 
+// A short "Day type: …" line stamped into a promoted drill's description, so
+// the Drill Library records which kind of session day each exercise came from.
+// Handles a dual-type day (e.g. "Tactical + Strength") and an optional date.
+function dayTypeNote(types, dateStr) {
+  const labels = (types || []).map(t => (t || '').trim()).filter(Boolean);
+  if (!labels.length) return '';
+  let s = 'Day type: ' + labels.join(' + ');
+  if (dateStr) s += ' (' + dateStr + ')';
+  return s;
+}
+
 // When a session is saved, any exercise carrying a pasted URL (but not yet
 // linked to a library drill) is auto-added to the Drill Library and linked by
 // id — so every referenced link becomes a reusable, searchable drill. An
 // existing library drill with the same URL is reused instead of duplicated.
-async function promoteExerciseUrlsToLibrary(exercises) {
+// `ctx` ({ types:[type,type2], date }) stamps the session's day type into the
+// new drill's description.
+async function promoteExerciseUrlsToLibrary(exercises, ctx) {
+  const dayNote = dayTypeNote(ctx?.types, ctx?.date);
   let added = 0;
   for (const ex of exercises) {
     const url = (ex.url || '').trim();
@@ -4967,6 +4981,11 @@ async function promoteExerciseUrlsToLibrary(exercises) {
     if (existing) {
       ex.mediaId = existing.id; ex.url = ''; ex.urlTitle = '';
       if (!ex.name && existing.title) ex.name = existing.title;
+      // Stamp the day type onto a reused drill that has no description yet.
+      if (dayNote && !(existing.notes || '').trim()) {
+        existing.notes = dayNote;
+        try { await saveDrillDB(existing); } catch (e) {}
+      }
       continue;
     }
 
@@ -4987,7 +5006,7 @@ async function promoteExerciseUrlsToLibrary(exercises) {
       category: ex.category || 'technical',
       intensityTag: '',
       tags: [],
-      notes: '',
+      notes: dayNote,
       load: null,
       addedAt: Date.now(),
     };
@@ -5019,7 +5038,7 @@ async function backfillExerciseLinks() {
   for (const s of state.sessions) {
     if (!s.exercises || !s.exercises.length) continue;
     if (!s.exercises.some(ex => (ex.url || '').trim() && !ex.mediaId)) continue;
-    drillsAdded += await promoteExerciseUrlsToLibrary(s.exercises);
+    drillsAdded += await promoteExerciseUrlsToLibrary(s.exercises, { types: [s.type, s.type2], date: s.date });
     try { await upsertSessionDB(s); } catch (e) { console.warn('Backfill session save failed:', e); }
     sessionsUpdated++;
   }
@@ -5035,8 +5054,12 @@ async function saveSession() {
   if (!dateStr) { alert('Please select a date.'); return; }
 
   // Auto-promote any pasted exercise links into the Drill Library first, so the
-  // saved session stores library ids rather than loose URLs.
-  await promoteExerciseUrlsToLibrary(currentExercises);
+  // saved session stores library ids rather than loose URLs. Pass the day type
+  // so each new drill's description records which session day it came from.
+  await promoteExerciseUrlsToLibrary(currentExercises, {
+    types: [chipSelections['type'] || 'Intensive', chipSelections['type2']],
+    date: dateStr,
+  });
 
   const session = {
     id: editingSessionId || genId(),
