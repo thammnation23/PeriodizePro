@@ -456,13 +456,19 @@
   .session-card.int-med { border-left: 3px solid var(--med); }
   .session-card.int-low { border-left: 3px solid var(--low); }
   .session-card.game-card { border-left: 3px solid var(--game); background: var(--game-bg); }
+  /* Centre the session title; the narrow day columns can't always fit the
+     title pills and the duration on one line, so the header wraps and the
+     duration drops to its own centred line rather than overlapping. */
   .session-card-header {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
-    justify-content: space-between;
+    justify-content: center;
+    gap: 3px 8px;
     margin-bottom: 8px;
   }
   .session-type {
+    text-align: center;
     font-family: 'Anton', sans-serif;
     font-size: 13px;
     font-weight: 700;
@@ -1018,6 +1024,7 @@
     text-overflow: ellipsis;
     flex: 1;
     min-width: 0;
+    text-align: center;
   }
   .month-chip-meta {
     font-family: 'JetBrains Mono', monospace;
@@ -4259,7 +4266,7 @@ function buildMonthSessionChip(s) {
     <div class="month-chip" style="border-left-color:${typeColor}" onclick="event.stopPropagation();editSession('${s.id}')" title="${escapeAttr(label)}">
       <div class="month-chip-top">
         <span class="month-chip-dot" style="background:${typeColor}"></span>
-        <span class="month-chip-label" style="color:${typeColor}">${label}</span>
+        <span class="month-chip-label" style="color:var(--text)">${label}</span>
         ${meta ? `<span class="month-chip-meta">${meta}</span>` : ''}
       </div>
       ${marks.length ? `<div class="month-chip-marks">${marks.map(m => `<span>${m}</span>`).join('')}</div>` : ''}
@@ -4971,6 +4978,10 @@ function dayTypeNote(types, dateStr) {
 // new drill's description.
 async function promoteExerciseUrlsToLibrary(exercises, ctx) {
   const dayNote = dayTypeNote(ctx?.types, ctx?.date);
+  // Each day type also becomes a "Day: …" tag so the library can be filtered to
+  // the exercises used on that kind of day.
+  const dayTags = (ctx?.types || []).map(t => (t || '').trim()).filter(Boolean)
+    .map(t => 'Day: ' + t);
   let added = 0;
   for (const ex of exercises) {
     const url = (ex.url || '').trim();
@@ -4981,11 +4992,15 @@ async function promoteExerciseUrlsToLibrary(exercises, ctx) {
     if (existing) {
       ex.mediaId = existing.id; ex.url = ''; ex.urlTitle = '';
       if (!ex.name && existing.title) ex.name = existing.title;
-      // Stamp the day type onto a reused drill that has no description yet.
-      if (dayNote && !(existing.notes || '').trim()) {
-        existing.notes = dayNote;
-        try { await saveDrillDB(existing); } catch (e) {}
+      // Stamp the day type onto a reused drill: fill an empty description and
+      // add any missing day-type tags, without touching existing content.
+      let changed = false;
+      if (dayNote && !(existing.notes || '').trim()) { existing.notes = dayNote; changed = true; }
+      if (dayTags.length) {
+        existing.tags = existing.tags || [];
+        for (const t of dayTags) if (!existing.tags.includes(t)) { existing.tags.push(t); changed = true; }
       }
+      if (changed) { try { await saveDrillDB(existing); } catch (e) {} }
       continue;
     }
 
@@ -5005,7 +5020,7 @@ async function promoteExerciseUrlsToLibrary(exercises, ctx) {
       title,
       category: ex.category || 'technical',
       intensityTag: '',
-      tags: [],
+      tags: dayTags.slice(),
       notes: dayNote,
       load: null,
       addedAt: Date.now(),
@@ -5918,6 +5933,15 @@ function setLibCat(cat) {
   renderLibrary();
 }
 
+// Clicking a tag chip (e.g. "Day: Tactical") filters the library to drills
+// carrying that tag, by dropping it into the search box.
+function filterLibByTag(tag) {
+  const box = document.getElementById('libSearch');
+  if (box) box.value = tag || '';
+  libActiveCat = 'all';
+  renderLibrary();
+}
+
 function renderLibGrid() {
   const grid = document.getElementById('libGrid');
   const query = (document.getElementById('libSearch').value || '').toLowerCase().trim();
@@ -5951,7 +5975,7 @@ function buildLibCard(m) {
   const cfg = CAT_CONFIG[m.category] || CAT_CONFIG.individual;
   const thumb = getMediaThumb(m);
   const typeLabel = m.mediaType === 'youtube' ? 'YouTube' : m.mediaType === 'upload' ? 'Image' : m.mediaType === 'image' ? 'Image URL' : 'Link';
-  const tags = (m.tags||[]).map(t => `<span class="lib-tag ${cfg.cls}">${t}</span>`).join('');
+  const tags = (m.tags||[]).map(t => `<span class="lib-tag ${cfg.cls}" style="cursor:pointer" title="Filter the library by “${escapeAttr(t)}”" onclick="event.stopPropagation();filterLibByTag(this.dataset.tag)" data-tag="${escapeAttr(t)}">${t}</span>`).join('');
   const usageCount = state.sessions.filter(s =>
     (s.warmupMedia||[]).includes(m.id) || (s.sessionMedia||[]).includes(m.id)
   ).length;
