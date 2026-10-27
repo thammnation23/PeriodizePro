@@ -1911,6 +1911,7 @@
   <div class="nav-tab" onclick="switchTab('month')">Month</div>
   <div class="nav-tab" onclick="switchTab('week')">Week</div>
   <div class="nav-tab" onclick="switchTab('review')">Week Review</div>
+  <div class="nav-tab" onclick="switchTab('matches')">Matches</div>
   <div class="nav-tab" onclick="switchTab('squad')">Squad</div>
   <div class="nav-tab" onclick="switchTab('strength')">Strength</div>
   <div class="nav-tab" onclick="switchTab('library')">Drill Library</div>
@@ -1928,6 +1929,7 @@
       <p class="section-title" style="margin:0">Annual Plan · 52 Weeks</p>
       <button class="btn btn-ghost btn-sm" onclick="openSeasonPhases()" title="Set Preseason, Regular Season, breaks, Playoffs…">＋ Season Phases</button>
     </div>
+    <div id="yearWindowNotice"></div>
     <div id="yearGrid"></div>
     <div class="year-legend" style="margin-top:16px" id="yearLegendField"></div>
     <div class="year-legend" style="margin-top:10px" id="yearLegendMdi">
@@ -2014,6 +2016,31 @@
     </div>
 
     <div id="reviewBody"></div>
+  </div>
+
+  <!-- ── MATCHES VIEW (MDI timeline) ── -->
+  <div id="view-matches" class="view">
+    <div style="display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:14px;flex-wrap:wrap;gap:10px">
+      <div>
+        <h2 style="margin:0;font-family:'Anton',sans-serif;letter-spacing:2px;font-size:24px">MATCHES · MDI TIMELINE</h2>
+        <div style="font-size:11px;color:var(--text3);font-family:'Anton',sans-serif;letter-spacing:1px;margin-top:2px">Match Difficulty Index across the schedule · opponent ELO + match context</div>
+      </div>
+      <div style="display:flex;align-items:flex-end;gap:12px;flex-wrap:wrap">
+        <label style="display:flex;flex-direction:column;gap:3px;font-family:'Anton',sans-serif;letter-spacing:1px;font-size:10px;color:var(--text3)">SEASON
+          <select id="matchesSeasonFilter" onchange="onMatchesSeasonChange()" style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);color:var(--text);padding:6px 8px;font-family:'JetBrains Mono',monospace;font-size:12px"></select>
+        </label>
+        <label style="display:flex;flex-direction:column;gap:3px;font-family:'Anton',sans-serif;letter-spacing:1px;font-size:10px;color:var(--text3)">FROM
+          <input type="date" id="matchesFrom" onchange="renderMatches()" style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);color:var(--text);padding:5px 8px;font-family:'JetBrains Mono',monospace;font-size:12px">
+        </label>
+        <label style="display:flex;flex-direction:column;gap:3px;font-family:'Anton',sans-serif;letter-spacing:1px;font-size:10px;color:var(--text3)">TO
+          <input type="date" id="matchesTo" onchange="renderMatches()" style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);color:var(--text);padding:5px 8px;font-family:'JetBrains Mono',monospace;font-size:12px">
+        </label>
+        <button class="btn btn-ghost btn-sm" onclick="clearMatchesRange()" title="Clear the custom date range and go back to the season filter">Reset range</button>
+      </div>
+    </div>
+    <div id="matchStats" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:8px;margin-bottom:16px"></div>
+    <div id="mdiChart" style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px;margin-bottom:16px"></div>
+    <div id="matchList"></div>
   </div>
 
   <!-- ── SQUAD VIEW ── -->
@@ -3555,6 +3582,7 @@ function switchTab(tab) {
   if (tab === 'squad')    renderSquad();
   if (tab === 'strength') renderStrength();
   if (tab === 'review')   renderWeekReview();
+  if (tab === 'matches')  renderMatches();
   if (tab === 'morphocycle') renderMorphocycle();
   if (tab === 'methodology') renderMethodology();
   if (tab === 'library')  renderLibrary();
@@ -3568,20 +3596,34 @@ function renderYear() {
   const container = document.getElementById('yearGrid');
   container.innerHTML = '';
 
-  // ── DIAGNOSTIC: log game date range vs season window range
-  // (helps debug "imported matches don't show on annual plan")
+  // ── Game date range vs the displayed 52-week window.
+  // Games outside the window have no day-cell and silently don't render, so
+  // surface that in-app with a one-click fix (helps debug "imported matches
+  // don't show on annual plan").
+  const noticeEl = document.getElementById('yearWindowNotice');
+  if (noticeEl) noticeEl.innerHTML = '';
   if (state.games?.length) {
     const gameDates = state.games.map(g => g.date).filter(Boolean).sort();
     const week1 = formatDate(getWeekStart(1));
     const week52end = new Date(getWeekStart(52));
     week52end.setDate(week52end.getDate() + 6);
     const seasonEnd = formatDate(week52end);
-    console.log(`[YearView] ${state.games.length} games · range ${gameDates[0]} → ${gameDates[gameDates.length-1]}`);
-    console.log(`[YearView] Season window: ${week1} → ${seasonEnd} (Season start: ${state.settings?.season_start || 'default'})`);
     const inWindow = gameDates.filter(d => d >= week1 && d <= seasonEnd).length;
-    console.log(`[YearView] Games inside window: ${inWindow} / ${gameDates.length}`);
-    if (inWindow === 0 && gameDates.length > 0) {
-      console.warn('[YearView] No games fall within the displayed season window. Adjust Season Start in Settings to include them.');
+    const outside = gameDates.length - inWindow;
+    console.log(`[YearView] ${state.games.length} games · range ${gameDates[0]} → ${gameDates[gameDates.length-1]}`);
+    console.log(`[YearView] Season window: ${week1} → ${seasonEnd} (Season start: ${state.settings?.season_start || 'default'}) · inside ${inWindow}/${gameDates.length}`);
+    if (outside > 0 && noticeEl) {
+      noticeEl.innerHTML = `
+        <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;background:var(--surface2);border:1px solid var(--border);border-left:3px solid #f5a623;border-radius:var(--radius);padding:10px 14px;margin:10px 0">
+          <span style="font-size:12px;color:var(--text2);line-height:1.4">
+            <strong style="color:#f5a623">${outside}</strong> of ${gameDates.length} match${gameDates.length === 1 ? '' : 'es'} fall outside this 52-week window
+            (<span style="font-family:'JetBrains Mono',monospace">${week1} → ${seasonEnd}</span>) and aren't shown on the grid.
+          </span>
+          <span style="display:flex;gap:8px;margin-left:auto">
+            <button class="btn btn-primary btn-sm" onclick="fitSeasonToMatches()">Fit window to my matches</button>
+            <button class="btn btn-ghost btn-sm" onclick="switchTab('settings')">Adjust Season Start</button>
+          </span>
+        </div>`;
     }
   }
 
@@ -7024,6 +7066,42 @@ async function saveSettings() {
   rebuildSessionTypeChips();
   renderYear();
   alert('Settings saved ✓');
+}
+
+// Re-anchor the 52-week Annual Plan window so the most recent season's
+// matches fall inside it. Week numbers are derived from Season Start, so this
+// only relabels weeks — sessions and games stay on their own dates untouched.
+async function fitSeasonToMatches() {
+  const dates = (state.games || []).map(g => g.date).filter(Boolean).sort();
+  if (!dates.length) { alert('No matches to fit to — import or add some first.'); return; }
+
+  // Target the latest season present, and start the window on the Monday
+  // on/before its first match so week 1 begins cleanly.
+  const latestYear = dates[dates.length - 1].slice(0, 4);
+  const firstOfLatest = dates.find(d => d.slice(0, 4) === latestYear) || dates[0];
+  const d = new Date(firstOfLatest + 'T12:00:00');
+  const day = d.getDay();
+  d.setDate(d.getDate() + (day === 0 ? -6 : 1 - day)); // back up to Monday
+  const mondayStr = formatDate(d);
+
+  if (!confirm(
+    `Set the Annual Plan to start on ${mondayStr} so your ${latestYear} season fits the 52-week grid?\n\n` +
+    `This only changes week numbering — your matches and sessions keep their dates.`
+  )) return;
+
+  const payload = { ...state.settings, season_start: mondayStr, updated_at: new Date().toISOString() };
+  setSyncStatus('syncing');
+  const { data, error } = await sb.from('app_settings').upsert(payload).select().single();
+  if (error) {
+    console.error('Fit-season save error:', error);
+    setSyncStatus('error');
+    alert('Error saving season start: ' + error.message);
+    return;
+  }
+  state.settings = data;
+  applySeasonStart();
+  setSyncStatus('ok');
+  renderYear();
 }
 
 function resetSettings() {
@@ -10826,6 +10904,25 @@ function renderEloHistoryChart(history) {
 
 // ── MATCHES VIEW (MDI timeline + list) ──
 
+// Choosing a season clears any custom date range so the two controls never
+// fight each other.
+function onMatchesSeasonChange() {
+  const f = document.getElementById('matchesFrom');
+  const t = document.getElementById('matchesTo');
+  if (f) f.value = '';
+  if (t) t.value = '';
+  renderMatches();
+}
+
+// Reset the custom range and fall back to the season picker.
+function clearMatchesRange() {
+  const f = document.getElementById('matchesFrom');
+  const t = document.getElementById('matchesTo');
+  if (f) f.value = '';
+  if (t) t.value = '';
+  renderMatches();
+}
+
 function renderMatches() {
   const allGames = (state.games || []).slice().sort((a, b) => new Date(a.date) - new Date(b.date));
   const yourElo = state.settings?.team_elo || ELO_DEFAULT;
@@ -10841,10 +10938,22 @@ function renderMatches() {
     `;
     filterEl.value = previousValue && (previousValue === 'all' || years.includes(previousValue)) ? previousValue : (years[years.length - 1] || 'all');
   }
-  const selectedYear = filterEl?.value || 'all';
-  const games = selectedYear === 'all'
-    ? allGames
-    : allGames.filter(g => g.date?.startsWith(selectedYear));
+
+  // A custom from/to range, when set, takes precedence over the season picker.
+  const from = document.getElementById('matchesFrom')?.value || '';
+  const to   = document.getElementById('matchesTo')?.value || '';
+  const rangeActive = !!(from || to);
+  if (filterEl) filterEl.disabled = rangeActive;
+
+  let games;
+  if (rangeActive) {
+    games = allGames.filter(g => g.date && (!from || g.date >= from) && (!to || g.date <= to));
+  } else {
+    const selectedYear = filterEl?.value || 'all';
+    games = selectedYear === 'all'
+      ? allGames
+      : allGames.filter(g => g.date?.startsWith(selectedYear));
+  }
 
   // Annotate each game with full-context MDI + opponent record
   const annotated = games.map(g => {
