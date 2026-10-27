@@ -4273,24 +4273,32 @@ function buildMonthSessionChip(s) {
     </div>`;
 }
 
+// Match venue → colour, matching the Annual plan legend.
+function venueColor(venue) {
+  const v = venue || 'Home';
+  return v === 'Away' ? '#7f77dd' : v === 'Neutral' ? '#9e9e9e' : '#e24b4a';
+}
+
 function buildMonthGameChip(g) {
   if (!g) return '';
   const oppRecord = g.opponent_id
     ? state.opponents.find(o => o.id === g.opponent_id)
     : state.opponents.find(o => o.name?.toLowerCase() === g.opponent?.toLowerCase());
+  const venue  = g.venue || 'Home';
+  const vColor = venueColor(venue);
   const crest = oppRecord?.badge_url
-    ? `<img class="month-chip-crest" src="${escapeAttr(oppRecord.badge_url)}" onerror="this.outerHTML='<span class=&quot;month-chip-dot&quot; style=&quot;background:var(--game)&quot;></span>'">`
-    : `<span class="month-chip-dot" style="background:var(--game)"></span>`;
+    ? `<img class="month-chip-crest" src="${escapeAttr(oppRecord.badge_url)}" onerror="this.outerHTML='<span class=&quot;month-chip-dot&quot; style=&quot;background:${vColor}&quot;></span>'">`
+    : `<span class="month-chip-dot" style="background:${vColor}"></span>`;
   const resultColor = g.result === 'W' ? '#2eb86b' : g.result === 'L' ? '#ff6b6b' : g.result === 'D' ? '#c5d12b' : null;
   const scoreText = (g.scoreUs != null && g.scoreThem != null) ? `${g.scoreUs}–${g.scoreThem}` : null;
   const right = g.result
     ? `<span class="month-chip-result" style="color:${resultColor}">${g.result}${scoreText ? ' ' + scoreText : ''}</span>`
-    : (g.venue ? `<span class="month-chip-meta">${g.venue}</span>` : '');
+    : `<span class="month-chip-meta" style="color:${vColor};font-weight:600">${venue}</span>`;
   return `
-    <div class="month-chip" style="border-left-color:var(--game)" onclick="event.stopPropagation();editGame('${g.id || ''}')" title="${escapeAttr(g.opponent || 'Match')}">
+    <div class="month-chip" style="border-left-color:${vColor};background:${vColor}14" onclick="event.stopPropagation();editGame('${g.id || ''}')" title="${escapeAttr((g.opponent || 'Match') + ' · ' + venue)}">
       <div class="month-chip-top">
         ${crest}
-        <span class="month-chip-label" style="color:var(--game)">${g.opponent || 'Match'}</span>
+        <span class="month-chip-label" style="color:var(--text)">${g.opponent || 'Match'}</span>
         ${right}
       </div>
     </div>`;
@@ -4330,6 +4338,9 @@ function renderMonth() {
       + (dateStr === selectedDayDate ? ' selected' : '');
 
     const game = isGame ? state.games.find(gg => gg.date === dateStr) : null;
+    // Venue-colour the game day's left border to match the Annual plan
+    // (Home = red, Away = purple, Neutral = grey).
+    if (game) cell.style.borderLeft = '3px solid ' + venueColor(game.venue);
     // S&C plan for this day — a week-status dot + a chip per planned lift
     const scDn = DAYS[(d.getDay() + 6) % 7];
     const scStatus = statusCfg(state.scWeeks[weekNum]?.status);
