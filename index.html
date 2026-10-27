@@ -314,7 +314,7 @@
   }
   .month-day-num {
     font-family: 'Anton', sans-serif;
-    font-size: 15px;
+    font-size: 17px;
     font-weight: 700;
     color: var(--text2);
     margin-bottom: 4px;
@@ -962,7 +962,7 @@
   /* Month day cell updated */
   .month-day {
     background: var(--surface);
-    min-height: 118px;
+    min-height: 132px;
     padding: 8px;
     cursor: pointer;
     transition: background 0.12s;
@@ -1012,12 +1012,12 @@
   }
   .month-chip:hover { background: var(--surface3); }
   .month-chip-top { display: flex; align-items: center; gap: 5px; }
-  .month-chip-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
-  .month-chip-crest { width: 15px; height: 15px; object-fit: contain; flex-shrink: 0; }
+  .month-chip-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+  .month-chip-crest { width: 19px; height: 19px; object-fit: contain; flex-shrink: 0; }
   .month-chip-label {
     font-family: 'Anton', sans-serif;
     letter-spacing: 0.5px;
-    font-size: 12px;
+    font-size: 13.5px;
     line-height: 1.25;
     white-space: nowrap;
     overflow: hidden;
@@ -1028,13 +1028,13 @@
   }
   .month-chip-meta {
     font-family: 'JetBrains Mono', monospace;
-    font-size: 9px;
+    font-size: 10.5px;
     color: var(--text3);
     flex-shrink: 0;
   }
   .month-chip-result {
     font-family: 'Anton', sans-serif;
-    font-size: 11px;
+    font-size: 12.5px;
     letter-spacing: 0.5px;
     flex-shrink: 0;
   }
@@ -1043,7 +1043,7 @@
     align-items: center;
     gap: 7px;
     font-family: 'JetBrains Mono', monospace;
-    font-size: 9px;
+    font-size: 10px;
     color: var(--text3);
     padding-left: 12px;
   }
@@ -3024,6 +3024,23 @@
   </div>
 </div>
 
+<!-- ═══ PER-PLAYER STRENGTH STRATEGY (Load / Maintain / Deload) ═══ -->
+<div class="modal-overlay" id="scPlayersModal">
+  <div class="modal" style="width:540px">
+    <div class="modal-header">
+      <div class="modal-title" id="scPlayersTitle">Player strategy</div>
+      <button class="modal-close" onclick="closeModal('scPlayersModal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div id="scPlayersBody"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('scPlayersModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveScPlayers()">Save</button>
+    </div>
+  </div>
+</div>
+
 <!-- ═══ MEDIA DETAIL MODAL ═══ -->
 <!-- Lightweight inline player for ad-hoc exercise URLs (not library drills) -->
 <div class="modal-overlay" id="urlPlayerModal">
@@ -3203,7 +3220,7 @@ async function loadAllData() {
   // S&C weekly plan — { [weekNum]: { status, days:{Mon:lift,…}, dbId } } (non-fatal)
   state.scWeeks = {};
   if (scR && scR.status === 'fulfilled' && !scR.value.error) {
-    (scR.value.data || []).forEach(r => { state.scWeeks[r.week_num] = { status: r.status || '', days: r.days || {}, testing: (r.testing && !Array.isArray(r.testing)) ? r.testing : {}, dbId: r.id }; });
+    (scR.value.data || []).forEach(r => { state.scWeeks[r.week_num] = { status: r.status || '', days: r.days || {}, testing: (r.testing && !Array.isArray(r.testing)) ? r.testing : {}, playerStatus: (r.player_status && typeof r.player_status === 'object' && !Array.isArray(r.player_status)) ? r.player_status : {}, dbId: r.id }; });
   } else if (scR?.value?.error) {
     console.warn('sc_weeks load failed:', scR.value.error.message);
   }
@@ -3462,17 +3479,21 @@ function getWeekStart(weekNum) {
   return d;
 }
 function getCurrentWeekNum() {
-  const now = new Date();
-  const start = new Date(SEASON_START);
-  const diff = now - start;
-  const week = Math.ceil(diff / (7 * 86400000));
-  return Math.max(1, Math.min(52, week || 1));
+  // Monday-aligned, consistent with getWeekStart / dateToWeekNum so the
+  // "current week" highlight matches the planner and the Week/Month views.
+  return dateToWeekNum(formatDate(new Date()));
 }
 function dateToWeekNum(dateStr) {
+  // Inverse of getWeekStart: both use Monday→Sunday weeks, so a date lands in
+  // the same week number the planner and Week view place it in. (A raw 7-day
+  // count from the season start would drift, mis-dating S&C entries in Month.)
   const d = new Date(dateStr + 'T12:00:00');
-  const start = new Date(SEASON_START.getFullYear(), SEASON_START.getMonth(), SEASON_START.getDate(), 12);
-  const diff = d - start;
-  return Math.max(1, Math.min(52, Math.ceil(diff / (7 * 86400000))));
+  const day = d.getDay(); // 0=Sun
+  const dMon = new Date(d.getFullYear(), d.getMonth(), d.getDate() + (day === 0 ? -6 : 1 - day), 12);
+  const w1 = getWeekStart(1); // Monday of week 1
+  const w1Mon = new Date(w1.getFullYear(), w1.getMonth(), w1.getDate(), 12);
+  const diffWeeks = Math.round((dMon - w1Mon) / (7 * 86400000));
+  return Math.max(1, Math.min(52, diffWeeks + 1));
 }
 function formatDate(d) {
   // Use local date parts — avoids UTC midnight timezone shift
@@ -4347,10 +4368,10 @@ function renderMonth() {
     const scEntries = dayEntries(state.scWeeks[weekNum]?.days?.[scDn]);
     const scLiftRow = scEntries.length
       ? `<div style="display:flex;flex-direction:column;align-items:flex-start;gap:2px;margin-top:3px">${scEntries.map(e => { const lf = liftByKey(e.lift); const ph = e.phase === 'pre' ? 'ACT' : 'GYM';
-          return `<span title="${escapeAttr(phaseLabel(e.phase) + ': ' + lf.label + (e.load ? ' · ' + e.load : ''))}" style="display:inline-flex;align-items:center;gap:4px;max-width:100%;font-family:'Anton',sans-serif;font-size:9px;font-weight:700;letter-spacing:.3px;padding:2px 6px;border-radius:3px;background:${lf.color}80;color:var(--text);border:1px solid ${lf.color}"><span style="font-size:8px;opacity:.75">${ph}</span><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeAttr(lf.label)}</span></span>`; }).join('')}</div>`
+          return `<span title="${escapeAttr(phaseLabel(e.phase) + ': ' + lf.label + (e.load ? ' · ' + e.load : ''))}" style="display:inline-flex;align-items:center;gap:4px;max-width:100%;font-family:'Anton',sans-serif;font-size:10.5px;font-weight:700;letter-spacing:.3px;padding:2px 7px;border-radius:3px;background:${lf.color}80;color:var(--text);border:1px solid ${lf.color}"><span style="font-size:9px;opacity:.75">${ph}</span><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeAttr(lf.label)}</span></span>`; }).join('')}</div>`
       : '';
     const monthMdI = mdInner(dateStr);
-    const monthMdTag = monthMdI ? `<span title="${escapeAttr(mdTitle(dateStr))}" style="font-family:'Anton',sans-serif;font-size:8.5px;letter-spacing:.3px;padding:0 5px;border-radius:3px;background:var(--surface2);border:1px solid var(--border)">${monthMdI}</span>` : '';
+    const monthMdTag = monthMdI ? `<span title="${escapeAttr(mdTitle(dateStr))}" style="font-family:'Anton',sans-serif;font-size:9.5px;letter-spacing:.3px;padding:1px 6px;border-radius:3px;background:var(--surface2);border:1px solid var(--border)">${monthMdI}</span>` : '';
     cell.innerHTML = `
       <div class="month-day-header-row">
         <div style="display:flex;align-items:center;gap:5px"><div class="month-day-num">${d.getDate()}</div>${monthMdTag}</div>
@@ -9884,6 +9905,39 @@ function getScStatuses() { const c = state.settings?.sc_statuses; return (Array.
 function statusCfg(k) { return k ? getScStatuses().find(s => s.key === k) : null; }
 function statusRx(s) { if (!s) return ''; return s.rx || SC_STATUS_RX[s.key] || ''; }
 
+// ── Per-player weekly strength strategy (Load / Maintain / Deload) ──
+// scWeek.playerStatus = { [playerId]: statusKey }. A player with no override
+// inherits the week's team status as their baseline. The "general view" shows
+// the team average: the most common effective status + the L/M/D split.
+function scActivePlayers() { return (state.players || []).filter(p => !p.archived); }
+function scEffectivePlayerStatuses(w) {
+  const wk = state.scWeeks[w]; if (!wk) return [];
+  const ps = wk.playerStatus || {};
+  const base = wk.status || '';
+  return scActivePlayers().map(p => ps[p.id] || base).filter(Boolean);
+}
+function scWeekSummary(w) {
+  const wk = state.scWeeks[w] || {};
+  const overrides = Object.keys(wk.playerStatus || {}).length;
+  const eff = scEffectivePlayerStatuses(w);
+  const counts = {};
+  eff.forEach(k => { counts[k] = (counts[k] || 0) + 1; });
+  const weight = { load: 3, maintain: 2, deload: 1 }; // tie-break toward heavier stimulus
+  let majority = wk.status || null, max = -1;
+  Object.entries(counts).forEach(([k, n]) => {
+    if (n > max || (n === max && (weight[k] || 0) > (weight[majority] || 0))) { max = n; majority = k; }
+  });
+  return { teamStatus: wk.status || '', overrides, counts, majority, total: eff.length };
+}
+// Compact L3·M8·D2 distribution chips for the planner's general view.
+function scDistChips(counts) {
+  return getScStatuses().map(s => {
+    const n = counts[s.key] || 0;
+    if (!n) return '';
+    return `<span title="${escapeAttr(s.label)}: ${n}" style="font-family:'JetBrains Mono',monospace;font-size:9px;font-weight:700;padding:1px 4px;border-radius:3px;background:${s.color}22;color:${s.color}">${s.label[0].toUpperCase()}${n}</span>`;
+  }).join('');
+}
+
 // Lift types are user-editable (stored in app_settings.sc_lifts); these are the
 // defaults. The blank "off" entry is implicit and prepended by allScLifts().
 const DEFAULT_SC_LIFTS = [
@@ -9924,7 +9978,7 @@ function dayEntries(v) { const ord = { pre: 0, post: 1 }; return dayEntriesRaw(v
 function dayPhase(v, phase) { return dayEntries(v).find(e => e.phase === phase) || null; }
 
 function currentSeasonSC() { return document.getElementById('seasonSelect')?.value || '2025-26'; }
-function scWeekToDB(weekNum, w) { return { user_id: currentUser.id, season: currentSeasonSC(), week_num: weekNum, status: w.status || null, days: w.days || {}, testing: w.testing || {}, updated_at: new Date().toISOString() }; }
+function scWeekToDB(weekNum, w) { return { user_id: currentUser.id, season: currentSeasonSC(), week_num: weekNum, status: w.status || null, days: w.days || {}, testing: w.testing || {}, player_status: w.playerStatus || {}, updated_at: new Date().toISOString() }; }
 async function saveScWeekDB(weekNum, w) {
   setSyncStatus('syncing');
   const { data, error } = await sb.from('sc_weeks').upsert(scWeekToDB(weekNum, w), { onConflict: 'user_id,season,week_num' }).select().single();
@@ -10001,9 +10055,16 @@ function renderScWeekPlanner() {
       const dateHdr = `<div style="font-size:9px;line-height:1.2;text-align:center;font-family:'JetBrains Mono',monospace;color:${isMatch ? 'var(--game)' : 'var(--text3)'}">${MONTHS_SHORT[d.getMonth()]} ${d.getDate()}${mdInline}</div>`;
       return `<div title="${escapeAttr(tip)}" style="position:relative;flex:1;min-width:0;min-height:54px;display:flex;flex-direction:column;gap:1px">${dateHdr}${matchLine}${body}</div>`;
     }).join('');
-    const statusPill = st
-      ? `<span style="font-family:'Anton',sans-serif;font-size:10px;letter-spacing:1px;padding:2px 8px;border-radius:3px;background:${st.color}22;color:${st.color}">${st.label.toUpperCase()}</span>`
+    // Status cell: team average (when per-player strategies are set) + the
+    // 👥 slot to pull up the team and set each player's Load/Maintain/Deload.
+    const summary = scWeekSummary(w);
+    const showCfg = (summary.overrides ? statusCfg(summary.majority) : null) || st;
+    const pill = showCfg
+      ? `<span title="${summary.overrides ? 'Team average · ' + summary.total + ' players' : 'Team status'}" style="font-family:'Anton',sans-serif;font-size:10px;letter-spacing:1px;padding:2px 8px;border-radius:3px;background:${showCfg.color}22;color:${showCfg.color}">${showCfg.label.toUpperCase()}</span>`
       : `<span style="font-size:10px;color:var(--text3);font-family:'Anton',sans-serif;letter-spacing:1px">—</span>`;
+    const dist = summary.overrides ? `<div style="display:flex;gap:3px;flex-wrap:wrap;margin-top:3px">${scDistChips(summary.counts)}</div>` : '';
+    const playersBtn = `<button type="button" onclick="event.stopPropagation();openScPlayers(${w})" title="Set each player's Load / Maintain / Deload for this week" style="margin-top:4px;display:inline-flex;align-items:center;gap:3px;padding:2px 7px;border-radius:4px;border:1px solid var(--border);background:transparent;color:var(--text3);font-size:10px;cursor:pointer">👥${summary.overrides ? `<span style="font-family:'JetBrains Mono',monospace">${summary.overrides}</span>` : ''}</button>`;
+    const statusPill = `${pill}${dist}${playersBtn}`;
     const hl = w === curWk ? 'rgba(0,212,255,0.06)' : '';
     rows += `<div id="scwk-row-${w}" onclick="openScWeek(${w})" style="display:grid;grid-template-columns:118px 92px 1fr;gap:10px;align-items:center;padding:6px 10px;border-top:1px solid var(--border);cursor:pointer;background:${hl}" onmouseover="this.style.background='var(--surface3)'" onmouseout="this.style.background='${hl}'">
         <div><span style="font-family:'JetBrains Mono',monospace;font-weight:700;font-size:12px">W${w}</span> <span style="font-size:10px;color:var(--text3)">${dates}</span>${(() => { const tests = Object.values(wk.testing || {}).flat().map(t => t && t.test).filter(Boolean); return tests.length ? ` <span title="${escapeAttr([...new Set(tests)].join(', '))}" style="font-size:10px">🧪</span>` : ''; })()}</div>
@@ -10054,7 +10115,7 @@ function renderScLiftLegend() {
   const principles = [
     principle('⚑', '<b style="color:var(--text2)">1×/week is the maintenance floor</b> — one quality session held max strength &amp; 40m sprint across a 12-wk in-season block; every 2nd week did not.'),
     principle('⚡', '<b style="color:var(--text2)">Intensity &gt; volume</b> — matches already train the legs, so loading leans low-rep / high-intensity.'),
-    principle('👤', '<b style="color:var(--text2)">Lifts are a player-day call</b> — individualise dose/type per athlete; the week status is a team frame, not a per-player prescription.'),
+    principle('👤', '<b style="color:var(--text2)">Lifts are a player-day call</b> — the week status is the team frame; tap 👥 on any week to set each player&rsquo;s Load / Maintain / Deload. The STATUS column then shows the team average.'),
   ].join('');
   host.innerHTML = `
     <div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden">
@@ -10071,13 +10132,13 @@ function renderScLiftLegend() {
 
 // ── Weekly S&C editor ──
 let editingScWeekNum = null;
-let scWeekDraft = { status: '', days: {}, dbId: undefined };
+let scWeekDraft = { status: '', days: {}, playerStatus: {}, dbId: undefined };
 
 function openScWeek(weekNum) {
   editingScWeekNum = weekNum;
   const existing = state.scWeeks[weekNum] || { status: '', days: {}, testing: {} };
   const exTesting = (existing.testing && !Array.isArray(existing.testing)) ? existing.testing : {};
-  scWeekDraft = { status: existing.status || '', days: JSON.parse(JSON.stringify(existing.days || {})), testing: JSON.parse(JSON.stringify(exTesting)), dbId: existing.dbId };
+  scWeekDraft = { status: existing.status || '', days: JSON.parse(JSON.stringify(existing.days || {})), testing: JSON.parse(JSON.stringify(exTesting)), playerStatus: JSON.parse(JSON.stringify(existing.playerStatus || {})), dbId: existing.dbId };
   const start = getWeekStart(weekNum);
   const end = new Date(start); end.setDate(end.getDate() + 6);
   document.getElementById('scWeekModalTitle').textContent = `Week ${weekNum} · ${MONTHS_SHORT[start.getMonth()]} ${start.getDate()} – ${MONTHS_SHORT[end.getMonth()]} ${end.getDate()}`;
@@ -10155,7 +10216,7 @@ async function saveScWeek() {
   Object.keys(scWeekDraft.days || {}).forEach(dn => { const arr = dayEntries(scWeekDraft.days[dn]); if (arr.length) cleanDays[dn] = arr; });
   const testing = {};
   Object.keys(scWeekDraft.testing || {}).forEach(dn => { const a = (scWeekDraft.testing[dn] || []).filter(t => t.test); if (a.length) testing[dn] = a; });
-  state.scWeeks[editingScWeekNum] = { status: scWeekDraft.status, days: cleanDays, testing, dbId: scWeekDraft.dbId };
+  state.scWeeks[editingScWeekNum] = { status: scWeekDraft.status, days: cleanDays, testing, playerStatus: scWeekDraft.playerStatus || {}, dbId: scWeekDraft.dbId };
   const ok = await saveScWeekDB(editingScWeekNum, state.scWeeks[editingScWeekNum]);
   if (!ok) { alert('Save failed — check your connection.'); return; }
   closeModal('scWeekModal');
@@ -10173,7 +10234,91 @@ function copyPrevScWeek() {
   if (!prev || (!prev.status && !Object.values(prev.days || {}).some(Boolean))) { alert('No plan on the previous week to copy.'); return; }
   scWeekDraft.status = prev.status || '';
   scWeekDraft.days = JSON.parse(JSON.stringify(prev.days || {}));
+  scWeekDraft.playerStatus = JSON.parse(JSON.stringify(prev.playerStatus || {}));
   renderScWeekEditor();
+}
+
+// ── Per-player strategy roster (the "pull up the team" slot) ──
+let scPlayersWeek = null;
+let scPlayersDraft = {}; // { playerId: statusKey }
+function openScPlayers(weekNum) {
+  scPlayersWeek = weekNum;
+  const wk = state.scWeeks[weekNum] || {};
+  scPlayersDraft = JSON.parse(JSON.stringify(wk.playerStatus || {}));
+  const start = getWeekStart(weekNum);
+  const end = new Date(start); end.setDate(end.getDate() + 6);
+  document.getElementById('scPlayersTitle').textContent =
+    `Player strategy · Week ${weekNum} · ${MONTHS_SHORT[start.getMonth()]} ${start.getDate()}–${MONTHS_SHORT[end.getMonth()]} ${end.getDate()}`;
+  renderScPlayers();
+  openModal('scPlayersModal');
+}
+function renderScPlayers() {
+  const wk = state.scWeeks[scPlayersWeek] || {};
+  const baseCfg = statusCfg(wk.status || '');
+  const players = scActivePlayers();
+  const host = document.getElementById('scPlayersBody');
+  if (!players.length) {
+    host.innerHTML = `<div style="padding:22px;text-align:center;color:var(--text3);font-size:12px">No active players yet — add players on the Squad page, then set each one's weekly strategy here.</div>`;
+    return;
+  }
+  const setAll = getScStatuses().map(s =>
+    `<button type="button" onclick="setAllScPlayers('${s.key}')" style="padding:4px 9px;border-radius:5px;border:1px solid ${s.color}66;background:${s.color}18;color:${s.color};font-family:'Anton',sans-serif;letter-spacing:.5px;font-size:10px;cursor:pointer">ALL ${s.label.toUpperCase()}</button>`).join('');
+  const rows = players.map(p => {
+    const cur = scPlayersDraft[p.id] || '';
+    const chips = getScStatuses().map(s => {
+      const on = cur === s.key;
+      return `<button type="button" onclick="setScPlayer('${p.id}','${s.key}')" style="padding:3px 10px;border-radius:5px;border:1px solid ${on ? s.color : 'var(--border)'};background:${on ? s.color + '22' : 'transparent'};color:${on ? s.color : 'var(--text3)'};font-family:'Anton',sans-serif;letter-spacing:.5px;font-size:10px;cursor:pointer">${s.label}</button>`;
+    }).join('');
+    const num = p.shirtNumber ? `<span style="font-family:'JetBrains Mono',monospace;color:var(--text3);font-size:10px;margin-right:6px">#${p.shirtNumber}</span>` : '';
+    const inheritTag = !cur
+      ? `<span title="Inherits the week's team status" style="font-size:9px;color:var(--text3);margin-right:4px">${baseCfg ? 'team · ' + baseCfg.label : 'unset'}</span>`
+      : `<button type="button" title="Clear — inherit team status" onclick="setScPlayer('${p.id}','')" style="margin-right:2px;padding:2px 6px;border-radius:5px;border:1px solid var(--border);background:transparent;color:var(--text3);font-size:11px;cursor:pointer">✕</button>`;
+    return `<div style="display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center;padding:7px 0;border-top:1px solid var(--border)">
+      <div style="min-width:0"><div style="font-size:12.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${num}${escapeAttr(p.name || 'Player')}</div>${p.position ? `<div style="font-size:9px;color:var(--text3)">${escapeAttr(p.position)}</div>` : ''}</div>
+      <div style="display:flex;align-items:center;gap:5px">${inheritTag}${chips}</div>
+    </div>`;
+  }).join('');
+  host.innerHTML = `
+    <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-bottom:6px">
+      <span style="font-size:10px;color:var(--text3);font-family:'Anton',sans-serif;letter-spacing:.5px">SET ALL:</span>${setAll}
+      <button type="button" onclick="setAllScPlayers('')" style="padding:4px 9px;border-radius:5px;border:1px solid var(--border);background:transparent;color:var(--text3);font-family:'Anton',sans-serif;letter-spacing:.5px;font-size:10px;cursor:pointer">CLEAR ALL</button>
+    </div>
+    ${baseCfg
+      ? `<div style="font-size:10.5px;color:var(--text3);margin-bottom:6px">Blank players inherit the team status (<span style="color:${baseCfg.color}">${baseCfg.label}</span>). Set a player only to deviate from it.</div>`
+      : `<div style="font-size:10.5px;color:var(--text3);margin-bottom:6px">No team status on this week — set players directly, or set the week's team status first (click the week).</div>`}
+    <div id="scPlayersSummary" style="margin-bottom:4px"></div>
+    <div>${rows}</div>`;
+  renderScPlayersSummary();
+}
+function renderScPlayersSummary() {
+  const el = document.getElementById('scPlayersSummary'); if (!el) return;
+  const base = (state.scWeeks[scPlayersWeek] || {}).status || '';
+  const counts = {};
+  scActivePlayers().forEach(p => { const k = scPlayersDraft[p.id] || base; if (k) counts[k] = (counts[k] || 0) + 1; });
+  const total = Object.values(counts).reduce((a, b) => a + b, 0);
+  el.innerHTML = total
+    ? `<div style="display:flex;flex-wrap:wrap;align-items:center;gap:7px;padding:7px 10px;border-radius:6px;background:var(--surface3)"><span style="font-size:9px;font-family:'Anton',sans-serif;letter-spacing:1px;color:var(--text3)">TEAM AVERAGE</span>${scDistChips(counts)}<span style="font-size:10px;color:var(--text3)">· ${total} players</span></div>`
+    : '';
+}
+function setScPlayer(pid, key) {
+  if (!key) delete scPlayersDraft[pid]; else scPlayersDraft[pid] = key;
+  renderScPlayers();
+}
+function setAllScPlayers(key) {
+  scPlayersDraft = {};
+  if (key) scActivePlayers().forEach(p => { scPlayersDraft[p.id] = key; });
+  renderScPlayers();
+}
+async function saveScPlayers() {
+  const existing = state.scWeeks[scPlayersWeek] || { status: '', days: {}, testing: {} };
+  const activeIds = new Set(scActivePlayers().map(p => p.id));
+  const clean = {};
+  Object.entries(scPlayersDraft).forEach(([pid, k]) => { if (k && activeIds.has(pid)) clean[pid] = k; });
+  state.scWeeks[scPlayersWeek] = { status: existing.status || '', days: existing.days || {}, testing: existing.testing || {}, playerStatus: clean, dbId: existing.dbId };
+  const ok = await saveScWeekDB(scPlayersWeek, state.scWeeks[scPlayersWeek]);
+  if (!ok) { alert('Save failed — check your connection.'); return; }
+  closeModal('scPlayersModal');
+  renderStrength();
 }
 
 // Seed a default microcycle into every week that has no plan yet — a fast
