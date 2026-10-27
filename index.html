@@ -3952,33 +3952,31 @@ function buildMonthLabelRow(weekMonths) {
   lbl.className = 'year-label';
   row.appendChild(lbl);
 
-  let curMonth = -1;
-  let spanCount = 0;
-  let spanCells = [];
-
-  weekMonths.forEach((m, i) => {
-    if (m !== curMonth) {
-      curMonth = m;
-      spanCount = 1;
-      const cell = document.createElement('div');
-      cell.className = 'year-month-label';
-      cell.textContent = MONTHS_SHORT[m];
-      cell.title = 'Go to ' + MONTHS[m];
-      cell.addEventListener('click', () => {
-        // Work out year for this month (season can span two years)
-        const weekStart = getWeekStart(i + 1);
-        currentMonth = weekStart.getMonth();
-        currentMonthYear = weekStart.getFullYear();
-        switchTab('month');
-      });
-      spanCells.push(cell);
-      row.appendChild(cell);
-    } else {
-      const cell = document.createElement('div');
-      cell.style.cssText = 'height:28px;';
-      row.appendChild(cell);
-    }
-  });
+  // One label per month, spanning every week column that falls in that month,
+  // so each month reads as a continuous band across its weeks. Weeks are
+  // grouped in consecutive runs (handles a month recurring across two years).
+  let i = 0;
+  while (i < weekMonths.length) {
+    const m = weekMonths[i];
+    let j = i;
+    while (j + 1 < weekMonths.length && weekMonths[j + 1] === m) j++;
+    const span = j - i + 1;
+    const firstWeek = i + 1;
+    const cell = document.createElement('div');
+    cell.className = 'year-month-label';
+    cell.style.gridColumn = 'span ' + span;
+    cell.textContent = MONTHS_SHORT[m];
+    cell.title = 'Go to ' + MONTHS[m];
+    cell.addEventListener('click', () => {
+      // Work out year for this month (season can span two years)
+      const weekStart = getWeekStart(firstWeek);
+      currentMonth = weekStart.getMonth();
+      currentMonthYear = weekStart.getFullYear();
+      switchTab('month');
+    });
+    row.appendChild(cell);
+    i = j + 1;
+  }
 
   return row;
 }
