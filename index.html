@@ -1708,25 +1708,25 @@
   }
   .dp-title {
     font-family: 'Anton',sans-serif; font-size:13px; font-weight:700;
-    letter-spacing:1px; color:var(--text2); margin-bottom:10px;
+    letter-spacing:1px; color:var(--text); margin-bottom:10px;
     text-transform:uppercase; display:flex; justify-content:space-between; align-items:center;
   }
   .dp-close { cursor:pointer; color:var(--text3); font-size:16px; line-height:1; padding:2px 4px; }
   .dp-close:hover { color:var(--game); }
   .dp-label {
     font-family:'Anton',sans-serif; font-size:10px; font-weight:700;
-    letter-spacing:1.5px; text-transform:uppercase; color:var(--text3);
+    letter-spacing:1.5px; text-transform:uppercase; color:var(--text);
     margin-bottom:5px; margin-top:10px;
   }
   .dp-chips { display:flex; flex-wrap:wrap; gap:4px; }
   .dp-chip {
     padding:3px 9px; border-radius:20px;
     font-family:'Anton',sans-serif; font-size:11px; font-weight:700; letter-spacing:0.5px;
-    border:1px solid var(--border); cursor:pointer; color:var(--text2); background:var(--surface2);
+    border:1px solid var(--border); cursor:pointer; color:var(--text); background:var(--surface2);
     transition: all 0.12s;
   }
   .dp-chip.active { border-width:2px; }
-  .dp-chip.dp-none.active { border-color:var(--accent); color:var(--accent); background:rgba(0,212,255,0.08); }
+  .dp-chip.dp-none.active { border-color:var(--accent); color:var(--text); background:rgba(0,212,255,0.08); }
   .dp-actions { display:flex; gap:8px; margin-top:12px; padding-top:10px; border-top:1px solid var(--border); }
   .year-month-label { cursor:pointer; transition:opacity 0.15s; }
   .year-month-label:hover { opacity:0.65; }
@@ -7192,8 +7192,9 @@ function buildDpChips(containerId, selectedVal, isSecondary) {
   }
   html += types.map(t => {
     const active = selectedVal === t.name ? 'active' : '';
-    return `<div class="dp-chip ${active}"
-      style="background:${t.color}22;color:${t.color};border-color:${active?t.color+'99':t.color+'44'}"
+    // Text stays dark/readable; the type colour lives on the tint + border only.
+    return `<div class="dp-chip ${active}" data-color="${t.color}"
+      style="background:${t.color}22;color:var(--text);border-color:${active?t.color:t.color+'55'}"
       onclick="dpSelectType(this,'${t.name}','${isSecondary?'secondary':'primary'}')">${t.name}</div>`;
   }).join('');
   container.innerHTML = html;
@@ -7203,11 +7204,12 @@ function dpSelectType(el, name, slot) {
   const containerId = slot === 'primary' ? 'dpPrimaryChips' : 'dpSecondaryChips';
   document.querySelectorAll('#' + containerId + ' .dp-chip').forEach(c => {
     c.classList.remove('active');
-    const baseColor = c.style.color;
-    c.style.borderColor = baseColor ? baseColor.replace(')', ',0.27)').replace('rgb','rgba') : '';
+    const tc = c.dataset.color;
+    if (tc) c.style.borderColor = tc + '55';
   });
   el.classList.add('active');
-  el.style.borderColor = el.style.color;
+  const tc = el.dataset.color;
+  if (tc) el.style.borderColor = tc;
   if (slot === 'primary') dpType1 = name;
   else                    dpType2 = name;
 }
