@@ -1917,13 +1917,16 @@
   <div class="nav-tab active" onclick="switchTab('year')">Annual Plan</div>
   <div class="nav-tab" onclick="switchTab('month')">Month</div>
   <div class="nav-tab" onclick="switchTab('week')">Week</div>
-  <div class="nav-tab" onclick="switchTab('review')">Week Review</div>
-  <div class="nav-tab" onclick="switchTab('squad')">Squad</div>
-  <div class="nav-tab" onclick="switchTab('strength')">Strength</div>
-  <div class="nav-tab" onclick="switchTab('library')">Drill Library</div>
+  <div class="nav-tab" onclick="switchTab('strength')">Gym Program</div>
   <div class="nav-tab" onclick="switchTab('morphocycle')">Morphocycle</div>
   <div class="nav-tab" onclick="switchTab('methodology')">Methodology</div>
   <div class="nav-tab" onclick="switchTab('settings')">Settings</div>
+  <div class="nav-tab" onclick="switchTab('library')">Drill Library</div>
+  <!-- Archived for now — re-enable by uncommenting:
+  <div class="nav-tab" onclick="switchTab('review')">Week Review</div>
+  <div class="nav-tab" onclick="switchTab('squad')">Squad</div>
+  -->
+
 </nav>
 
 <!-- ═══ MAIN ═══ -->
@@ -2045,7 +2048,7 @@
   <div id="view-strength" class="view">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:10px">
       <div>
-        <h2 style="margin:0;font-family:'Anton',sans-serif;letter-spacing:2px;font-size:24px">STRENGTH &amp; CONDITIONING</h2>
+        <h2 style="margin:0;font-family:'Anton',sans-serif;letter-spacing:2px;font-size:24px">GYM PROGRAM</h2>
         <div style="font-size:11px;color:var(--text3);font-family:'Anton',sans-serif;letter-spacing:1px;margin-top:2px">Annual periodization · session type per day · loading ideas</div>
       </div>
       <div style="display:flex;gap:8px;flex-wrap:wrap">
@@ -2333,9 +2336,13 @@
         <textarea id="sessionNotes" placeholder="Session notes, coaching cues, focus areas..."></textarea>
       </div>
 
-      <hr class="section-divider">
-      <div class="subsection-label">Squad Availability <span style="color:var(--text3);font-size:10px;font-weight:400;letter-spacing:0;text-transform:none">— Full · Modified · Recovery · RTP · Out</span></div>
-      <div id="sessionRoster"></div>
+      <!-- Squad availability archived for now — hidden but kept in the DOM so
+           existing availability logs are preserved and re-saved unchanged. -->
+      <div id="sessionRosterSection" style="display:none">
+        <hr class="section-divider">
+        <div class="subsection-label">Squad Availability <span style="color:var(--text3);font-size:10px;font-weight:400;letter-spacing:0;text-transform:none">— Full · Modified · Recovery · RTP · Out</span></div>
+        <div id="sessionRoster"></div>
+      </div>
 
     </div>
     <div class="modal-footer">
@@ -4156,7 +4163,7 @@ function buildSessionCardHTML(s) {
        </div>`
     : '';
   return `
-    <div class="session-card int-${typeClass} ${s.type === 'Game' ? 'game-card' : ''}" style="border-left-color:${typeColor}" onclick="event.stopPropagation();editSession('${s.id}')">
+    <div class="session-card int-${typeClass}" style="border-left-color:${typeColor}" onclick="event.stopPropagation();editSession('${s.id}')">
       <div class="session-card-header">
         <span class="session-type"><span style="background:${typeColor};color:${textOnColor(typeColor)};padding:2px 9px;border-radius:5px;border:1px solid rgba(0,0,0,0.16)">${s.type || 'Session'}</span>${s.type2 ? `<span style="color:var(--text3);margin:0 4px;font-weight:400">+</span><span style="background:${typeColor2};color:${textOnColor(typeColor2)};padding:2px 8px;border-radius:5px;border:1px solid rgba(0,0,0,0.16)">${s.type2}</span>` : ''}</span>
         <span class="session-duration">${s.duration ? s.duration + 'm' : '—'}</span>
