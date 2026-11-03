@@ -4155,6 +4155,20 @@ function buildSessionCardHTML(s) {
   const typeLabel = s.type2
     ? `${s.type} <span style="color:var(--text3)">+</span> <span style="color:${typeColor2}">${s.type2}</span>`
     : s.type || 'Session';
+  // A day with two session types is a Hybrid day: show one clean "HYBRID" label
+  // with the two component types as small chips beneath, instead of two wide
+  // pills that crowd the narrow week column.
+  const isDualType = !!s.type2;
+  const hybridColor = getTypeColor('Hybrid');
+  const headerPill = isDualType
+    ? `<span style="background:${hybridColor};color:${textOnColor(hybridColor)};padding:2px 10px;border-radius:5px;border:1px solid rgba(0,0,0,0.16)">Hybrid</span>`
+    : `<span style="background:${typeColor};color:${textOnColor(typeColor)};padding:2px 9px;border-radius:5px;border:1px solid rgba(0,0,0,0.16)">${s.type || 'Session'}</span>`;
+  const dualChips = isDualType
+    ? `<div style="display:flex;flex-wrap:wrap;justify-content:center;gap:4px;margin:-3px 0 7px">
+         <span style="font-family:'Anton',sans-serif;font-size:9.5px;letter-spacing:.3px;background:${typeColor}22;color:var(--text);padding:1px 7px;border-radius:4px;border:1px solid ${typeColor}66">${s.type}</span>
+         <span style="font-family:'Anton',sans-serif;font-size:9.5px;letter-spacing:.3px;background:${typeColor2}22;color:var(--text);padding:1px 7px;border-radius:4px;border:1px solid ${typeColor2}66">${s.type2}</span>
+       </div>`
+    : '';
   const gdHtml = (s.gdMinus || s.gdPlus)
     ? `<div style="display:flex;align-items:center;gap:6px;margin-top:5px;font-family:'JetBrains Mono',monospace;font-size:11px;">
          <span style="color:var(--text3)">GD</span>
@@ -4166,9 +4180,10 @@ function buildSessionCardHTML(s) {
   return `
     <div class="session-card int-${typeClass}" style="border-left-color:${typeColor}" onclick="event.stopPropagation();editSession('${s.id}')">
       <div class="session-card-header">
-        <span class="session-type"><span style="background:${typeColor};color:${textOnColor(typeColor)};padding:2px 9px;border-radius:5px;border:1px solid rgba(0,0,0,0.16)">${s.type || 'Session'}</span>${s.type2 ? `<span style="color:var(--text3);margin:0 4px;font-weight:400">+</span><span style="background:${typeColor2};color:${textOnColor(typeColor2)};padding:2px 8px;border-radius:5px;border:1px solid rgba(0,0,0,0.16)">${s.type2}</span>` : ''}</span>
+        <span class="session-type">${headerPill}</span>
         <span class="session-duration">${s.duration ? s.duration + 'm' : '—'}</span>
       </div>
+      ${dualChips}
       ${s.principle ? `<div style="font-size:11px;color:var(--text2);margin-bottom:6px;">${s.principle}</div>` : ''}
       ${(() => {
         const a = getAmsActualForDate(s.date);
