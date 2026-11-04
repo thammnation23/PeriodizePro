@@ -4341,7 +4341,6 @@ function buildMonthSessionChip(s) {
   else if (s.gdPlus)  meta = `GD+${s.gdPlus}`;
   else if (s.duration) meta = `${s.duration}m`;
   const marks = [];
-  if (s.testing && s.testing.length) marks.push('🧪');
   if (s.prePost && s.prePost.length) marks.push('±');
   return `
     <div class="month-chip" style="border-left-color:${typeColor}" onclick="event.stopPropagation();editSession('${s.id}')" title="${escapeAttr(label)}">
