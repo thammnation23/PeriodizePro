@@ -3626,7 +3626,7 @@ function switchTab(tab) {
   if (tab === 'month')    renderMonth();
   if (tab === 'week')     renderWeek();
   if (tab === 'squad')    renderSquad();
-  if (tab === 'strength') renderStrength();
+  if (tab === 'strength') { renderStrength(); setTimeout(jumpToCurrentScWeek, 80); }
   if (tab === 'review')   renderWeekReview();
   if (tab === 'morphocycle') renderMorphocycle();
   if (tab === 'methodology') renderMethodology();
