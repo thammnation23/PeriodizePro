@@ -2264,14 +2264,6 @@
         </div>
       </div>
 
-      <div class="form-group" style="margin-bottom:16px">
-        <label>Intensity — <span id="intensityLabel" style="color:var(--accent)">Medium</span></label>
-        <div class="range-row">
-          <input type="range" id="intensityRange" min="1" max="10" value="5" oninput="updateIntensity(this.value)">
-          <div class="range-val" id="intensityVal">5</div>
-        </div>
-      </div>
-
       <div class="form-grid">
         <div class="form-group">
           <label>Principle</label>
@@ -3545,7 +3537,9 @@ function stripe3(base, accent, bw, aw) {
     const s = (i * unit) / total * 100, mid = (i * unit + bw) / total * 100, e = ((i + 1) * unit) / total * 100;
     stops.push(`${base} ${s.toFixed(2)}% ${mid.toFixed(2)}%`, `${accent} ${mid.toFixed(2)}% ${e.toFixed(2)}%`);
   }
-  return `linear-gradient(0deg, ${stops.join(', ')})`;
+  // 180deg so the base colour leads (top), then the accent — e.g. Endurance
+  // reads green-then-yellow rather than yellow-then-green.
+  return `linear-gradient(180deg, ${stops.join(', ')})`;
 }
 
 // Background CSS for a type OBJECT { color, stripeColor, stripeBase, stripeAccent }
@@ -4004,7 +3998,7 @@ function showTooltip(e, week, dateStr, sessions, isGame) {
   }
   sessions.forEach(s => {
     const t2 = s.type2 ? ` + ${s.type2}` : '';
-    html += `<div class="tooltip-row">${s.type || 'Session'}${t2} · ${s.duration ? s.duration + 'min' : '—'} · Int ${s.intensity || '—'}/10</div>`;
+    html += `<div class="tooltip-row">${s.type || 'Session'}${t2} · ${s.duration ? s.duration + 'min' : '—'}</div>`;
   });
   if (!isGame && sessions.length === 0) {
     html = '<div class="tooltip-row">No session</div>';
@@ -4736,7 +4730,7 @@ function exportWeekPDF() {
     const notes = [...sessions.map(s => s.notes), game ? game.notes : ''].filter(n => n && n.trim()).join(' · ');
 
     cols.push({ i, d, sessions, game, m, dur, durMin, typeColor, sessType, scEntries, drills, notes,
-      intensity: primary ? parseInt(primary.intensity) || 0 : (game ? 9 : 0), has: !!(sessions.length || game) });
+      has: !!(sessions.length || game) });
   }
 
   const rangeStr = `${MONTHS_SHORT[weekStart.getMonth()]} ${weekStart.getDate()} – ${MONTHS_SHORT[weekEnd.getMonth()]} ${weekEnd.getDate()}`;
@@ -4895,16 +4889,6 @@ function syncOffDayForm() {
     el.disabled = isOff;
     el.style.opacity = isOff ? '0.45' : '';
   });
-  const range = document.getElementById('intensityRange');
-  if (range) {
-    range.disabled = isOff;
-    range.style.opacity = isOff ? '0.45' : '';
-    if (isOff) {
-      range.value = range.min || 1;
-      const iv = document.getElementById('intensityVal'); if (iv) iv.textContent = '0';
-      const il = document.getElementById('intensityLabel'); if (il) { il.textContent = 'Off'; il.style.color = 'var(--text3)'; }
-    }
-  }
 }
 
 // ── ADD SESSION ──
@@ -4950,8 +4934,6 @@ function editSession(id) {
 
   document.getElementById('sessionDate').value = s.date || '';
   document.getElementById('sessionDuration').value = s.duration || '';
-  document.getElementById('intensityRange').value = s.intensity || 5;
-  updateIntensity(s.intensity || 5);
   document.getElementById('sessionPrinciple').value = s.principle || '';
   document.getElementById('sessionComplexity').value = s.complexity || '';
   document.getElementById('metricTD').value = s.td || '';
@@ -4995,8 +4977,6 @@ function clearSessionForm() {
   currentGdMinus = '';
   currentGdPlus = '';
   document.getElementById('sessionComplexity').value = '';
-  document.getElementById('intensityRange').value = 5;
-  updateIntensity(5);
   chipSelections['type2'] = '';
   rebuildSessionTypeChips();
   sessionAttachments.warmup = [];
@@ -5135,7 +5115,6 @@ async function saveSession() {
     type: chipSelections['type'] || 'Intensive',
     type2: chipSelections['type2'] || '',
     duration: document.getElementById('sessionDuration').value,
-    intensity: document.getElementById('intensityRange').value,
     principle: document.getElementById('sessionPrinciple').value,
     complexity: document.getElementById('sessionComplexity').value,
     td: document.getElementById('metricTD').value,
@@ -5161,7 +5140,7 @@ async function saveSession() {
 
   // Off Day — zero the team load regardless of the (locked) inputs; notes kept.
   if (session.type === 'Off Day' || session.type2 === 'Off Day') {
-    session.duration = '0'; session.intensity = '0';
+    session.duration = '0';
     session.td = '0'; session.hsr = '0'; session.sd = '0'; session.acc = '0'; session.dec = '0';
   }
 
@@ -5868,16 +5847,6 @@ function addSessionFromDay() {
 }
 
 // ── INTENSITY DISPLAY ──
-function updateIntensity(v) {
-  const label = document.getElementById('intensityLabel');
-  const val = document.getElementById('intensityVal');
-  const n = parseInt(v);
-  val.textContent = n;
-  val.style.color = getIntensityColor(n);
-  label.textContent = getIntensityLabel(n);
-  label.style.color = getIntensityColor(n);
-}
-
 // ── YT / IMG PREVIEWS ──
 function previewYT(inputId, previewId) {
   const url = document.getElementById(inputId).value.trim();
@@ -7261,7 +7230,7 @@ async function saveDayPopover() {
 
   // Off Day — zero the team load; notes preserved.
   if (session.type === 'Off Day' || session.type2 === 'Off Day') {
-    session.duration = '0'; session.intensity = '0';
+    session.duration = '0';
     session.td = '0'; session.hsr = '0'; session.sd = '0'; session.acc = '0'; session.dec = '0';
   }
 
@@ -10467,7 +10436,7 @@ async function saveScStatuses() {
 // colours/stripes are pulled live from the configured session types so the
 // page always matches the Annual-plan palette.
 const MORPHO_DAYS = [
-  { type:'Strength', md:'Tension day · classically MD-4',
+  { type:'Strength', md:'',
     tagline:'Muscular tension — force, accel / decel, duels.',
     body:'The strength / tension acquisition day. Dominated by high-tension actions — eccentric &amp; concentric contractions, accelerations, decelerations, jumps, changes of direction and 1v1 duels. Played in smaller spaces with fewer players so efforts are frequent and forceful, kept short with generous recovery so quality never drops.',
     note:'Combine <b>fundamental</b> (analytical, eccentric, maximal tension) with <b>complementary</b> (game-based meso / micro principles). Develop Yap / Taz activation and recovery synergy.',
@@ -10486,7 +10455,7 @@ const MORPHO_DAYS = [
       ['Finishing','Short accel–decel, change of direction, box finishing'],
       ['Cool-down','Regen + mobility'],
     ] },
-  { type:'Endurance', md:'Duration day · classically MD-3',
+  { type:'Endurance', md:'',
     tagline:'Collective acquisition day — most complex.',
     body:'Focus on Macro principles of the game model. Dense inter-sectoral tactical work with reflective pauses and contextual feedback. Potential adaptation: express maximal speed.',
     principles:[
@@ -10504,7 +10473,7 @@ const MORPHO_DAYS = [
       ['Conditioned game','Match-like scenarios under fatigue'],
       ['Cool-down','Mobility'],
     ] },
-  { type:'Re-Entry', md:'Return to play · individualised',
+  { type:'Re-Intro', md:'',
     tagline:'Reintegration — bridging rehab back to full training.',
     body:'For players returning from injury or absence. A controlled, progressive re-exposure to the week’s demands — volume, intensity, change-of-direction and contact — before rejoining full team training. Criteria-led, not calendar-led, and run alongside the team week rather than in place of it.',
     principles:[
@@ -10522,7 +10491,7 @@ const MORPHO_DAYS = [
       ['Integration','Short blocks with the team as tolerated'],
       ['Monitor','Symptom / load check'],
     ] },
-  { type:'Tactical', md:'Speed / velocity emphasis · often MD-2',
+  { type:'Speed (Tactical)', md:'',
     tagline:'A rehearsal of the week’s ideas.',
     body:'Focus on efficiency and freshness. Complement with small tactical accelerations and System 1 work.',
     principles:[
@@ -10595,7 +10564,7 @@ const MORPHO_ARC = [
   { lbl:'MD+1', type:'Recovery' },
   { lbl:'MD-4', type:'Strength' },
   { lbl:'MD-3', type:'Endurance' },
-  { lbl:'MD-2', type:'Tactical' },
+  { lbl:'MD-2', type:'Speed (Tactical)' },
   { lbl:'MD-1', type:'Activation' },
   { lbl:'MD',   type:'Game', game:true },
 ];
@@ -10631,7 +10600,7 @@ function renderMorphocycle() {
           </div>`;
         }).join('')}
       </div>
-      <div style="font-size:10px;color:var(--text3);margin-top:7px">Re-Entry and Hybrid aren’t fixed to a slot — the coach places them as the week and squad demand.</div>
+      <div style="font-size:10px;color:var(--text3);margin-top:7px">Re-Intro and Hybrid aren’t fixed to a slot — the coach places them as the week and squad demand.</div>
     </div>`;
 
   // Day-type cards — description, key concept, principles, example framework.
@@ -10656,7 +10625,7 @@ function renderMorphocycle() {
         <div style="flex:1;padding:14px 16px;min-width:0">
           <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:4px">
             <span style="font-family:'Anton',sans-serif;letter-spacing:1px;font-size:17px;color:${col}">${d.type.toUpperCase()}</span>
-            <span style="font-size:10px;letter-spacing:.5px;color:var(--text3);font-family:'Anton',sans-serif">${d.md}</span>
+            ${d.md ? `<span style="font-size:10px;letter-spacing:.5px;color:var(--text3);font-family:'Anton',sans-serif">${d.md}</span>` : ''}
           </div>
           <div style="font-size:12.5px;color:var(--text);font-weight:600;margin-bottom:6px">${d.tagline}</div>
           <div style="font-size:12.5px;line-height:1.55;color:var(--text2)">${d.body}</div>
