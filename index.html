@@ -3703,9 +3703,14 @@ function renderYear() {
     // Highlight the week number for international-window weeks.
     const ws0 = getWeekStart(w); const we0 = new Date(ws0); we0.setDate(we0.getDate() + 6);
     const win0 = getIntlWindows().find(x => x.start && x.end && x.start <= formatDate(we0) && x.end >= formatDate(ws0));
+    const ph0 = phaseForDate(formatDate(ws0));
     if (win0) {
       cell.style.cssText = `background:${INTL_COLOR};color:#fff;border-radius:3px;font-weight:700;`;
       cell.title = `W${w} · International window${win0.label ? ' · ' + win0.label : ''}`;
+    } else if (ph0) {
+      // Season phase shown by colouring the week number (not a per-day border).
+      cell.style.cssText = `background:${ph0.color};color:${textOnColor(ph0.color)};border-radius:3px;font-weight:700;`;
+      cell.title = `W${w} · ${ph0.name}`;
     }
     cell.addEventListener('click', () => { currentWeek = w; switchTab('week'); });
     weekNumRow.appendChild(cell);
@@ -3791,20 +3796,8 @@ function renderYear() {
         cell.style.cssText = 'background:var(--surface2);height:28px;border-radius:3px;cursor:pointer;';
       }
 
-      // Season phase boundary — border only the outer edges of the phase range
-      // via inset box-shadow (fill + layout untouched). International windows
-      // are shown via the week-number highlight + the labelled Intl band below.
-      const ph = phaseAt[di][w];
-      const sh = [];
-      if (ph) {
-        const c = ph.color;
-        if (di === 0 || !samePhase(phaseAt[di - 1][w], ph)) sh.push(`inset 0 2px 0 0 ${c}`);
-        if (di === 6 || !samePhase(phaseAt[di + 1][w], ph)) sh.push(`inset 0 -2px 0 0 ${c}`);
-        if (w === 1  || !samePhase(phaseAt[di][w - 1], ph)) sh.push(`inset 2px 0 0 0 ${c}`);
-        if (w === 52 || !samePhase(phaseAt[di][w + 1], ph)) sh.push(`inset -2px 0 0 0 ${c}`);
-        cell.dataset.phase = ph.name;
-      }
-      if (sh.length) cell.style.boxShadow = sh.join(', ');
+      // Season phases are shown by colouring the week number (like the intl
+      // windows), not by bordering the days.
 
       // Click — open day type popover
       cell.addEventListener('mouseenter', (e) => showTooltip(e, w, dateStr, sessions, isGame));
@@ -4335,6 +4328,12 @@ function buildGameCardHTML(g) {
 // in the day panel / edit modal, so nothing is lost — just decluttered.
 function buildMonthSessionChip(s) {
   const typeColor = getTypeColor(s.type);
+  // Match the Week view: the day type is a filled, auto-contrast pill; a
+  // two-type day reads as Hybrid.
+  const isDual = !!s.type2;
+  const hybType = getSessionTypes().find(t => t.name === 'Hybrid');
+  const pillColor = isDual ? (hybType ? hybType.color : '#8b5cf6') : typeColor;
+  const pillLabel = isDual ? 'Hybrid' : (s.type || 'Session');
   const label = s.type2 ? `${s.type || 'Session'} + ${s.type2}` : (s.type || 'Session');
   let meta = '';
   if (s.gdMinus)      meta = `GD−${s.gdMinus}`;
@@ -4346,10 +4345,9 @@ function buildMonthSessionChip(s) {
   if (s.testing && s.testing.length) marks.push('🧪');
   if (s.prePost && s.prePost.length) marks.push('±');
   return `
-    <div class="month-chip" style="border-left-color:${typeColor}" onclick="event.stopPropagation();editSession('${s.id}')" title="${escapeAttr(label)}">
-      <div class="month-chip-top">
-        <span class="month-chip-dot" style="background:${typeColor}"></span>
-        <span class="month-chip-label" style="color:var(--text)">${label}</span>
+    <div class="month-chip" style="border-left-color:${pillColor}" onclick="event.stopPropagation();editSession('${s.id}')" title="${escapeAttr(label)}">
+      <div class="month-chip-top" style="justify-content:space-between">
+        <span class="month-chip-label" style="flex:0 1 auto;background:${pillColor};color:${textOnColor(pillColor)};padding:1px 7px;border-radius:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeAttr(pillLabel)}</span>
         ${meta ? `<span class="month-chip-meta">${meta}</span>` : ''}
       </div>
       ${marks.length ? `<div class="month-chip-marks">${marks.map(m => `<span>${m}</span>`).join('')}</div>` : ''}
