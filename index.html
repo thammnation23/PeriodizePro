@@ -4810,7 +4810,7 @@ function exportWeekPDF() {
     const label = c.dur || (c.game ? 'Match' : '');
     const bar = c.durMin > 0 ? `<div style="position:absolute;bottom:0;left:0;right:0;height:${pct}%;background:${color}"></div>` : '';
     const banner = c.game ? `<div style="position:absolute;top:0;left:0;right:0;background:#b5301f;color:#fff;font-family:'Anton',sans-serif;font-size:8px;letter-spacing:.3px;padding:1px 2px;z-index:2;white-space:nowrap;overflow:hidden">vs ${esc(c.game.opponent || 'TBD')}</div>` : '';
-    const lbl = label ? `<div style="position:absolute;bottom:2px;left:0;right:0;text-align:center;font-family:'Anton',sans-serif;font-size:11px;color:${pct >= 24 ? '#fff' : '#111'};z-index:1">${esc(label)}</div>` : '';
+    const lbl = label ? `<div style="position:absolute;bottom:2px;left:0;right:0;text-align:center;font-family:'Anton',sans-serif;font-size:11px;color:#111;z-index:1">${esc(label)}</div>` : '';
     return `<td style="position:relative;height:${BARH}px;background:#fff;padding:0;${BORD}">${bar}${banner}${lbl}</td>`;
   }).join('');
 
@@ -4881,7 +4881,7 @@ function exportWeekPDF() {
   </tr>
   ${scBanner}
   <tr><td style="background:#000;${BORD}"></td>${dayHeader}<td style="background:#000;color:#f5901e;text-align:center;font-family:'Anton',sans-serif;font-size:12px;${BORD}">Total</td></tr>
-  <tr><td style="${LBL}">Duration &amp; Intensity</td>${durRow}<td style="background:#333;${BORD}"></td></tr>
+  <tr><td style="${LBL}">Duration</td>${durRow}<td style="background:#333;${BORD}"></td></tr>
   <tr><td style="${LBL}">Recommended Session Type</td>${focusRow}<td style="background:#333;${BORD}"></td></tr>
   ${metricRow('TD',      'td',  totals.td)}
   ${metricRow('HSR',     'hsr', totals.hsr)}
