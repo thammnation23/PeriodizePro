@@ -3971,7 +3971,7 @@ function renderYear() {
   if (fieldLegend) {
     fieldLegend.innerHTML = getSessionTypes().map(t =>
       `<div class="legend-item"><div class="legend-dot" style="background:${typeObjBackground(t)}"></div> ${t.name}</div>`
-    ).join('') + `<div class="legend-item"><div class="legend-dot" style="background:var(--surface3)"></div> Rest</div>`;
+    ).join('');
   }
 
   // ── Season-phase legend (the border colours around the grid) ──
