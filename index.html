@@ -2260,7 +2260,7 @@
         </div>
         <div class="form-group">
           <label>Duration (min)</label>
-          <input type="number" id="sessionDuration" placeholder="90" min="0" max="300">
+          <input type="text" id="sessionDuration" placeholder="90 or 75-90">
         </div>
       </div>
 
@@ -2278,6 +2278,38 @@
             <option>High</option>
           </select>
         </div>
+      </div>
+
+      <div class="form-grid">
+        <div class="form-group">
+          <label>Density</label>
+          <select id="sessionDensity">
+            <option value="">—</option>
+            <option>Low</option>
+            <option>Low-Medium</option>
+            <option>Medium</option>
+            <option>Medium-High</option>
+            <option>High</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Loading</label>
+          <select id="sessionLoadDay">
+            <option value="">—</option>
+            <option>Recovery</option>
+            <option>Load</option>
+            <option>Unload</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label>Physical Expression</label>
+        <select id="sessionPhysicalExpression">
+          <option value="">—</option>
+          <option>Peak Accel/Decel</option>
+          <option>Max Velocity</option>
+        </select>
       </div>
 
       <hr class="section-divider">
@@ -3294,6 +3326,7 @@ function dbToSession(r) {
     id: r.id, date: r.date, type: r.type, type2: r.type2 || '',
     duration: r.duration, intensity: r.intensity,
     principle: r.principle, complexity: r.complexity,
+    density: r.density || '', loadDay: r.load_day || '', physicalExpression: r.physical_expression || '',
     td: r.td, hsr: r.hsr, sd: r.sd, acc: r.acc, dec: r.dec_count,
     warmupMedia:  r.warmup_drills  || [],
     sessionMedia: r.session_drills || [],
@@ -3310,9 +3343,10 @@ function sessionToDB(s) {
   return {
     id: s.id, user_id: currentUser.id,
     date: s.date, type: s.type, type2: s.type2 || null,
-    duration: s.duration ? parseInt(s.duration) : null,
+    duration: s.duration || null,
     intensity: s.intensity ? parseInt(s.intensity) : null,
     principle: s.principle, complexity: s.complexity,
+    density: s.density || null, load_day: s.loadDay || null, physical_expression: s.physicalExpression || null,
     td: s.td ? parseInt(s.td) : null,
     hsr: s.hsr ? parseInt(s.hsr) : null,
     sd: s.sd ? parseInt(s.sd) : null,
@@ -4153,9 +4187,12 @@ function buildSessionCardHTML(s) {
   // with the two component types as small chips beneath, instead of two wide
   // pills that crowd the narrow week column.
   const isDualType = !!s.type2;
-  const hybridColor = getTypeColor('Hybrid');
+  // Hybrid is no longer a configured session type, so fall back to a fixed
+  // colour rather than the grey "unknown type" default.
+  const hybType = getSessionTypes().find(t => t.name === 'Hybrid');
+  const hybridColor = hybType ? hybType.color : '#8b5cf6';
   const headerPill = isDualType
-    ? `<span style="background:${hybridColor};color:${textOnColor(hybridColor)};padding:2px 10px;border-radius:5px;border:1px solid rgba(0,0,0,0.16)">Hybrid</span>`
+    ? `<span style="font-size:10px;letter-spacing:.5px;background:${hybridColor};color:${textOnColor(hybridColor)};padding:1px 8px;border-radius:4px;border:1px solid rgba(0,0,0,0.16)">Hybrid</span>`
     : `<span style="background:${typeColor};color:${textOnColor(typeColor)};padding:2px 9px;border-radius:5px;border:1px solid rgba(0,0,0,0.16)">${s.type || 'Session'}</span>`;
   const dualChips = isDualType
     ? `<div style="display:flex;flex-wrap:wrap;justify-content:center;gap:4px;margin:-3px 0 7px">
@@ -4936,6 +4973,9 @@ function editSession(id) {
   document.getElementById('sessionDuration').value = s.duration || '';
   document.getElementById('sessionPrinciple').value = s.principle || '';
   document.getElementById('sessionComplexity').value = s.complexity || '';
+  document.getElementById('sessionDensity').value = s.density || '';
+  document.getElementById('sessionLoadDay').value = s.loadDay || '';
+  document.getElementById('sessionPhysicalExpression').value = s.physicalExpression || '';
   document.getElementById('metricTD').value = s.td || '';
   document.getElementById('metricHSR').value = s.hsr || '';
   document.getElementById('metricSD').value = s.sd || '';
@@ -4977,6 +5017,9 @@ function clearSessionForm() {
   currentGdMinus = '';
   currentGdPlus = '';
   document.getElementById('sessionComplexity').value = '';
+  document.getElementById('sessionDensity').value = '';
+  document.getElementById('sessionLoadDay').value = '';
+  document.getElementById('sessionPhysicalExpression').value = '';
   chipSelections['type2'] = '';
   rebuildSessionTypeChips();
   sessionAttachments.warmup = [];
@@ -5117,6 +5160,9 @@ async function saveSession() {
     duration: document.getElementById('sessionDuration').value,
     principle: document.getElementById('sessionPrinciple').value,
     complexity: document.getElementById('sessionComplexity').value,
+    density: document.getElementById('sessionDensity').value,
+    loadDay: document.getElementById('sessionLoadDay').value,
+    physicalExpression: document.getElementById('sessionPhysicalExpression').value,
     td: document.getElementById('metricTD').value,
     hsr: document.getElementById('metricHSR').value,
     sd: document.getElementById('metricSD').value,
@@ -7223,6 +7269,7 @@ async function saveDayPopover() {
         intensity:  5,
         principle:  '',
         complexity: '',
+        density:'', loadDay:'', physicalExpression:'',
         td:'', hsr:'', sd:'', acc:'', dec:'',
         warmupMedia: [], sessionMedia: [],
         gdMinus:'', gdPlus:'', activation:'', notes:'',
@@ -10508,7 +10555,7 @@ const MORPHO_DAYS = [
       ['Finishing','Quick-combination finishing'],
       ['Cool-down','Mobility'],
     ] },
-  { type:'Hybrid', md:'Mixed emphasis · flexible',
+  { type:'Hybrid', color:'#8b5cf6', md:'Mixed emphasis · flexible',
     tagline:'Blends more than one sub-dynamic.',
     body:'A blended day combining sub-dynamics — e.g. some tension with some duration, or speed with tactical. Used when the calendar compresses the week (two games, travel) or when no single dominant stimulus is wanted. Loads are balanced so no one quality is fully taxed.',
     principles:[
@@ -10606,8 +10653,8 @@ function renderMorphocycle() {
   // Day-type cards — description, key concept, principles, example framework.
   const subHead = (t, col) => `<div style="font-family:'Anton',sans-serif;letter-spacing:1px;font-size:9.5px;color:${col};margin:12px 0 7px">${t}</div>`;
   const cards = MORPHO_DAYS.map(d => {
-    const col = getTypeColor(d.type);
-    const bg  = getTypeBackground(d.type);
+    const col = d.color || getTypeColor(d.type);
+    const bg  = d.color || getTypeBackground(d.type);
     const noteHtml = d.note
       ? `<div style="margin:2px 0 4px;padding:9px 12px;border-radius:6px;background:${col}14;border:1px solid ${col}44;border-left:3px solid ${col};font-size:12px;line-height:1.5;color:var(--text2)">${d.note}</div>`
       : '';
