@@ -4327,11 +4327,15 @@ function buildGameCardHTML(g) {
 // Full detail (metrics, exercises, media, pre/post, testing) opens on click
 // in the day panel / edit modal, so nothing is lost — just decluttered.
 function buildMonthSessionChip(s) {
-  // Filled, auto-contrast type pill (like the Week view). A two-type day shows
-  // both type names rather than a generic "Hybrid".
-  const pillColor = getTypeColor(s.type);
-  const pillLabel = s.type2 ? `${s.type || 'Session'} + ${s.type2}` : (s.type || 'Session');
-  const label = pillLabel;
+  // Filled, auto-contrast type pill(s) — like the Week view. A two-type day
+  // shows both types, each in its own colour.
+  const typeColor = getTypeColor(s.type);
+  const typeColor2 = s.type2 ? getTypeColor(s.type2) : null;
+  const label = s.type2 ? `${s.type || 'Session'} + ${s.type2}` : (s.type || 'Session');
+  const pill = (txt, col) => `<span class="month-chip-label" style="flex:0 1 auto;background:${col};color:${textOnColor(col)};padding:1px 7px;border-radius:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeAttr(txt)}</span>`;
+  const pills = s.type2
+    ? pill(s.type || 'Session', typeColor) + pill(s.type2, typeColor2)
+    : pill(s.type || 'Session', typeColor);
   let meta = '';
   if (s.gdMinus)      meta = `GD−${s.gdMinus}`;
   else if (s.gdPlus)  meta = `GD+${s.gdPlus}`;
@@ -4340,9 +4344,9 @@ function buildMonthSessionChip(s) {
   if (s.testing && s.testing.length) marks.push('🧪');
   if (s.prePost && s.prePost.length) marks.push('±');
   return `
-    <div class="month-chip" style="border-left-color:${pillColor}" onclick="event.stopPropagation();editSession('${s.id}')" title="${escapeAttr(label)}">
-      <div class="month-chip-top" style="justify-content:space-between">
-        <span class="month-chip-label" style="flex:0 1 auto;background:${pillColor};color:${textOnColor(pillColor)};padding:1px 7px;border-radius:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeAttr(pillLabel)}</span>
+    <div class="month-chip" style="border-left-color:${typeColor}" onclick="event.stopPropagation();editSession('${s.id}')" title="${escapeAttr(label)}">
+      <div class="month-chip-top" style="justify-content:space-between;gap:4px">
+        <div style="display:flex;gap:3px;flex:1 1 auto;min-width:0;flex-wrap:wrap">${pills}</div>
         ${meta ? `<span class="month-chip-meta">${meta}</span>` : ''}
       </div>
       ${marks.length ? `<div class="month-chip-marks">${marks.map(m => `<span>${m}</span>`).join('')}</div>` : ''}
