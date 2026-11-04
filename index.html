@@ -4838,6 +4838,24 @@ function exportWeekPDF() {
     cols.map(c => `<td style="background:#fafafa;color:#333;font-size:9px;text-align:left;line-height:1.3;vertical-align:top;font-family:Arial,sans-serif;padding:5px 6px;${BORD}">${esc(c.notes || '')}</td>`).join('')
   }<td style="background:#333;${BORD}"></td></tr>` : '';
 
+  // Day-type reminders — only the types actually used this week, appended under
+  // the loading table as a concise coaching reminder.
+  const usedTypes = [];
+  cols.forEach(c => {
+    const s0 = c.sessions[0];
+    if (!s0) return;
+    const key = s0.type2 ? 'Hybrid' : s0.type;
+    if (key && MORPHO_REMINDERS[key] && !usedTypes.includes(key)) usedTypes.push(key);
+  });
+  const reminderTable = usedTypes.length ? `
+  <table style="margin-top:10px">
+    <tr><td colspan="2" style="background:#000;color:#f5901e;font-family:'Anton',sans-serif;font-size:12px;letter-spacing:1px;padding:5px 10px;${BORD}">DAY-TYPE REMINDERS</td></tr>
+    ${usedTypes.map(t => `<tr>
+        <td style="width:150px;background:#111;color:#fff;font-family:'Anton',sans-serif;font-size:11px;letter-spacing:.5px;padding:6px 10px;border-left:4px solid ${morphoTypeColor(t)};${BORD}">${esc(t.toUpperCase())}</td>
+        <td style="background:#fff;color:#222;font-family:Arial,sans-serif;font-size:10px;line-height:1.4;padding:6px 10px;${BORD}">${esc(MORPHO_REMINDERS[t])}</td>
+      </tr>`).join('')}
+  </table>` : '';
+
   const html =
 `<!doctype html><html><head><meta charset="utf-8">
 <title>${esc(teamName)} — Week ${w} Loading</title>
@@ -4872,6 +4890,7 @@ function exportWeekPDF() {
   <tr><td style="${LBL}">Drill Example</td>${drillRow}<td style="background:#333;${BORD}"></td></tr>
   ${notesRow}
 </table>
+${reminderTable}
 <script>window.onload=function(){var go=function(){setTimeout(function(){window.print();},250);};if(document.fonts&&document.fonts.ready){document.fonts.ready.then(go);}else{setTimeout(go,600);}};<\/script>
 </body></html>`;
 
@@ -10616,6 +10635,25 @@ const MORPHO_ARC = [
   { lbl:'MD',   type:'Game', game:true },
 ];
 
+// Concise one-line reminder per day type — shown as a quick-reference table in
+// the Morphocycle section and appended to the Week PDF export for the day types
+// used that week. Kept short and digestible on purpose.
+const MORPHO_REMINDERS = {
+  'Strength':         'High-tension force — accel/decel, jumps, 1v1 duels. Small spaces, short forceful efforts, long recovery.',
+  'Endurance':        'Biggest collective day — full game structures, large spaces, long intervals, reflective pauses.',
+  'Speed (Tactical)': 'Efficiency & freshness — reduced spaces, short sharp actions, high tempo, long recovery.',
+  'Re-Intro':         'Criteria-led return — progressive volume, change-of-direction & contact to GPS markers, run alongside the team.',
+  'Hybrid':           'Blend two sub-dynamics — balanced load so no single quality is fully taxed.',
+  'Activation':       'Prime, don’t fatigue — low volume, high speed, set-pieces & shape, match readiness.',
+  'Recovery':         'Regenerate — flush for players who played, compensatory top-up for the rest, low intensity.',
+};
+// Hybrid when two types are combined on the day; else the day's own type.
+function morphoReminder(type, type2) {
+  if (type2) return MORPHO_REMINDERS['Hybrid'] || '';
+  return MORPHO_REMINDERS[type] || '';
+}
+function morphoTypeColor(type) { return type === 'Hybrid' ? '#8b5cf6' : getTypeColor(type); }
+
 function renderMorphocycle() {
   const host = document.getElementById('morphoContent');
   if (!host) return;
@@ -10684,7 +10722,22 @@ function renderMorphocycle() {
       </div>`;
   }).join('');
 
-  host.innerHTML = intro + arc +
+  // Quick-reference reminder table — concise ideas per day type; mirrored into
+  // the Week PDF export.
+  const refRows = MORPHO_DAYS.map(d => {
+    const rc = d.color || morphoTypeColor(d.type);
+    const rem = MORPHO_REMINDERS[d.type] || '';
+    return `<div style="display:grid;grid-template-columns:138px 1fr;gap:12px;align-items:start;padding:7px 0;border-top:1px solid var(--border)">
+      <span style="font-family:'Anton',sans-serif;letter-spacing:.5px;font-size:11px;color:${rc};border-left:3px solid ${rc};padding-left:8px">${d.type.toUpperCase()}</span>
+      <span style="font-size:11.5px;line-height:1.45;color:var(--text2)">${rem}</span>
+    </div>`;
+  }).join('');
+  const refTable = `<div style="margin-bottom:22px">
+    <div style="font-family:'Anton',sans-serif;letter-spacing:1px;font-size:10px;color:var(--text3);margin-bottom:6px">QUICK REFERENCE · DAY-TYPE REMINDERS <span style="color:var(--text3);font-weight:400;letter-spacing:0;font-family:Arial;font-size:10px">— included in PDF exports</span></div>
+    <div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:2px 16px">${refRows}</div>
+  </div>`;
+
+  host.innerHTML = intro + arc + refTable +
     `<div style="font-family:'Anton',sans-serif;letter-spacing:1px;font-size:10px;color:var(--text3);margin-bottom:10px">DAY TYPES</div>` +
     cards;
 }
