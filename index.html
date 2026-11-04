@@ -2266,21 +2266,16 @@
 
       <div class="form-grid">
         <div class="form-group">
-          <label>Principle</label>
-          <input type="text" id="sessionPrinciple" placeholder="e.g. Overload, Specificity...">
-        </div>
-        <div class="form-group">
           <label>Complexity</label>
           <select id="sessionComplexity">
             <option value="">—</option>
             <option>Low</option>
+            <option>Low-Medium</option>
             <option>Medium</option>
+            <option>Medium-High</option>
             <option>High</option>
           </select>
         </div>
-      </div>
-
-      <div class="form-grid">
         <div class="form-group">
           <label>Density</label>
           <select id="sessionDensity">
@@ -2292,6 +2287,9 @@
             <option>High</option>
           </select>
         </div>
+      </div>
+
+      <div class="form-grid">
         <div class="form-group">
           <label>Loading</label>
           <select id="sessionLoadDay">
@@ -2301,15 +2299,14 @@
             <option>Unload</option>
           </select>
         </div>
-      </div>
-
-      <div class="form-group">
-        <label>Physical Expression</label>
-        <select id="sessionPhysicalExpression">
-          <option value="">—</option>
-          <option>Peak Accel/Decel</option>
-          <option>Max Velocity</option>
-        </select>
+        <div class="form-group">
+          <label>Physical Expression</label>
+          <select id="sessionPhysicalExpression">
+            <option value="">—</option>
+            <option>Peak Accel/Decel</option>
+            <option>Max Velocity</option>
+          </select>
+        </div>
       </div>
 
       <hr class="section-divider">
@@ -4767,6 +4764,8 @@ function exportWeekPDF() {
     const notes = [...sessions.map(s => s.notes), game ? game.notes : ''].filter(n => n && n.trim()).join(' · ');
 
     cols.push({ i, d, sessions, game, m, dur, durMin, typeColor, sessType, scEntries, drills, notes,
+      complexity: primary?.complexity || '', density: primary?.density || '',
+      loadDay: primary?.loadDay || '', physicalExpression: primary?.physicalExpression || '',
       has: !!(sessions.length || game) });
   }
 
@@ -4822,6 +4821,12 @@ function exportWeekPDF() {
       ${scList.map(x => `<div style="font-family:Arial,sans-serif;font-size:8.5px;color:#1a3a5a;margin-top:2px;line-height:1.2">${esc(x)}</div>`).join('')}
     </td>`;
   }).join('');
+
+  // Qualitative session descriptors — one row each, shown only when at least
+  // one day in the week has a value.
+  const descRow = (label, key) => cols.some(c => c[key])
+    ? `<tr><td style="${LBL}">${label}</td>${cols.map(c => `<td style="background:#eef3f9;color:#11243a;text-align:center;vertical-align:middle;font-family:Arial,sans-serif;font-size:10px;padding:4px 6px;${BORD}">${esc(c[key] || '')}</td>`).join('')}<td style="background:#333;${BORD}"></td></tr>`
+    : '';
 
   const metricRow = (label, key, total) =>
     `<tr><td style="${LBL}">${label}</td>${
@@ -4883,6 +4888,10 @@ function exportWeekPDF() {
   <tr><td style="background:#000;${BORD}"></td>${dayHeader}<td style="background:#000;color:#f5901e;text-align:center;font-family:'Anton',sans-serif;font-size:12px;${BORD}">Total</td></tr>
   <tr><td style="${LBL}">Duration</td>${durRow}<td style="background:#333;${BORD}"></td></tr>
   <tr><td style="${LBL}">Recommended Session Type</td>${focusRow}<td style="background:#333;${BORD}"></td></tr>
+  ${descRow('Complexity',          'complexity')}
+  ${descRow('Density',             'density')}
+  ${descRow('Loading',             'loadDay')}
+  ${descRow('Physical Expression', 'physicalExpression')}
   ${metricRow('TD',      'td',  totals.td)}
   ${metricRow('HSR',     'hsr', totals.hsr)}
   ${metricRow('Sprint',  'sd',  totals.sd)}
@@ -4990,7 +4999,6 @@ function editSession(id) {
 
   document.getElementById('sessionDate').value = s.date || '';
   document.getElementById('sessionDuration').value = s.duration || '';
-  document.getElementById('sessionPrinciple').value = s.principle || '';
   document.getElementById('sessionComplexity').value = s.complexity || '';
   document.getElementById('sessionDensity').value = s.density || '';
   document.getElementById('sessionLoadDay').value = s.loadDay || '';
@@ -5029,7 +5037,7 @@ function editSession(id) {
 }
 
 function clearSessionForm() {
-  ['sessionDate','sessionDuration','sessionPrinciple','metricTD','metricHSR','metricSD','metricAccDec','sessionNotes','sessionActivation'].forEach(id => {
+  ['sessionDate','sessionDuration','metricTD','metricHSR','metricSD','metricAccDec','sessionNotes','sessionActivation'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.value = '';
   });
@@ -5177,7 +5185,6 @@ async function saveSession() {
     type: chipSelections['type'] || 'Intensive',
     type2: chipSelections['type2'] || '',
     duration: document.getElementById('sessionDuration').value,
-    principle: document.getElementById('sessionPrinciple').value,
     complexity: document.getElementById('sessionComplexity').value,
     density: document.getElementById('sessionDensity').value,
     loadDay: document.getElementById('sessionLoadDay').value,
