@@ -2319,16 +2319,27 @@
           <input type="number" id="metricTD" placeholder="8000">
         </div>
         <div class="form-group">
-          <label>HSR (m)</label>
+          <label>HID (m)</label>
           <input type="number" id="metricHSR" placeholder="800">
         </div>
         <div class="form-group">
-          <label>Sprint Distance (m)</label>
+          <label>VHID (m)</label>
           <input type="number" id="metricSD" placeholder="200">
         </div>
         <div class="form-group">
           <label>Acc/Dec (n) <span style="color:var(--text3);font-size:10px">— combined efforts</span></label>
           <input type="number" id="metricAccDec" placeholder="50">
+        </div>
+        <div class="form-group">
+          <label>Max Velocity (%)</label>
+          <div style="display:flex;gap:6px;align-items:center">
+            <select id="maxVelComparator" style="width:58px;flex:0 0 auto">
+              <option value="">—</option>
+              <option value=">">&gt;</option>
+              <option value="<">&lt;</option>
+            </select>
+            <input type="number" id="maxVelValue" placeholder="90" min="0" max="100" style="flex:1;min-width:0">
+          </div>
         </div>
       </div>
 
@@ -2513,11 +2524,11 @@
             <input type="number" id="gameTD" placeholder="11000">
           </div>
           <div>
-            <label style="font-size:10px">HSR (m)</label>
+            <label style="font-size:10px">HID (m)</label>
             <input type="number" id="gameHSR" placeholder="900">
           </div>
           <div>
-            <label style="font-size:10px">Sprint (m)</label>
+            <label style="font-size:10px">VHID (m)</label>
             <input type="number" id="gameSprint" placeholder="300">
           </div>
           <div>
@@ -2748,11 +2759,11 @@
           <input type="number" id="loadMPM" placeholder="e.g. 85" step="0.1" min="0">
         </div>
         <div class="form-group">
-          <label>HSR / Min (m)</label>
+          <label>HID / Min (m)</label>
           <input type="number" id="loadHSR" placeholder="e.g. 12" step="0.1" min="0">
         </div>
         <div class="form-group">
-          <label>Sprint / Min (m)</label>
+          <label>VHID / Min (m)</label>
           <input type="number" id="loadSPR" placeholder="e.g. 4" step="0.1" min="0">
         </div>
         <div class="form-group">
@@ -3324,7 +3335,7 @@ function dbToSession(r) {
     id: r.id, date: r.date, type: r.type, type2: r.type2 || '',
     duration: r.duration, intensity: r.intensity,
     principle: r.principle, complexity: r.complexity,
-    density: r.density || '', loadDay: r.load_day || '', physicalExpression: r.physical_expression || '',
+    density: r.density || '', loadDay: r.load_day || '', physicalExpression: r.physical_expression || '', maxVelocity: r.max_velocity || '',
     td: r.td, hsr: r.hsr, sd: r.sd, acc: r.acc, dec: r.dec_count,
     warmupMedia:  r.warmup_drills  || [],
     sessionMedia: r.session_drills || [],
@@ -3344,7 +3355,7 @@ function sessionToDB(s) {
     duration: s.duration || null,
     intensity: s.intensity ? parseInt(s.intensity) : null,
     principle: s.principle, complexity: s.complexity,
-    density: s.density || null, load_day: s.loadDay || null, physical_expression: s.physicalExpression || null,
+    density: s.density || null, load_day: s.loadDay || null, physical_expression: s.physicalExpression || null, max_velocity: s.maxVelocity || null,
     td: s.td ? parseInt(s.td) : null,
     hsr: s.hsr ? parseInt(s.hsr) : null,
     sd: s.sd ? parseInt(s.sd) : null,
@@ -4219,9 +4230,10 @@ function buildSessionCardHTML(s) {
         return `
       <div class="metrics-grid">
         ${editableMetricChip('TD',  s.td,  `updateSessionMetric('${s.id}','td',this.value)`,  a?.td)}
-        ${editableMetricChip('HSR', s.hsr, `updateSessionMetric('${s.id}','hsr',this.value)`, a?.hsr)}
-        ${editableMetricChip('SPR', s.sd,  `updateSessionMetric('${s.id}','sd',this.value)`,  a?.sd)}
+        ${editableMetricChip('HID', s.hsr, `updateSessionMetric('${s.id}','hsr',this.value)`, a?.hsr)}
+        ${editableMetricChip('VHID', s.sd, `updateSessionMetric('${s.id}','sd',this.value)`,  a?.sd)}
         ${editableMetricChip('A/D', (parseInt(s.acc)||0) + (parseInt(s.dec)||0) || '', `updateSessionMetric('${s.id}','accDec',this.value)`, a?.accDec)}
+        ${s.maxVelocity ? `<div class="metric-chip"><div class="metric-label">Max V</div><div class="metric-value">${escapeAttr(s.maxVelocity)}%</div></div>` : ''}
         ${actualOnlyMetricChip('MV%', a?.mv, '%')}
       </div>`;
       })()}
@@ -4307,8 +4319,8 @@ function buildGameCardHTML(g) {
         return `
       <div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:6px;padding-top:6px;border-top:1px solid var(--border)">
         ${editableMetricChip('TD',  g.td,     `updateGameMetric('${g.id}','td',this.value)`,     a?.td)}
-        ${editableMetricChip('HSR', g.hsr,    `updateGameMetric('${g.id}','hsr',this.value)`,    a?.hsr)}
-        ${editableMetricChip('SPR', g.sprint, `updateGameMetric('${g.id}','sprint',this.value)`, a?.sd)}
+        ${editableMetricChip('HID', g.hsr,    `updateGameMetric('${g.id}','hsr',this.value)`,    a?.hsr)}
+        ${editableMetricChip('VHID', g.sprint, `updateGameMetric('${g.id}','sprint',this.value)`, a?.sd)}
         ${editableMetricChip('A/D', (parseInt(g.acc)||0) + (parseInt(g.dec)||0) || '', `updateGameMetric('${g.id}','accDec',this.value)`, a?.accDec)}
         ${actualOnlyMetricChip('MV%', a?.mv, '%')}
       </div>`;
@@ -4493,7 +4505,7 @@ function renderWeekTotals(weekStart) {
     <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px">
       <span style="font-family:'Anton',sans-serif;letter-spacing:1.5px;font-size:11px;color:var(--text3);margin-right:4px">WEEK TOTAL${hasActual ? ' · PLANNED / ACTUAL' : ''}</span>
       ${metric('TD (m)',  planned.td,  actual.td)}
-      ${metric('HSR (m)', planned.hsr, actual.hsr)}
+      ${metric('HID (m)', planned.hsr, actual.hsr)}
       ${metric('Sprint',  planned.sd,  actual.sd)}
       ${metric('Acc/Dec', planned.ad,  actual.ad)}
     </div>`;
@@ -5093,6 +5105,9 @@ function editSession(id) {
   document.getElementById('sessionDensity').value = s.density || '';
   document.getElementById('sessionLoadDay').value = s.loadDay || '';
   document.getElementById('sessionPhysicalExpression').value = s.physicalExpression || '';
+  const mvParts = (s.maxVelocity || '').match(/^([<>]?)\s*(\d+)/);
+  document.getElementById('maxVelComparator').value = mvParts ? mvParts[1] : '';
+  document.getElementById('maxVelValue').value = mvParts ? mvParts[2] : '';
   document.getElementById('metricTD').value = s.td || '';
   document.getElementById('metricHSR').value = s.hsr || '';
   document.getElementById('metricSD').value = s.sd || '';
@@ -5137,6 +5152,8 @@ function clearSessionForm() {
   document.getElementById('sessionDensity').value = '';
   document.getElementById('sessionLoadDay').value = '';
   document.getElementById('sessionPhysicalExpression').value = '';
+  document.getElementById('maxVelComparator').value = '';
+  document.getElementById('maxVelValue').value = '';
   chipSelections['type2'] = '';
   rebuildSessionTypeChips();
   sessionAttachments.warmup = [];
@@ -5279,6 +5296,7 @@ async function saveSession() {
     density: document.getElementById('sessionDensity').value,
     loadDay: document.getElementById('sessionLoadDay').value,
     physicalExpression: document.getElementById('sessionPhysicalExpression').value,
+    maxVelocity: (document.getElementById('maxVelValue').value ? (document.getElementById('maxVelComparator').value + document.getElementById('maxVelValue').value) : ''),
     td: document.getElementById('metricTD').value,
     hsr: document.getElementById('metricHSR').value,
     sd: document.getElementById('metricSD').value,
@@ -5952,8 +5970,8 @@ function openDayPanel(dateStr) {
         ${s.principle ? `<div style="font-size:11px;color:var(--text2);margin-bottom:6px">${s.principle}${s.complexity ? ' · ' + s.complexity : ''}</div>` : ''}
         <div class="metrics-grid">
           ${s.td  ? `<div class="metric-chip"><div class="metric-label">TD</div><div class="metric-value">${fmtNum(s.td)}</div></div>` : ''}
-          ${s.hsr ? `<div class="metric-chip"><div class="metric-label">HSR</div><div class="metric-value">${fmtNum(s.hsr)}</div></div>` : ''}
-          ${s.sd  ? `<div class="metric-chip"><div class="metric-label">SPR</div><div class="metric-value">${fmtNum(s.sd)}</div></div>` : ''}
+          ${s.hsr ? `<div class="metric-chip"><div class="metric-label">HID</div><div class="metric-value">${fmtNum(s.hsr)}</div></div>` : ''}
+          ${s.sd  ? `<div class="metric-chip"><div class="metric-label">VHID</div><div class="metric-value">${fmtNum(s.sd)}</div></div>` : ''}
           ${((parseInt(s.acc)||0) + (parseInt(s.dec)||0)) ? `<div class="metric-chip"><div class="metric-label">A/D</div><div class="metric-value">${(parseInt(s.acc)||0) + (parseInt(s.dec)||0)}</div></div>` : ''}
         </div>
         ${gdHtml}
@@ -6178,7 +6196,7 @@ function buildLibCard(m) {
   // Drill load summary (show up to 3 key metrics inline)
   let loadHtml = '';
   if (m.load && Object.keys(m.load).length) {
-    const LOAD_LABELS = { mpm:'m/min', hsr:'HSR/min', spr:'Spr/min', accDensity:'AccD', accEff:'Acc/min', decEff:'Dec/min' };
+    const LOAD_LABELS = { mpm:'m/min', hsr:'HID/min', spr:'VHID/min', accDensity:'AccD', accEff:'Acc/min', decEff:'Dec/min' };
     loadHtml = `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px">` +
       Object.entries(m.load).slice(0,3).map(([k,v]) =>
         `<span style="font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--accent);background:rgba(0,212,255,0.08);padding:2px 6px;border-radius:3px">${v} <span style="color:var(--text3)">${LOAD_LABELS[k]||k}</span></span>`
@@ -6421,8 +6439,8 @@ function openMediaDetail(id) {
 
   const LOAD_LABELS = {
     mpm:        { label: 'Metres / Min',     unit: 'm/min' },
-    hsr:        { label: 'HSR / Min',        unit: 'm/min' },
-    spr:        { label: 'Sprint / Min',     unit: 'm/min' },
+    hsr:        { label: 'HID / Min',        unit: 'm/min' },
+    spr:        { label: 'VHID / Min',       unit: 'm/min' },
     accDensity: { label: 'Accel Density',    unit: '' },
     accEff:     { label: 'Accel Effs / Min', unit: '/min' },
     decEff:     { label: 'Decel Effs / Min', unit: '/min' },
@@ -7385,7 +7403,7 @@ async function saveDayPopover() {
         intensity:  5,
         principle:  '',
         complexity: '',
-        density:'', loadDay:'', physicalExpression:'',
+        density:'', loadDay:'', physicalExpression:'', maxVelocity:'',
         td:'', hsr:'', sd:'', acc:'', dec:'',
         warmupMedia: [], sessionMedia: [],
         gdMinus:'', gdPlus:'', activation:'', notes:'',
@@ -8892,7 +8910,7 @@ function renderWeekReview() {
       const rowDefs = [
         { label: 'Intensity',   plannedGetter: d => d.avgIntensity != null ? Math.round(d.avgIntensity) : '', plannedTotal: '—', actualKey: null },
         { label: 'TD (m)',      plannedGetter: d => d.td,           plannedTotal: totals.td,             actualKey: 'td' },
-        { label: 'HSR (m)',     plannedGetter: d => d.hsr,          plannedTotal: totals.hsr,            actualKey: 'hsr' },
+        { label: 'HID (m)',     plannedGetter: d => d.hsr,          plannedTotal: totals.hsr,            actualKey: 'hsr' },
         { label: 'Sprint',      plannedGetter: d => d.sd,           plannedTotal: totals.sd,             actualKey: 'sd' },
         { label: 'Acc/Dec (n)', plannedGetter: d => d.acc + d.dec,  plannedTotal: totals.acc + totals.dec, actualKey: 'accDec' },
       ];
