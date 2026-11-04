@@ -4755,15 +4755,19 @@ function exportWeekPDF() {
     const primary = sessions[0] || null;
     const dur = sessions.map(s => fmtDur(s.duration)).filter(Boolean).join(' + ');
     const durMin = primary ? parseDurMin(primary.duration) : (game ? 90 : 0);
-    const typeColor = primary ? getTypeColor(primary.type) : (game ? '#e8412c' : '#ffffff');
+    const typeColor = primary ? getTypeColor(primary.type) : (game ? '#1f9d55' : '#ffffff');
     const sessType = primary ? [primary.type, primary.type2].filter(Boolean).join(' / ') : (game ? 'Match Day' : '');
     const scEntries = dayEntries(state.scWeeks?.[w]?.days?.[DAYS[i]]);
-    let drills = sessions.flatMap(s => (s.exercises || []).map(ex => ex.name || '').filter(Boolean));
-    if (!drills.length && primary) drills = [primary.type, primary.type2].filter(Boolean);
-    if (game) drills = [`Match v ${game.opponent || 'TBD'}${game.competition ? ' (' + game.competition + ')' : ''}`, ...drills];
+    const isOff = !!(primary && (primary.type === 'Off Day' || primary.type2 === 'Off Day'));
+    let oppCrest = '';
+    if (game) {
+      const opp = game.opponent_id ? state.opponents.find(o => o.id === game.opponent_id)
+                : state.opponents.find(o => o.name?.toLowerCase() === game.opponent?.toLowerCase());
+      oppCrest = opp?.badge_url || '';
+    }
     const notes = [...sessions.map(s => s.notes), game ? game.notes : ''].filter(n => n && n.trim()).join(' · ');
 
-    cols.push({ i, d, sessions, game, m, dur, durMin, typeColor, sessType, scEntries, drills, notes,
+    cols.push({ i, d, sessions, game, m, dur, durMin, typeColor, sessType, scEntries, notes, isOff, oppCrest,
       complexity: primary?.complexity || '', density: primary?.density || '',
       loadDay: primary?.loadDay || '', physicalExpression: primary?.physicalExpression || '',
       has: !!(sessions.length || game) });
@@ -4783,7 +4787,7 @@ function exportWeekPDF() {
         : 'Recommended loading not set for this week type.')
     : '';
   const scBanner = scStatus
-    ? `<tr><td colspan="9" style="padding:0;${BORD0}"><div style="display:flex;align-items:stretch">
+    ? `<tr><td colspan="8" style="padding:0;${BORD0}"><div style="display:flex;align-items:stretch">
         <div style="background:${scStatus.color};color:#000;font-family:'Anton',sans-serif;font-size:12px;letter-spacing:1px;padding:5px 13px;display:flex;align-items:center;white-space:nowrap">S&amp;C WEEK · ${escapeAttr(scStatus.label.toUpperCase())}</div>
         <div style="flex:1;background:#111;color:#e6eaf0;font-family:Arial,sans-serif;font-size:10px;line-height:1.35;padding:4px 13px;display:flex;align-items:center">${scRxCell}</div>
       </div></td></tr>`
@@ -4800,28 +4804,31 @@ function exportWeekPDF() {
        <div style="color:#cfd3da;font-size:9px;font-family:Arial,sans-serif">${MONTHS_SHORT[c.d.getMonth()]} ${c.d.getDate()}</div>
      </td>`).join('');
 
-  // Duration & Intensity: a bar per day whose HEIGHT scales 0–120 min and whose
-  // COLOUR is the session-type colour (games red). Duration value labelled on it.
+  // Duration: a bar per day whose HEIGHT scales 0–120 min and whose COLOUR is
+  // the session-type colour (matches green). Minutes centred on the bar; match
+  // days show the opponent crest; off days show no minutes.
   const BARH = 108;
   // Loading band colour: Load = hot, Unload = amber, Recovery = green.
   const loadColor = (l) => l === 'Load' ? '#c8411f' : l === 'Unload' ? '#d98c1a' : l === 'Recovery' ? '#2f9e4f' : '#334155';
   const durRow = cols.map(c => {
     const pct = Math.max(0, Math.min(100, (c.durMin / 120) * 100));
     const color = c.typeColor || '#ffffff';
-    const label = c.dur || (c.game ? 'Match' : '');
-    const bar = c.durMin > 0 ? `<div style="position:absolute;bottom:0;left:0;right:0;height:${pct}%;background:${color}"></div>` : '';
-    const banner = c.game ? `<div style="position:absolute;top:0;left:0;right:0;background:#b5301f;color:#fff;font-family:'Anton',sans-serif;font-size:9px;letter-spacing:.3px;padding:2px 2px;z-index:3;white-space:nowrap;overflow:hidden">vs ${esc(c.game.opponent || 'TBD')}</div>` : '';
+    const label = c.isOff ? '' : (c.dur || '');
+    const bar = (c.game || c.durMin > 0) ? `<div style="position:absolute;bottom:0;left:0;right:0;height:${c.game ? 100 : pct}%;background:${color}"></div>` : '';
     // Loading day label pinned to the top of the column — emphasises the day's
     // loading character (Recovery / Load / Unload), like a morphocycle label.
     const loadTop = (!c.game && c.loadDay) ? `<div style="position:absolute;top:0;left:0;right:0;text-align:center;background:${loadColor(c.loadDay)};color:#fff;font-family:'Anton',sans-serif;font-size:10px;letter-spacing:.6px;padding:3px 2px;z-index:2;white-space:nowrap;overflow:hidden">${esc(c.loadDay.toUpperCase())}</div>` : '';
-    const lbl = label ? `<div style="position:absolute;bottom:3px;left:0;right:0;text-align:center;font-family:'Anton',sans-serif;font-size:12px;color:#111;z-index:1">${esc(label)}</div>` : '';
-    return `<td style="position:relative;height:${BARH}px;background:#fff;padding:0;${BORD}">${bar}${loadTop}${banner}${lbl}</td>`;
+    // Match day: opponent crest + name centred on the green bar.
+    const matchCell = c.game ? `<div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:2;padding:3px">${c.oppCrest ? `<img src="${esc(c.oppCrest)}" style="max-height:48px;max-width:82%;object-fit:contain;margin-bottom:2px">` : ''}<div style="font-family:'Anton',sans-serif;font-size:10px;color:#fff;letter-spacing:.3px;text-align:center;line-height:1.1;text-shadow:0 1px 2px rgba(0,0,0,.45)">vs ${esc(c.game.opponent || 'TBD')}</div></div>` : '';
+    // Minutes centred vertically in the middle of the cell.
+    const lbl = label ? `<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-family:'Anton',sans-serif;font-size:12px;color:#111;z-index:1">${esc(label)}</div>` : '';
+    return `<td style="position:relative;height:${BARH}px;background:#fff;padding:0;${BORD}">${bar}${loadTop}${matchCell}${lbl}</td>`;
   }).join('');
 
   // Recommended Session Type + the day's S&C slots (Activation / Gym).
   const focusRow = cols.map(c => {
     const scList = (c.scEntries || []).map(e => `${phaseLabel(e.phase)}: ${liftByKey(e.lift).label}${e.load ? ' (' + e.load + ')' : ''}`);
-    return `<td style="background:#cfe0f5;color:#11243a;text-align:center;vertical-align:top;padding:4px 5px;${BORD}">
+    return `<td style="background:#cfe0f5;color:#11243a;text-align:center;vertical-align:middle;padding:4px 5px;${BORD}">
       <div style="font-family:'Anton',sans-serif;letter-spacing:.3px;font-size:11px;font-weight:700">${esc(c.sessType || '')}</div>
       ${scList.map(x => `<div style="font-family:Arial,sans-serif;font-size:8.5px;color:#1a3a5a;margin-top:2px;line-height:1.2">${esc(x)}</div>`).join('')}
     </td>`;
@@ -4830,23 +4837,13 @@ function exportWeekPDF() {
   // Qualitative session descriptors — one row each, shown only when at least
   // one day in the week has a value.
   const descRow = (label, key) => cols.some(c => c[key])
-    ? `<tr><td style="${LBL}">${label}</td>${cols.map(c => `<td style="background:#eef3f9;color:#11243a;text-align:center;vertical-align:middle;font-family:Arial,sans-serif;font-size:10px;padding:4px 6px;${BORD}">${esc(c[key] || '')}</td>`).join('')}<td style="background:#333;${BORD}"></td></tr>`
+    ? `<tr><td style="${LBL}">${label}</td>${cols.map(c => `<td style="background:#eef3f9;color:#11243a;text-align:center;vertical-align:middle;font-family:Arial,sans-serif;font-size:10px;padding:4px 6px;${BORD}">${esc(c[key] || '')}</td>`).join('')}</tr>`
     : '';
-
-  const metricRow = (label, key, total) =>
-    `<tr><td style="${LBL}">${label}</td>${
-      cols.map(c => `<td style="background:#000;color:#fff;${MET}">${c.has ? (c.m[key] || 0) : ''}</td>`).join('')
-    }<td style="background:#333;color:#f5901e;${MET}">${total || 0}</td></tr>`;
-
-  const drillRow = cols.map(c =>
-    `<td style="background:#fff;color:#222;font-size:9.5px;text-align:center;line-height:1.3;vertical-align:top;font-family:Arial,sans-serif;padding:5px 6px;${BORD}">${
-      (c.drills || []).slice(0, 7).map(x => esc(x)).join('<br>')
-    }</td>`).join('');
 
   const hasNotes = cols.some(c => c.notes);
   const notesRow = hasNotes ? `<tr><td style="${LBL}">Notes</td>${
-    cols.map(c => `<td style="background:#fafafa;color:#333;font-size:9px;text-align:center;line-height:1.3;vertical-align:top;font-family:Arial,sans-serif;padding:5px 6px;${BORD}">${esc(c.notes || '')}</td>`).join('')
-  }<td style="background:#333;${BORD}"></td></tr>` : '';
+    cols.map(c => `<td style="background:#fafafa;color:#333;font-size:9px;text-align:center;line-height:1.3;vertical-align:middle;font-family:Arial,sans-serif;padding:5px 6px;${BORD}">${esc(c.notes || '')}</td>`).join('')
+  }</tr>` : '';
 
   // Day-type reminders — only the types actually used this week, appended under
   // the loading table as a concise coaching reminder.
@@ -4882,25 +4879,20 @@ function exportWeekPDF() {
 </style></head><body>
 <div class="print-hint">Press <b>Ctrl/Cmd + P</b> and choose “Save as PDF”, landscape. (Enable “Background graphics” for colours.)</div>
 <table>
-  <colgroup><col class="lbl">${cols.map(() => '<col>').join('')}<col class="tot"></colgroup>
+  <colgroup><col class="lbl">${cols.map(() => '<col>').join('')}</colgroup>
   <tr>
     <td style="background:#000;color:#fff;font-family:'Anton',sans-serif;font-size:14px;text-align:center;padding:6px;${BORD}">${esc(teamName)}</td>
-    <td colspan="8" style="background:#f5901e;color:#000;font-family:'Anton',sans-serif;font-size:18px;letter-spacing:1px;text-align:center;padding:6px;${BORD}">
+    <td colspan="7" style="background:#f5901e;color:#000;font-family:'Anton',sans-serif;font-size:18px;letter-spacing:1px;text-align:center;padding:6px;${BORD}">
       MICRO CYCLE LOADING PATTERNS · WEEK ${w}<span style="font-size:12px;font-weight:400"> &nbsp;|&nbsp; ${rangeStr}${titleExtra ? ' · ' + esc(titleExtra) : ''}</span>
     </td>
   </tr>
   ${scBanner}
-  <tr><td style="background:#000;${BORD}"></td>${dayHeader}<td style="background:#000;color:#f5901e;text-align:center;font-family:'Anton',sans-serif;font-size:12px;${BORD}">Total</td></tr>
-  <tr><td style="${LBL}">Duration</td>${durRow}<td style="background:#333;${BORD}"></td></tr>
-  <tr><td style="${LBL}">Recommended Session Type</td>${focusRow}<td style="background:#333;${BORD}"></td></tr>
+  <tr><td style="background:#000;${BORD}"></td>${dayHeader}</tr>
+  <tr><td style="${LBL}">Duration</td>${durRow}</tr>
+  <tr><td style="${LBL}">Recommended Session Type</td>${focusRow}</tr>
   ${descRow('Complexity',          'complexity')}
   ${descRow('Density',             'density')}
   ${descRow('Physical Expression', 'physicalExpression')}
-  ${metricRow('TD',      'td',  totals.td)}
-  ${metricRow('HSR',     'hsr', totals.hsr)}
-  ${metricRow('Sprint',  'sd',  totals.sd)}
-  ${metricRow('Acc/Dec', 'ad',  totals.ad)}
-  <tr><td style="${LBL}">Drill Example</td>${drillRow}<td style="background:#333;${BORD}"></td></tr>
   ${notesRow}
 </table>
 ${reminderTable}
@@ -10652,10 +10644,10 @@ const MORPHO_ARC = [
 const MORPHO_REMINDERS = {
   'Strength':         'Competitive & Combative · Shorter working intervals · Small-Medium Spaces · One-Rule Principle',
   'Endurance':        'Biggest collective day — full game structures, large spaces, long intervals, reflective pauses.',
-  'Speed (Tactical)': 'Efficiency & freshness — reduced spaces, short sharp actions, high tempo, long recovery.',
+  'Speed (Tactical)': 'A Rehearsal of the Week’s Ideas · Speed of Decision & Execution · Discontinuous · Short Working Intervals & Longer Recovery · Maximum relative intensity without fatigue · Avoid Peak Intensities (Velocity & Accel/Decel)',
   'Re-Intro':         'Criteria-led return — progressive volume, change-of-direction & contact to GPS markers, run alongside the team.',
   'Hybrid':           'Blend two sub-dynamics — balanced load so no single quality is fully taxed.',
-  'Activation':       'Prime, don’t fatigue — low volume, high speed, set-pieces & shape, match readiness.',
+  'Activation':       'Rehearsal · Prime, not fatigue · Short working intervals · Short Sharp Actions · <85% Max Velocity → Avoid HID',
   'Recovery':         'Regenerate — flush for players who played, compensatory top-up for the rest, low intensity.',
 };
 // Hybrid when two types are combined on the day; else the day's own type.
@@ -10740,7 +10732,7 @@ function renderMorphocycle() {
     const rem = MORPHO_REMINDERS[d.type] || '';
     return `<div style="display:grid;grid-template-columns:138px 1fr;gap:12px;align-items:start;padding:7px 0;border-top:1px solid var(--border)">
       <span style="font-family:'Anton',sans-serif;letter-spacing:.5px;font-size:11px;color:${rc};border-left:3px solid ${rc};padding-left:8px">${d.type.toUpperCase()}</span>
-      <span style="font-size:11.5px;line-height:1.45;color:var(--text2)">${rem}</span>
+      <span style="font-size:11.5px;line-height:1.45;color:var(--text2)">${escapeAttr(rem)}</span>
     </div>`;
   }).join('');
   const refTable = `<div style="margin-bottom:22px">
