@@ -4327,21 +4327,16 @@ function buildGameCardHTML(g) {
 // Full detail (metrics, exercises, media, pre/post, testing) opens on click
 // in the day panel / edit modal, so nothing is lost — just decluttered.
 function buildMonthSessionChip(s) {
-  const typeColor = getTypeColor(s.type);
-  // Match the Week view: the day type is a filled, auto-contrast pill; a
-  // two-type day reads as Hybrid.
-  const isDual = !!s.type2;
-  const hybType = getSessionTypes().find(t => t.name === 'Hybrid');
-  const pillColor = isDual ? (hybType ? hybType.color : '#8b5cf6') : typeColor;
-  const pillLabel = isDual ? 'Hybrid' : (s.type || 'Session');
-  const label = s.type2 ? `${s.type || 'Session'} + ${s.type2}` : (s.type || 'Session');
+  // Filled, auto-contrast type pill (like the Week view). A two-type day shows
+  // both type names rather than a generic "Hybrid".
+  const pillColor = getTypeColor(s.type);
+  const pillLabel = s.type2 ? `${s.type || 'Session'} + ${s.type2}` : (s.type || 'Session');
+  const label = pillLabel;
   let meta = '';
   if (s.gdMinus)      meta = `GD−${s.gdMinus}`;
   else if (s.gdPlus)  meta = `GD+${s.gdPlus}`;
   else if (s.duration) meta = `${s.duration}m`;
   const marks = [];
-  const exCount = (s.exercises || []).length;
-  if (exCount)                       marks.push(`${exCount} ex`);
   if (s.testing && s.testing.length) marks.push('🧪');
   if (s.prePost && s.prePost.length) marks.push('±');
   return `
