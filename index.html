@@ -4860,15 +4860,23 @@ function exportWeekPDF() {
   cols.forEach(c => {
     const s0 = c.sessions[0];
     if (!s0) return;
-    const key = s0.type2 ? 'Hybrid' : s0.type;
-    if (key && MORPHO_REMINDERS[key] && !usedTypes.includes(key)) usedTypes.push(key);
+    let label, rem, color;
+    if (s0.type2) {
+      const ck = hybridKey(s0.type, s0.type2);
+      if (MORPHO_HYBRID_REMINDERS[ck]) { label = ck; rem = MORPHO_HYBRID_REMINDERS[ck]; }
+      else { label = 'Hybrid'; rem = MORPHO_REMINDERS['Hybrid']; }
+      color = '#8b5cf6';
+    } else {
+      label = s0.type; rem = MORPHO_REMINDERS[s0.type]; color = morphoTypeColor(s0.type);
+    }
+    if (rem && !usedTypes.find(u => u.label === label)) usedTypes.push({ label, rem, color });
   });
   const reminderTable = usedTypes.length ? `
   <table style="margin-top:10px">
     <tr><td colspan="2" style="background:#000;color:#f5901e;font-family:'Anton',sans-serif;font-size:12px;letter-spacing:1px;text-align:center;padding:5px 10px;${BORD}">DAY-TYPE REMINDERS</td></tr>
-    ${usedTypes.map(t => `<tr>
-        <td style="width:150px;background:#111;color:#fff;font-family:'Anton',sans-serif;font-size:11px;letter-spacing:.5px;text-align:center;padding:6px 10px;border-left:4px solid ${morphoTypeColor(t)};${BORD}">${esc(t.toUpperCase())}</td>
-        <td style="background:#fff;color:#222;font-family:Arial,sans-serif;font-size:10px;line-height:1.4;text-align:center;padding:6px 10px;${BORD}">${esc(MORPHO_REMINDERS[t])}</td>
+    ${usedTypes.map(u => `<tr>
+        <td style="width:150px;background:#111;color:#fff;font-family:'Anton',sans-serif;font-size:11px;letter-spacing:.5px;text-align:center;padding:6px 10px;border-left:4px solid ${u.color};${BORD}">${esc(u.label.toUpperCase())}</td>
+        <td style="background:#fff;color:#222;font-family:Arial,sans-serif;font-size:10px;line-height:1.4;text-align:center;padding:6px 10px;${BORD}">${esc(u.rem)}</td>
       </tr>`).join('')}
   </table>` : '';
 
@@ -10747,9 +10755,16 @@ const MORPHO_REMINDERS = {
   'Activation':       'Rehearsal · Prime, not fatigue · Short working intervals · Short Sharp Actions · <85% Max Velocity → Avoid HID',
   'Recovery':         'Regenerate — flush for players who played, compensatory top-up for the rest, low intensity.',
 };
+// Specific reminders for particular two-type (hybrid) combinations, keyed by
+// the two type names sorted so the order entered doesn't matter. Falls back to
+// the generic Hybrid reminder when a combination isn't listed here.
+const MORPHO_HYBRID_REMINDERS = {
+  'Re-Intro + Strength': 'Gradual build into session · Combative and Competitive · Reduced frequency of accel/decel stimulus · Short working intervals',
+};
+function hybridKey(a, b) { return [a || '', b || ''].sort().join(' + '); }
 // Hybrid when two types are combined on the day; else the day's own type.
 function morphoReminder(type, type2) {
-  if (type2) return MORPHO_REMINDERS['Hybrid'] || '';
+  if (type2) return MORPHO_HYBRID_REMINDERS[hybridKey(type, type2)] || MORPHO_REMINDERS['Hybrid'] || '';
   return MORPHO_REMINDERS[type] || '';
 }
 function morphoTypeColor(type) { return type === 'Hybrid' ? '#8b5cf6' : getTypeColor(type); }
@@ -10829,6 +10844,12 @@ function renderMorphocycle() {
     const rem = MORPHO_REMINDERS[d.type] || '';
     return `<div style="display:grid;grid-template-columns:138px 1fr;gap:12px;align-items:start;padding:7px 0;border-top:1px solid var(--border)">
       <span style="font-family:'Anton',sans-serif;letter-spacing:.5px;font-size:11px;color:${rc};border-left:3px solid ${rc};padding-left:8px">${d.type.toUpperCase()}</span>
+      <span style="font-size:11.5px;line-height:1.45;color:var(--text2)">${escapeAttr(rem)}</span>
+    </div>`;
+  }).join('') + Object.entries(MORPHO_HYBRID_REMINDERS).map(([combo, rem]) => {
+    const rc = '#8b5cf6';
+    return `<div style="display:grid;grid-template-columns:138px 1fr;gap:12px;align-items:start;padding:7px 0;border-top:1px solid var(--border)">
+      <span style="font-family:'Anton',sans-serif;letter-spacing:.5px;font-size:11px;color:${rc};border-left:3px solid ${rc};padding-left:8px">${escapeAttr(combo.toUpperCase())}</span>
       <span style="font-size:11.5px;line-height:1.45;color:var(--text2)">${escapeAttr(rem)}</span>
     </div>`;
   }).join('');
