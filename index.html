@@ -4814,14 +4814,15 @@ function exportWeekPDF() {
       </div></td></tr>`
     : '';
 
-  // Shared cell styles
+  // Shared cell styles — Real Salt Lake palette: claret, cobalt, gold.
+  const RSL = { claret: '#B30838', cobalt: '#013A81', gold: '#F1CB00' };
   const BORD = 'border:1px solid #2b2b2b;';
-  const LBL  = `background:#000;color:#f5901e;font-family:'Anton',sans-serif;letter-spacing:.5px;text-transform:uppercase;font-size:10.5px;text-align:center;padding:5px 8px;${BORD}`;
+  const LBL  = `background:${RSL.cobalt};color:${RSL.gold};font-family:'Anton',sans-serif;letter-spacing:.5px;text-transform:uppercase;font-size:10.5px;text-align:center;padding:5px 8px;${BORD}`;
   const MET  = `font-family:'JetBrains Mono',monospace;font-weight:700;text-align:center;font-size:14px;padding:5px 6px;${BORD}`;
 
   const dayHeader = cols.map(c =>
-    `<td style="background:#000;text-align:center;padding:4px;${BORD}">
-       <div style="font-family:'Anton',sans-serif;color:#f5901e;font-size:13px;letter-spacing:.5px">${DAY3[c.i]}</div>
+    `<td style="background:${RSL.cobalt};text-align:center;padding:4px;${BORD}">
+       <div style="font-family:'Anton',sans-serif;color:${RSL.gold};font-size:13px;letter-spacing:.5px">${DAY3[c.i]}</div>
        <div style="color:#cfd3da;font-size:9px;font-family:Arial,sans-serif">${MONTHS_SHORT[c.d.getMonth()]} ${c.d.getDate()}</div>
      </td>`).join('');
 
@@ -4889,7 +4890,7 @@ function exportWeekPDF() {
   });
   const reminderTable = usedTypes.length ? `
   <table style="margin-top:10px">
-    <tr><td colspan="2" style="background:#000;color:#f5901e;font-family:'Anton',sans-serif;font-size:12px;letter-spacing:1px;text-align:center;padding:5px 10px;${BORD}">DAY-TYPE REMINDERS</td></tr>
+    <tr><td colspan="2" style="background:${RSL.cobalt};color:${RSL.gold};font-family:'Anton',sans-serif;font-size:12px;letter-spacing:1px;text-align:center;padding:5px 10px;${BORD}">DAY-TYPE REMINDERS</td></tr>
     ${usedTypes.map(u => `<tr>
         <td style="width:150px;background:#111;color:#fff;font-family:'Anton',sans-serif;font-size:11px;letter-spacing:.5px;text-align:center;padding:6px 10px;border-left:4px solid ${u.color};${BORD}">${esc(u.label.toUpperCase())}</td>
         <td style="background:#fff;color:#222;font-family:Arial,sans-serif;font-size:10px;line-height:1.4;text-align:center;padding:6px 10px;${BORD}">${esc(u.rem)}</td>
@@ -4914,11 +4915,11 @@ function exportWeekPDF() {
 <table>
   <colgroup><col class="lbl">${cols.map(() => '<col>').join('')}</colgroup>
   <tr>
-    <td style="background:#000;color:#fff;font-family:'Anton',sans-serif;font-size:14px;text-align:center;padding:6px;${BORD}">${teamCrest ? `<img src="${esc(teamCrest)}" style="height:36px;width:auto;object-fit:contain;display:block;margin:0 auto 4px">` : ''}${esc(teamName)}</td>
-    <td colspan="7" style="background:#f5901e;color:#000;font-family:'Anton',sans-serif;font-size:18px;letter-spacing:1px;text-align:center;padding:6px;${BORD}">RECOMMENDED MORPHOCYCLE · WEEK ${w}</td>
+    <td style="background:${RSL.claret};color:#fff;font-family:'Anton',sans-serif;font-size:14px;text-align:center;padding:6px;${BORD}">${teamCrest ? `<img src="${esc(teamCrest)}" style="height:36px;width:auto;object-fit:contain;display:block;margin:0 auto 4px">` : ''}${esc(teamName)}</td>
+    <td colspan="7" style="background:${RSL.gold};color:${RSL.claret};font-family:'Anton',sans-serif;font-size:18px;letter-spacing:1px;text-align:center;padding:6px;${BORD}">RECOMMENDED MORPHOCYCLE · WEEK ${w}</td>
   </tr>
   ${scBanner}
-  <tr><td style="background:#000;${BORD}"></td>${dayHeader}</tr>
+  <tr><td style="background:${RSL.cobalt};${BORD}"></td>${dayHeader}</tr>
   <tr><td style="${LBL}">Duration</td>${durRow}</tr>
   <tr><td style="${LBL}">Recommended Session Type</td>${focusRow}</tr>
   ${descRow('Complexity',          'complexity')}
