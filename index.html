@@ -4768,6 +4768,7 @@ function exportWeekPDF() {
     const dur = sessions.map(s => fmtDur(s.duration)).filter(Boolean).join(' + ');
     const durMin = primary ? parseDurMin(primary.duration) : (game ? 90 : 0);
     const typeColor = primary ? getTypeColor(primary.type) : (game ? '#1f9d55' : '#ffffff');
+    const typeColor2 = primary?.type2 ? getTypeColor(primary.type2) : null;
     const sessType = primary ? [primary.type, primary.type2].filter(Boolean).join(' / ') : (game ? 'Match Day' : '');
     const scEntries = dayEntries(state.scWeeks?.[w]?.days?.[DAYS[i]]);
     const isOff = !!(primary && (primary.type === 'Off Day' || primary.type2 === 'Off Day'));
@@ -4779,7 +4780,7 @@ function exportWeekPDF() {
     }
     const notes = [...sessions.map(s => s.notes), game ? game.notes : ''].filter(n => n && n.trim()).join(' · ');
 
-    cols.push({ i, d, sessions, game, m, dur, durMin, typeColor, sessType, scEntries, notes, isOff, oppCrest,
+    cols.push({ i, d, sessions, game, m, dur, durMin, typeColor, typeColor2, sessType, scEntries, notes, isOff, oppCrest,
       complexity: primary?.complexity || '', density: primary?.density || '',
       loadDay: primary?.loadDay || '', physicalExpression: primary?.physicalExpression || '',
       has: !!(sessions.length || game) });
@@ -4825,8 +4826,11 @@ function exportWeekPDF() {
   const durRow = cols.map(c => {
     const pct = Math.max(0, Math.min(100, (c.durMin / 120) * 100));
     const color = c.typeColor || '#ffffff';
+    // Combined (two-type) day → the bar is striped with both type colours
+    // (3 stripes each), e.g. Re-Intro / Strength = green & blue alternating.
+    const barBg = c.typeColor2 ? stripe3(color, c.typeColor2, 3, 3) : color;
     const label = c.isOff ? '' : (c.dur || '');
-    const bar = (c.game || c.durMin > 0) ? `<div style="position:absolute;bottom:0;left:0;right:0;height:${c.game ? 100 : pct}%;background:${color}"></div>` : '';
+    const bar = (c.game || c.durMin > 0) ? `<div style="position:absolute;bottom:0;left:0;right:0;height:${c.game ? 100 : pct}%;background:${barBg}"></div>` : '';
     // Loading day label pinned to the top of the column — emphasises the day's
     // loading character (Recovery / Load / Unload), like a morphocycle label.
     const loadTop = (!c.game && c.loadDay) ? `<div style="position:absolute;top:0;left:0;right:0;text-align:center;background:${loadColor(c.loadDay)};color:#fff;font-family:'Anton',sans-serif;font-size:10px;letter-spacing:.6px;padding:3px 2px;z-index:2;white-space:nowrap;overflow:hidden">${esc(c.loadDay.toUpperCase())}</div>` : '';
