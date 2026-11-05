@@ -4885,7 +4885,7 @@ function exportWeekPDF() {
     } else {
       label = s0.type; rem = MORPHO_REMINDERS[s0.type]; color = morphoTypeColor(s0.type);
     }
-    if (rem && !usedTypes.find(u => u.label === label)) usedTypes.push({ label, rem, color });
+    if (rem && label !== 'Recovery' && !usedTypes.find(u => u.label === label)) usedTypes.push({ label, rem, color });
   });
   const reminderTable = usedTypes.length ? `
   <table style="margin-top:10px">
