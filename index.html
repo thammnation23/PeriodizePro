@@ -1017,7 +1017,7 @@
   .month-chip-label {
     font-family: 'Anton', sans-serif;
     letter-spacing: 0.5px;
-    font-size: 13.5px;
+    font-size: 15px;
     line-height: 1.25;
     white-space: nowrap;
     overflow: hidden;
@@ -4377,7 +4377,7 @@ function buildMonthGameChip(g) {
     <div class="month-chip" style="border-left-color:${vColor};background:${vColor}14" onclick="event.stopPropagation();editGame('${g.id || ''}')" title="${escapeAttr((g.opponent || 'Match') + ' · ' + venue)}">
       <div class="month-chip-top">
         ${crest}
-        <span class="month-chip-label" style="color:var(--text)">${g.opponent || 'Match'}</span>
+        <span class="month-chip-label" style="color:${vColor}">${g.opponent || 'Match'}</span>
         ${right}
       </div>
     </div>`;
@@ -4974,15 +4974,15 @@ function exportMonthPDF() {
     if (game) {
       const opp = game.opponent_id ? state.opponents.find(o => o.id === game.opponent_id)
                 : state.opponents.find(o => o.name?.toLowerCase() === game.opponent?.toLowerCase());
-      const crest = opp?.badge_url ? `<img src="${esc(opp.badge_url)}" style="height:13px;vertical-align:-2px;margin-right:3px">` : '';
-      band = `<div style="background:#1f9d55;color:#fff;font-family:'Anton',sans-serif;font-size:9px;letter-spacing:.3px;padding:2px 4px;border-radius:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${crest}vs ${esc(game.opponent || 'TBD')}</div>`;
+      const crest = opp?.badge_url ? `<img src="${esc(opp.badge_url)}" style="height:16px;vertical-align:-3px;margin-right:4px">` : '';
+      band = `<div style="background:#1f9d55;color:#fff;font-family:'Anton',sans-serif;font-size:11.5px;letter-spacing:.3px;padding:3px 5px;border-radius:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${crest}vs ${esc(game.opponent || 'TBD')}</div>`;
     } else if (primary) {
       const isOff = primary.type === 'Off Day' || primary.type2 === 'Off Day';
       const isDual = !!primary.type2;
       const hybType = getSessionTypes().find(t => t.name === 'Hybrid');
       const tcol = isDual ? (hybType ? hybType.color : '#8b5cf6') : getTypeColor(primary.type);
       const label = isOff ? 'Off Day' : (isDual ? 'Hybrid' : primary.type);
-      band = `<div style="background:${tcol};color:${textOnColor(tcol)};font-family:'Anton',sans-serif;font-size:9px;letter-spacing:.3px;padding:2px 4px;border-radius:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(label.toUpperCase())}</div>`;
+      band = `<div style="background:${tcol};color:${textOnColor(tcol)};font-family:'Anton',sans-serif;font-size:11.5px;letter-spacing:.3px;padding:3px 5px;border-radius:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(label.toUpperCase())}</div>`;
     }
     return `<td style="vertical-align:top;height:86px;padding:3px 4px;background:${inMonth ? '#fff' : '#eee'};${BORD}">
       <div style="font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:700;color:${inMonth ? '#111' : '#aaa'};text-align:right;margin-bottom:2px">${d.getDate()}</div>
