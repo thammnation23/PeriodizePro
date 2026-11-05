@@ -4428,6 +4428,13 @@ function renderMonth() {
       ? `<div style="display:flex;flex-direction:column;align-items:flex-start;gap:2px;margin-top:3px">${scEntries.map(e => { const lf = liftByKey(e.lift); const ph = e.phase === 'pre' ? 'ACT' : 'GYM';
           return `<span title="${escapeAttr(phaseLabel(e.phase) + ': ' + lf.label + (e.load ? ' · ' + e.load : ''))}" style="display:inline-flex;align-items:center;gap:4px;max-width:100%;font-family:'Anton',sans-serif;font-size:10.5px;font-weight:700;letter-spacing:.3px;padding:2px 7px;border-radius:3px;background:${lf.color}80;color:var(--text);border:1px solid ${lf.color}"><span style="font-size:9px;opacity:.75">${ph}</span><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeAttr(lf.label)}</span></span>`; }).join('')}</div>`
       : '';
+    // Travel chip — mirrors the Week view's per-day travel marker.
+    const travelT = state.weekSettings[weekNum]?.travel?.[scDn];
+    const travelChip = (travelT && travelT.mode) ? (() => {
+      const m = travelModeCfg(travelT.mode) || { icon: '🧳', color: '#888780' };
+      const full = `Travel: ${travelT.mode}${travelT.dir ? ' · ' + travelT.dir : ''}${travelT.note ? ' · ' + travelT.note : ''}`;
+      return `<div title="${escapeAttr(full)}" style="display:inline-flex;align-items:center;gap:4px;max-width:100%;font-family:'Anton',sans-serif;font-size:9.5px;letter-spacing:.3px;padding:2px 6px;border-radius:4px;margin-top:3px;background:${m.color}22;color:${m.color};border:1px solid ${m.color}66"><span style="font-size:11px">${m.icon}</span><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeAttr(travelT.mode.toUpperCase())}${travelT.dir ? ' · ' + escapeAttr(travelT.dir.toUpperCase()) : ''}</span></div>`;
+    })() : '';
     const monthMdI = mdInner(dateStr);
     const monthMdTag = monthMdI ? `<span title="${escapeAttr(mdTitle(dateStr))}" style="font-family:'Anton',sans-serif;font-size:9.5px;letter-spacing:.3px;padding:1px 6px;border-radius:3px;background:var(--surface2);border:1px solid var(--border)">${monthMdI}</span>` : '';
     cell.innerHTML = `
@@ -4443,7 +4450,8 @@ function renderMonth() {
         ${game ? buildMonthGameChip(game) : ''}
         ${sessions.map(s => buildMonthSessionChip(s)).join('')}
         ${scLiftRow}
-        ${(!game && sessions.length === 0 && isCurrentMonth) ? '<div class="month-day-empty">＋</div>' : ''}
+        ${travelChip}
+        ${(!game && sessions.length === 0 && !travelChip && isCurrentMonth) ? '<div class="month-day-empty">＋</div>' : ''}
       </div>
     `;
     cell.onclick = () => openDayPanel(dateStr);
