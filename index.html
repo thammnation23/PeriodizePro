@@ -4732,6 +4732,9 @@ function exportWeekPDF() {
   const ws = state.weekSettings[w] || {};
   const teamName = (state.settings?.team_name && state.settings.team_name !== '__other__')
     ? state.settings.team_name : 'My Team';
+  // Team crest — reuse the badge from the matching opponent record if present.
+  const teamOpp = (state.opponents || []).find(o => o.name && o.name.toLowerCase() === teamName.toLowerCase());
+  const teamCrest = teamOpp?.badge_url || '';
   const DAY3 = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
 
   // Heat scale for the duration/intensity cell (concrete hex — the print window
@@ -4898,10 +4901,8 @@ function exportWeekPDF() {
 <table>
   <colgroup><col class="lbl">${cols.map(() => '<col>').join('')}</colgroup>
   <tr>
-    <td style="background:#000;color:#fff;font-family:'Anton',sans-serif;font-size:14px;text-align:center;padding:6px;${BORD}">${esc(teamName)}</td>
-    <td colspan="7" style="background:#f5901e;color:#000;font-family:'Anton',sans-serif;font-size:18px;letter-spacing:1px;text-align:center;padding:6px;${BORD}">
-      MICRO CYCLE LOADING PATTERNS · WEEK ${w}<span style="font-size:12px;font-weight:400"> &nbsp;|&nbsp; ${rangeStr}${titleExtra ? ' · ' + esc(titleExtra) : ''}</span>
-    </td>
+    <td style="background:#000;color:#fff;font-family:'Anton',sans-serif;font-size:14px;text-align:center;padding:6px;${BORD}">${teamCrest ? `<img src="${esc(teamCrest)}" style="height:36px;width:auto;object-fit:contain;display:block;margin:0 auto 4px">` : ''}${esc(teamName)}</td>
+    <td colspan="7" style="background:#f5901e;color:#000;font-family:'Anton',sans-serif;font-size:18px;letter-spacing:1px;text-align:center;padding:6px;${BORD}">RECOMMENDED MORPHOCYCLE · WEEK ${w}</td>
   </tr>
   ${scBanner}
   <tr><td style="background:#000;${BORD}"></td>${dayHeader}</tr>
