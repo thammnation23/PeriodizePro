@@ -10915,6 +10915,37 @@ function renderMorphocycle() {
     cards;
 }
 
+// An original diagram representing the morphocycle logic (match → match): the
+// load / complexity curve across the week with each day's sub-dynamic. This is
+// our own representation of the book's structure, not a reproduction of any
+// figure from it.
+function morphoDiagramSVG() {
+  const days = [
+    { x:60,  y:80,  c:'#2eb86b', focus:'GAME',       d:'SAT', md:'MD' },
+    { x:150, y:230, c:'#cbd5e1', focus:'RECOVERY',   d:'SUN', md:'+1' },
+    { x:240, y:200, c:'#86e3a8', focus:'RECOVERY',   d:'MON', md:'+2' },
+    { x:330, y:120, c:'#3b6fe0', focus:'TENSION',    d:'TUE', md:'−4' },
+    { x:420, y:60,  c:'#0d7252', focus:'DURATION',   d:'WED', md:'−3' },
+    { x:510, y:110, c:'#f5c518', focus:'VELOCITY',   d:'THU', md:'−2' },
+    { x:600, y:180, c:'#fce588', focus:'ACTIVATION', d:'FRI', md:'−1' },
+    { x:690, y:80,  c:'#2eb86b', focus:'GAME',       d:'SAT', md:'MD' },
+  ];
+  const line = days.map(p => `${p.x},${p.y}`).join(' ');
+  const area = `${line} 690,250 60,250`;
+  const nodes = days.map(p => `
+    <text x="${p.x}" y="${p.y - 15}" text-anchor="middle" font-size="9" letter-spacing="0.4" fill="var(--text3)" style="font-family:'Anton',sans-serif">${p.focus}</text>
+    <circle cx="${p.x}" cy="${p.y}" r="7" fill="${p.c}" stroke="var(--surface2)" stroke-width="2.5"/>
+    <text x="${p.x}" y="272" text-anchor="middle" font-size="11" letter-spacing="0.5" fill="var(--text2)" style="font-family:'Anton',sans-serif">${p.d}</text>
+    <text x="${p.x}" y="287" text-anchor="middle" font-size="10" fill="var(--text3)" style="font-family:'JetBrains Mono',monospace">${p.md}</text>`).join('');
+  return `<svg viewBox="0 0 750 300" width="100%" style="max-width:750px;display:block;margin:6px auto 2px">
+    <text x="18" y="150" text-anchor="middle" transform="rotate(-90 18 150)" font-size="9" letter-spacing="1" fill="var(--text3)" style="font-family:'Anton',sans-serif">LOAD · COMPLEXITY</text>
+    <polygon points="${area}" fill="rgba(0,212,255,0.09)"/>
+    <line x1="40" y1="250" x2="712" y2="250" stroke="var(--border)" stroke-width="1"/>
+    <polyline points="${line}" fill="none" stroke="var(--text2)" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+    ${nodes}
+  </svg>`;
+}
+
 function renderMethodology() {
   const host = document.getElementById('methodologySections');
   if (!host) return;
@@ -10954,6 +10985,8 @@ function renderMethodology() {
         <div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:16px 20px;margin-bottom:14px">
           <h3 style="margin:0 0 6px 0;font-family:'Anton',sans-serif;letter-spacing:1.5px;font-size:14px;color:var(--accent)">${idx} · ${s.title.toUpperCase()}</h3>
           ${s.note ? `<div style="font-size:11px;color:var(--text3);font-style:italic;margin-bottom:12px;line-height:1.5">${s.note}</div>` : ''}
+          ${morphoDiagramSVG()}
+          <div style="text-align:center;font-size:10.5px;color:var(--text3);font-style:italic;margin:2px 0 14px">A representation of the book&rsquo;s logic — the acquisition morphocycle from match to match (load / complexity across the week).</div>
           <div style="overflow-x:auto">
             <table style="width:100%;border-collapse:collapse;font-size:11.5px">
               <thead>
