@@ -4836,8 +4836,9 @@ function exportWeekPDF() {
     const loadTop = (!c.game && c.loadDay) ? `<div style="position:absolute;top:0;left:0;right:0;text-align:center;background:${loadColor(c.loadDay)};color:#fff;font-family:'Anton',sans-serif;font-size:10px;letter-spacing:.6px;padding:3px 2px;z-index:2;white-space:nowrap;overflow:hidden">${esc(c.loadDay.toUpperCase())}</div>` : '';
     // Match day: opponent crest + name centred on the green bar.
     const matchCell = c.game ? `<div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:2;padding:3px">${c.oppCrest ? `<img src="${esc(c.oppCrest)}" style="max-height:48px;max-width:82%;object-fit:contain;margin-bottom:2px">` : ''}<div style="font-family:'Anton',sans-serif;font-size:10px;color:#fff;letter-spacing:.3px;text-align:center;line-height:1.1;text-shadow:0 1px 2px rgba(0,0,0,.45)">vs ${esc(c.game.opponent || 'TBD')}</div></div>` : '';
-    // Minutes pinned to the bottom of the cell.
-    const lbl = label ? `<div style="position:absolute;bottom:3px;left:0;right:0;text-align:center;font-family:'Anton',sans-serif;font-size:12px;color:#111;z-index:1">${esc(label)}</div>` : '';
+    // Minutes pinned to the bottom, on a white chip so the text stays readable
+    // over any bar — stripes, dark solids or light.
+    const lbl = label ? `<div style="position:absolute;bottom:3px;left:0;right:0;text-align:center;z-index:1"><span style="display:inline-block;background:rgba(255,255,255,0.94);color:#111;font-family:'Anton',sans-serif;font-size:11.5px;padding:1px 6px;border-radius:4px;box-shadow:0 0 0 1px rgba(0,0,0,0.12)">${esc(label)}</span></div>` : '';
     return `<td style="position:relative;height:${BARH}px;background:#fff;padding:0;${BORD}">${bar}${loadTop}${matchCell}${lbl}</td>`;
   }).join('');
 
