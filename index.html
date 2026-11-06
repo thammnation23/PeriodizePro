@@ -3269,7 +3269,7 @@ const MONTHS = ['January','February','March','April','May','June','July','August
 const MONTHS_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
 function emptyState() {
-  return { sessions: [], games: [], weekSettings: {}, media: [], settings: null, opponents: [], players: [], playerLogs: [], athleteNotes: [], scWeeks: {}, weekReviews: {}, amsActuals: {}, amsSyncStatus: {}, amsRaw: {}, amsActivities: {}, amsSelectedActivity: {} };
+  return { sessions: [], games: [], weekSettings: {}, media: [], dlMedia: [], settings: null, opponents: [], players: [], playerLogs: [], athleteNotes: [], scWeeks: {}, weekReviews: {}, amsActuals: {}, amsSyncStatus: {}, amsRaw: {}, amsActivities: {}, amsSelectedActivity: {} };
 }
 let state = emptyState();
 let currentWeek = getCurrentWeekNum();
@@ -3370,6 +3370,7 @@ async function loadAllData() {
     bestEffort(loadOpponents(),    'loadOpponents'),
     bestEffort(loadPlayers(),      'loadPlayers'),
     bestEffort(loadWeekReviews(),  'loadWeekReviews'),
+    bestEffort(loadDlDrills(),     'loadDlDrills'),
   ]);
 
   console.log(`Loaded: ${state.sessions.length} sessions, ${state.games.length} games, ${state.media.length} drills, ${state.opponents.length} opponents, ${(state.players||[]).length} players`);
@@ -3497,6 +3498,77 @@ function drillToDB(m) {
     load_acc_eff:     m.load?.accEff     || null,
     load_dec_eff:     m.load?.decEff     || null,
   };
+}
+
+// ── DRILL LIBRARY platform (dl_drills) — live-linked, read-only ──
+// Map a platform category id/label onto a PeriodizePro library key (CAT_CONFIG).
+function mapDlCat(id, label) {
+  if (CAT_CONFIG[id]) return id;
+  const l = (label || '').toLowerCase();
+  if (l.includes('warm')) return 'warmup';
+  if (l.includes('att') && l.includes('def')) return 'attdef';
+  if (l.includes('possession') || l.includes('passing')) return 'possession';
+  if (l.includes('rondo')) return 'rondo';
+  if (l.includes('game')) return 'gameform';
+  if (l.includes('tact')) return 'tactical';
+  if (l.includes('rtp')) return 'rtp';
+  if (l.includes('technical') || l.includes('activation')) return 'technical';
+  return 'individual';
+}
+
+// One dl_drills row → the library display model (same shape as dbToDrill),
+// flagged source:'dl' so it renders read-only and never enters session logic.
+function dlToMedia(r, catLabel) {
+  const load = {};
+  if (r.gps_m_min)      load.mpm        = r.gps_m_min;
+  if (r.gps_hsr_min)    load.hsr        = r.gps_hsr_min;
+  if (r.gps_sprint_min) load.spr        = r.gps_sprint_min;
+  const accDen = r.gps_acc_den ?? r.gps_acc_density;
+  if (accDen)           load.accDensity = accDen;
+  if (r.gps_acc_min)    load.accEff     = r.gps_acc_min;
+  if (r.gps_dec_min)    load.decEff     = r.gps_dec_min;
+
+  const ytId = r.video ? extractYTId(r.video) : null;
+  const mediaType = r.video ? (ytId ? 'youtube' : 'link') : (r.image_url ? 'image' : 'other');
+
+  // Flatten structured_tags (object of arrays) into plain tags for search.
+  let tags = Array.isArray(r.tags) ? r.tags.slice() : [];
+  if (r.structured_tags && typeof r.structured_tags === 'object') {
+    Object.values(r.structured_tags).forEach(v => { if (Array.isArray(v)) tags = tags.concat(v); });
+  }
+  tags = [...new Set(tags.filter(Boolean))];
+
+  const metaBits = [];
+  if (r.players)  metaBits.push(`Players: ${r.players}`);
+  if (r.size)     metaBits.push(`Size: ${r.size}`);
+  if (r.duration) metaBits.push(`Duration: ${r.duration}`);
+  const notes = [metaBits.join(' · '), r.instructions, r.coaching].filter(x => x && String(x).trim()).join('\n\n');
+
+  return {
+    id: r.id, mediaType, url: r.video || r.image_url || '', dataUrl: '',
+    title: r.name || 'Untitled', category: mapDlCat(r.cat, catLabel[r.cat]),
+    intensityTag: '', team: 'Drill Library',
+    dateAdded: (r.updated_at || r.created_at || '').slice(0, 10),
+    tags, notes,
+    load: Object.keys(load).length ? load : null,
+    addedAt: r.created_at, source: 'dl',
+  };
+}
+
+async function loadDlDrills() {
+  if (!sb) return;
+  try {
+    const [dRes, cRes] = await Promise.all([
+      sb.from('dl_drills').select('*').order('created_at', { ascending: false }),
+      sb.from('dl_categories').select('id,label'),
+    ]);
+    const catLabel = {};
+    (cRes.data || []).forEach(c => { catLabel[c.id] = c.label; });
+    state.dlMedia = (dRes.data || []).map(r => dlToMedia(r, catLabel));
+  } catch (e) {
+    console.warn('loadDlDrills failed:', e.message);
+    state.dlMedia = [];
+  }
 }
 
 // ── SAVE HELPERS ──
@@ -6244,12 +6316,18 @@ function renderLibrary() {
   renderLibGrid();
 }
 
+// Library views show PeriodizePro's own drills + the live-linked Drill
+// Library platform drills (state.dlMedia). Session/attachment logic uses
+// only state.media, so linked drills never leak into plans.
+function libItems() { return state.media.concat(state.dlMedia || []); }
+
 function renderLibCatTabs() {
   const tabs = document.getElementById('libCatTabs');
-  const allCount = state.media.length;
+  const all = libItems();
+  const allCount = all.length;
   let html = `<div class="lib-cat-tab ${libActiveCat==='all'?'active':''}" onclick="setLibCat('all')">All <span class="lib-cat-count">${allCount}</span></div>`;
   Object.entries(CAT_CONFIG).forEach(([key, cfg]) => {
-    const count = state.media.filter(m => m.category === key).length;
+    const count = all.filter(m => m.category === key).length;
     if (count === 0 && libActiveCat !== key) return;
     html += `<div class="lib-cat-tab ${libActiveCat===key?'active':''}" onclick="setLibCat('${key}')">${cfg.icon} ${cfg.label} <span class="lib-cat-count">${count}</span></div>`;
   });
@@ -6274,7 +6352,7 @@ function renderLibGrid() {
   const grid = document.getElementById('libGrid');
   const query = (document.getElementById('libSearch').value || '').toLowerCase().trim();
 
-  let items = state.media.filter(m => {
+  let items = libItems().filter(m => {
     if (libActiveCat !== 'all' && m.category !== libActiveCat) return false;
     if (query) {
       // Search title, notes, team, intensityTag, and each individual tag
@@ -6292,7 +6370,7 @@ function renderLibGrid() {
   });
 
   if (items.length === 0) {
-    grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1"><div class="empty-state-icon">📚</div><div class="empty-state-text">${state.media.length===0?'No drills yet — click ＋ Add Drill to get started':'No results for "'+query+'"'}</div></div>`;
+    grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1"><div class="empty-state-icon">📚</div><div class="empty-state-text">${libItems().length===0?'No drills yet — click ＋ Add Drill to get started':'No results for "'+query+'"'}</div></div>`;
     return;
   }
 
@@ -6343,7 +6421,9 @@ function buildLibCard(m) {
         ${loadHtml}
       </div>
       <div class="lib-card-actions">
-        <button class="btn btn-ghost btn-sm" style="flex:1" onclick="event.stopPropagation();editMediaItem('${m.id}')">✏ Edit</button>
+        ${m.source === 'dl'
+          ? `<span class="btn btn-ghost btn-sm" style="flex:1;opacity:.75;cursor:default" title="Linked from your Drill Library platform — edit it there">🔗 Library</span>`
+          : `<button class="btn btn-ghost btn-sm" style="flex:1" onclick="event.stopPropagation();editMediaItem('${m.id}')">✏ Edit</button>`}
         <a class="btn btn-ghost btn-sm" href="${m.url||m.dataUrl||'#'}" target="_blank" onclick="event.stopPropagation()" style="${(!m.url&&!m.dataUrl)?'pointer-events:none;opacity:0.4':''}" >↗ Open</a>
       </div>
     </div>
@@ -6549,11 +6629,13 @@ async function deleteMedia() {
 
 // ── MEDIA DETAIL ──
 function openMediaDetail(id) {
-  const m = state.media.find(x => x.id === id);
+  const m = state.media.find(x => x.id === id) || (state.dlMedia || []).find(x => x.id === id);
   if (!m) return;
   const cfg = CAT_CONFIG[m.category] || CAT_CONFIG.individual;
   document.getElementById('detailMediaTitle').textContent = m.title || 'Drill';
-  document.getElementById('detailEditBtn').dataset.mediaId = id;
+  const detailEditBtn = document.getElementById('detailEditBtn');
+  detailEditBtn.dataset.mediaId = id;
+  detailEditBtn.style.display = m.source === 'dl' ? 'none' : ''; // linked drills are read-only here
 
   const usedIn = state.sessions.filter(s =>
     (s.warmupMedia||[]).includes(id) || (s.sessionMedia||[]).includes(id)
