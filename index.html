@@ -155,6 +155,36 @@
   .nav-tab:hover { color: var(--text2); }
   .nav-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
 
+  /* ── View-only public link (?view): hide restricted tabs + all editing chrome ── */
+  body.view-only .nav-tab[onclick*="morphocycle"],
+  body.view-only .nav-tab[onclick*="settings"],
+  body.view-only .nav-tab[onclick*="review"],
+  body.view-only .nav-tab[onclick*="squad"] { display: none !important; }
+  body.view-only #userPill { display: none !important; }
+  body.view-only .month-day { cursor: default; }
+  body.view-only .month-day-empty { display: none !important; }
+  body.view-only [onclick*="openAddGame"],
+  body.view-only [onclick*="openAddSession"],
+  body.view-only [onclick*="addSessionFromDay"],
+  body.view-only [onclick*="openAddSessionOnDate"],
+  body.view-only .add-session-btn,
+  body.view-only [onclick*="openAddMedia"],
+  body.view-only [onclick*="openSeasonPhases"],
+  body.view-only [onclick*="openWeekSettings"],
+  body.view-only [onclick*="openAddPlayer"],
+  body.view-only [onclick*="openBulkGames"],
+  body.view-only [onclick*="exportData"],
+  body.view-only [onclick*="editMediaItem"],
+  body.view-only [onclick*="editSession"],
+  body.view-only [onclick*="editGame"],
+  body.view-only [onclick*="backfillExerciseLinks"],
+  body.view-only [onclick*="openScLiftsModal"],
+  body.view-only [onclick*="openScStatusModal"],
+  body.view-only [onclick*="applyDefaultScPattern"],
+  body.view-only #detailEditBtn,
+  body.view-only button[onclick*="openTravelDay"],
+  body.view-only #gpsSyncBtn { display: none !important; }
+
   /* ─── MAIN LAYOUT ─── */
   .main { padding: 24px; }
   .view { display: none; }
@@ -5121,6 +5151,8 @@ function closeModal(id) {
 }
 
 function openModal(id) {
+  // View-only public link: block every editing modal (allow the drill detail view).
+  if (document.body.classList.contains('view-only') && id !== 'mediaDetailModal') return;
   document.getElementById(id).classList.add('open');
 }
 
@@ -5937,6 +5969,7 @@ function collapsePanelVideo(drillId) {
 
 // ── DAY SIDE PANEL ──
 function openDayPanel(dateStr) {
+  if (document.body.classList.contains('view-only')) return; // read-only public link
   editingDayDate = dateStr;
   selectedDayDate = dateStr;
 
@@ -11654,8 +11687,21 @@ sb.auth.onAuthStateChange(async (event, session) => {
   }
 });
 
+// View-only public link — add ?view to the URL. Read-only; no sign-in required.
+const VIEW_MODE = new URLSearchParams(location.search).has('view');
+const VIEW_USER_ID = '1661262b-64c6-47b4-8e9d-de70db8633ad';
+if (VIEW_MODE) {
+  document.body.classList.add('view-only');
+  const ov = document.getElementById('authOverlay'); if (ov) ov.style.display = 'none';
+}
+
 // getSession on page load — primary restore mechanism for static hosting
 (async () => {
+  if (VIEW_MODE) {
+    // Anonymous read-only boot — data arrives via the anon SELECT policies.
+    await bootApp({ id: VIEW_USER_ID, email: 'viewer', user_metadata: { name: 'Coach · View Only' } });
+    return;
+  }
   const { data: { session } } = await sb.auth.getSession().catch(() => ({ data: {} }));
   if (session?.user) {
     await bootApp(session.user);
