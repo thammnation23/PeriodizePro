@@ -4771,6 +4771,9 @@ function exportWeekPDF() {
     return /^[\d\s\-–to]+$/i.test(v) ? v + ' min' : v; };
   // Parse a duration string to minutes (average of a range) for the bar scale.
   const parseDurMin = (v) => { const nums = (String(v || '').match(/\d+/g) || []).map(Number); return nums.length ? Math.round(nums.reduce((a, b) => a + b, 0) / nums.length) : 0; };
+  // Default recommended playing space per day type (morphocycle guidance) —
+  // used when the session has no explicit "Recommended Spaces" value set.
+  const SPACE_BY_TYPE = { 'Strength':'Small-Medium', 'Endurance':'Full Pitch', 'Speed (Tactical)':'Medium-Large', 'Activation':'Small', 'Re-Intro':'Medium', 'Recovery':'Small' };
 
   // Gather per-day data + weekly totals
   const cols = [];
@@ -4808,7 +4811,7 @@ function exportWeekPDF() {
     cols.push({ i, d, sessions, game, m, dur, durMin, typeColor, typeColor2, sessType, scEntries, notes, isOff, oppCrest,
       complexity: primary?.complexity || '', density: primary?.density || '',
       loadDay: primary?.loadDay || '', physicalExpression: primary?.physicalExpression || '',
-      recommendedSpaces: primary?.recommendedSpaces || '',
+      recommendedSpaces: primary ? (primary.recommendedSpaces || SPACE_BY_TYPE[primary.type] || '') : '',
       has: !!(sessions.length || game) });
   }
 
