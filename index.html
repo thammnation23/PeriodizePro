@@ -3528,8 +3528,21 @@ function dlToMedia(r, catLabel) {
   if (r.gps_acc_min)    load.accEff     = r.gps_acc_min;
   if (r.gps_dec_min)    load.decEff     = r.gps_dec_min;
 
-  const ytId = r.video ? extractYTId(r.video) : null;
-  const mediaType = r.video ? (ytId ? 'youtube' : 'link') : (r.image_url ? 'image' : 'other');
+  // Gather every viewable clip: the top-level video/image plus each
+  // progression (platform stores many drills' media inside progressions[]).
+  const clips = [];
+  if (r.video || r.image_url) clips.push({ name: '', video: r.video || '', image: r.image_url || '' });
+  (Array.isArray(r.progressions) ? r.progressions : []).forEach(p => {
+    if (p && (p.video || p.image)) clips.push({ name: (p.name || '').trim(), video: p.video || '', image: p.image || '' });
+  });
+  const seen = new Set();
+  const uClips = clips.filter(c => { const k = c.video || c.image; if (!k || seen.has(k)) return false; seen.add(k); return true; });
+  const primary = uClips[0] || null;
+  let url = '', mediaType = 'other';
+  if (primary) {
+    if (primary.video) { url = primary.video; mediaType = extractYTId(primary.video) ? 'youtube' : 'link'; }
+    else if (primary.image) { url = primary.image; mediaType = 'image'; }
+  }
 
   // Flatten structured_tags (object of arrays) into plain tags for search.
   let tags = Array.isArray(r.tags) ? r.tags.slice() : [];
@@ -3545,11 +3558,11 @@ function dlToMedia(r, catLabel) {
   const notes = [metaBits.join(' · '), r.instructions, r.coaching].filter(x => x && String(x).trim()).join('\n\n');
 
   return {
-    id: r.id, mediaType, url: r.video || r.image_url || '', dataUrl: '',
+    id: r.id, mediaType, url, dataUrl: '',
     title: r.name || 'Untitled', category: mapDlCat(r.cat, catLabel[r.cat]),
     intensityTag: '', team: 'Drill Library',
     dateAdded: (r.updated_at || r.created_at || '').slice(0, 10),
-    tags, notes,
+    tags, notes, clips: uClips,
     load: Object.keys(load).length ? load : null,
     addedAt: r.created_at, source: 'dl',
   };
@@ -6701,6 +6714,19 @@ function openMediaDetail(id) {
       </div>`;
   }
 
+  // Linked Drill Library drills can carry several clips (progressions) —
+  // list the extras below the primary embed so every clip is reachable.
+  let clipsHtml = '';
+  if (m.clips && m.clips.length > 1) {
+    clipsHtml = `<div class="subsection-label" style="margin-bottom:8px">More clips</div>
+      <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:16px">` +
+      m.clips.slice(1).map((c, i) => {
+        const link = c.video || c.image;
+        const label = c.name || ('Clip ' + (i + 2));
+        return `<a href="${link}" target="_blank" class="btn btn-ghost btn-sm" style="justify-content:flex-start">▶ ${escapeAttr(label)}</a>`;
+      }).join('') + `</div>`;
+  }
+
   document.getElementById('mediaDetailBody').innerHTML = `
     ${mediaHtml}
     <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:12px">
@@ -6711,6 +6737,7 @@ function openMediaDetail(id) {
     </div>
     ${tags ? `<div class="lib-card-tags" style="margin-bottom:12px">${tags}</div>` : ''}
     ${m.notes ? `<div style="font-size:13px;color:var(--text2);background:var(--surface2);border:1px solid var(--border);padding:10px;border-radius:var(--radius);margin-bottom:16px;line-height:1.6">${m.notes}</div>` : ''}
+    ${clipsHtml}
     ${loadHtml}
     ${m.url && !ytId ? `<div style="margin-bottom:12px"><a href="${m.url}" target="_blank" class="btn btn-ghost btn-sm">↗ Open Link</a></div>` : ''}
     ${usedIn.length ? `
