@@ -973,7 +973,9 @@
     overflow: hidden;
   }
   .month-day:hover { background: var(--surface2); }
-  .month-day.other-month { opacity: 0.3; }
+  /* Adjacent-month days stay fully visible (content not dimmed); only the
+     date number is lightly muted as a subtle "other month" cue. */
+  .month-day.other-month .month-day-num { opacity: 0.5; }
   .month-day.game { border-left: 3px solid var(--game); }
   .month-day.today .month-day-num { color: var(--accent); }
   .month-day.selected { background: var(--surface3); outline: 2px solid var(--accent); outline-offset: -2px; }
