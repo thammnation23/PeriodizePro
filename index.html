@@ -4924,7 +4924,7 @@ function exportWeekPDF() {
 
   const html =
 `<!doctype html><html><head><meta charset="utf-8">
-<title>${esc(teamName)} — Week ${w} Loading</title>
+<title>Week ${w} Loading</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Anton&family=JetBrains+Mono:wght@700&display=swap" rel="stylesheet">
 <style>
@@ -4940,7 +4940,7 @@ function exportWeekPDF() {
 <table>
   <colgroup><col class="lbl">${cols.map(() => '<col>').join('')}</colgroup>
   <tr>
-    <td style="background:${RSL.claret};color:#fff;font-family:'Anton',sans-serif;font-size:14px;text-align:center;padding:6px;${BORD}">${teamCrest ? `<img src="${esc(teamCrest)}" style="height:36px;width:auto;object-fit:contain;display:block;margin:0 auto 4px">` : ''}${esc(teamName)}</td>
+    <td style="background:${RSL.claret};color:#fff;font-family:'Anton',sans-serif;font-size:14px;text-align:center;padding:6px;${BORD}">${teamCrest ? `<img src="${esc(teamCrest)}" style="height:44px;width:auto;object-fit:contain;display:block;margin:0 auto">` : ''}</td>
     <td colspan="7" style="background:${RSL.gold};color:${RSL.claret};font-family:'Anton',sans-serif;font-size:18px;letter-spacing:1px;text-align:center;padding:6px;${BORD}">RECOMMENDED MORPHOCYCLE · WEEK ${w}</td>
   </tr>
   ${scBanner}
