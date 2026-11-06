@@ -2310,6 +2310,21 @@
         </div>
       </div>
 
+      <div class="form-grid">
+        <div class="form-group">
+          <label>Recommended Spaces</label>
+          <select id="sessionRecommendedSpaces">
+            <option value="">—</option>
+            <option>Small</option>
+            <option>Small-Medium</option>
+            <option>Medium</option>
+            <option>Medium-Large</option>
+            <option>Large</option>
+            <option>Full Pitch</option>
+          </select>
+        </div>
+      </div>
+
       <hr class="section-divider">
       <div class="subsection-label">Physical Load Metrics</div>
 
@@ -3336,6 +3351,7 @@ function dbToSession(r) {
     duration: r.duration, intensity: r.intensity,
     principle: r.principle, complexity: r.complexity,
     density: r.density || '', loadDay: r.load_day || '', physicalExpression: r.physical_expression || '', maxVelocity: r.max_velocity || '',
+    recommendedSpaces: r.recommended_spaces || '',
     td: r.td, hsr: r.hsr, sd: r.sd, acc: r.acc, dec: r.dec_count,
     warmupMedia:  r.warmup_drills  || [],
     sessionMedia: r.session_drills || [],
@@ -3356,6 +3372,7 @@ function sessionToDB(s) {
     intensity: s.intensity ? parseInt(s.intensity) : null,
     principle: s.principle, complexity: s.complexity,
     density: s.density || null, load_day: s.loadDay || null, physical_expression: s.physicalExpression || null, max_velocity: s.maxVelocity || null,
+    recommended_spaces: s.recommendedSpaces || null,
     td: s.td ? parseInt(s.td) : null,
     hsr: s.hsr ? parseInt(s.hsr) : null,
     sd: s.sd ? parseInt(s.sd) : null,
@@ -4741,8 +4758,8 @@ function exportWeekPDF() {
   const teamName = (state.settings?.team_name && state.settings.team_name !== '__other__')
     ? state.settings.team_name : 'My Team';
   // Team crest — reuse the badge from the matching opponent record if present.
-  const teamOpp = (state.opponents || []).find(o => o.name && o.name.toLowerCase() === teamName.toLowerCase());
-  const teamCrest = teamOpp?.badge_url || '';
+  // Team crest — Real Salt Lake badge (TheSportsDB).
+  const teamCrest = 'https://r2.thesportsdb.com/images/media/team/badge/kkjlfa1556488022.png';
   const DAY3 = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
 
   // Heat scale for the duration/intensity cell (concrete hex — the print window
@@ -4791,6 +4808,7 @@ function exportWeekPDF() {
     cols.push({ i, d, sessions, game, m, dur, durMin, typeColor, typeColor2, sessType, scEntries, notes, isOff, oppCrest,
       complexity: primary?.complexity || '', density: primary?.density || '',
       loadDay: primary?.loadDay || '', physicalExpression: primary?.physicalExpression || '',
+      recommendedSpaces: primary?.recommendedSpaces || '',
       has: !!(sessions.length || game) });
   }
 
@@ -4877,24 +4895,31 @@ function exportWeekPDF() {
   cols.forEach(c => {
     const s0 = c.sessions[0];
     if (!s0) return;
-    let label, rem, color;
+    let label, rem, color, color2 = null;
     if (s0.type2) {
       const ck = hybridKey(s0.type, s0.type2);
       if (MORPHO_HYBRID_REMINDERS[ck]) { label = ck; rem = MORPHO_HYBRID_REMINDERS[ck]; }
       else { label = 'Hybrid'; rem = MORPHO_REMINDERS['Hybrid']; }
-      color = '#8b5cf6';
+      // Match the striped column bar: both session-type colours.
+      color = getTypeColor(s0.type); color2 = getTypeColor(s0.type2);
     } else {
       label = s0.type; rem = MORPHO_REMINDERS[s0.type]; color = morphoTypeColor(s0.type);
     }
-    if (rem && label !== 'Recovery' && !usedTypes.find(u => u.label === label)) usedTypes.push({ label, rem, color });
+    if (rem && label !== 'Recovery' && !usedTypes.find(u => u.label === label)) usedTypes.push({ label, rem, color, color2 });
   });
   const reminderTable = usedTypes.length ? `
-  <table style="margin-top:10px">
-    <tr><td colspan="2" style="background:${RSL.cobalt};color:${RSL.gold};font-family:'Anton',sans-serif;font-size:12px;letter-spacing:1px;text-align:center;padding:5px 10px;${BORD}">DAY-TYPE REMINDERS</td></tr>
-    ${usedTypes.map(u => `<tr>
-        <td style="width:150px;background:#111;color:#fff;font-family:'Anton',sans-serif;font-size:11px;letter-spacing:.5px;text-align:center;padding:6px 10px;border-left:4px solid ${u.color};${BORD}">${esc(u.label.toUpperCase())}</td>
+  <table style="margin-top:28px">
+    ${usedTypes.map(u => {
+      // Legend swatch matches that day's column: solid type colour, or the
+      // two-colour stripe for a hybrid day.
+      const swatch = u.color2 ? stripe3(u.color, u.color2, 3, 3) : u.color;
+      const txt = u.color2 ? '#fff' : textOnColor(u.color);
+      const sh  = u.color2 ? 'text-shadow:0 1px 2px rgba(0,0,0,.55);' : '';
+      return `<tr>
+        <td style="width:160px;background:${swatch};color:${txt};${sh}font-family:'Anton',sans-serif;font-size:11px;letter-spacing:.5px;text-align:center;padding:7px 10px;${BORD}">${esc(u.label.toUpperCase())}</td>
         <td style="background:#fff;color:#222;font-family:Arial,sans-serif;font-size:10px;line-height:1.4;text-align:center;padding:6px 10px;${BORD}">${esc(u.rem)}</td>
-      </tr>`).join('')}
+      </tr>`;
+    }).join('')}
   </table>` : '';
 
   const html =
@@ -4925,6 +4950,7 @@ function exportWeekPDF() {
   ${descRow('Complexity',          'complexity')}
   ${descRow('Density',             'density')}
   ${descRow('Physical Expression', 'physicalExpression')}
+  ${descRow('Recommended Spaces',  'recommendedSpaces')}
   ${notesRow}
 </table>
 ${reminderTable}
@@ -5162,6 +5188,7 @@ function editSession(id) {
   document.getElementById('sessionDensity').value = s.density || '';
   document.getElementById('sessionLoadDay').value = s.loadDay || '';
   document.getElementById('sessionPhysicalExpression').value = s.physicalExpression || '';
+  document.getElementById('sessionRecommendedSpaces').value = s.recommendedSpaces || '';
   const mvParts = (s.maxVelocity || '').match(/^([<>]?)\s*(\d+)/);
   document.getElementById('maxVelComparator').value = mvParts ? mvParts[1] : '';
   document.getElementById('maxVelValue').value = mvParts ? mvParts[2] : '';
@@ -5209,6 +5236,7 @@ function clearSessionForm() {
   document.getElementById('sessionDensity').value = '';
   document.getElementById('sessionLoadDay').value = '';
   document.getElementById('sessionPhysicalExpression').value = '';
+  document.getElementById('sessionRecommendedSpaces').value = '';
   document.getElementById('maxVelComparator').value = '';
   document.getElementById('maxVelValue').value = '';
   chipSelections['type2'] = '';
@@ -5353,6 +5381,7 @@ async function saveSession() {
     density: document.getElementById('sessionDensity').value,
     loadDay: document.getElementById('sessionLoadDay').value,
     physicalExpression: document.getElementById('sessionPhysicalExpression').value,
+    recommendedSpaces: document.getElementById('sessionRecommendedSpaces').value,
     maxVelocity: (document.getElementById('maxVelValue').value ? (document.getElementById('maxVelComparator').value + document.getElementById('maxVelValue').value) : ''),
     td: document.getElementById('metricTD').value,
     hsr: document.getElementById('metricHSR').value,
@@ -7460,7 +7489,7 @@ async function saveDayPopover() {
         intensity:  5,
         principle:  '',
         complexity: '',
-        density:'', loadDay:'', physicalExpression:'', maxVelocity:'',
+        density:'', loadDay:'', physicalExpression:'', maxVelocity:'', recommendedSpaces:'',
         td:'', hsr:'', sd:'', acc:'', dec:'',
         warmupMedia: [], sessionMedia: [],
         gdMinus:'', gdPlus:'', activation:'', notes:'',
