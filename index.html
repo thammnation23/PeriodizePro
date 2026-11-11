@@ -4432,15 +4432,11 @@ function buildSessionCardHTML(s) {
   // colour rather than the grey "unknown type" default.
   const hybType = getSessionTypes().find(t => t.name === 'Hybrid');
   const hybridColor = hybType ? hybType.color : '#8b5cf6';
+  // Two-type day: show both session types as pills (no "Hybrid" label).
   const headerPill = isDualType
-    ? `<span style="font-size:10px;letter-spacing:.5px;background:${hybridColor};color:${textOnColor(hybridColor)};padding:1px 8px;border-radius:4px;border:1px solid rgba(0,0,0,0.16)">Hybrid</span>`
+    ? `<span style="display:inline-flex;flex-wrap:wrap;gap:4px"><span style="background:${typeColor};color:${textOnColor(typeColor)};padding:2px 8px;border-radius:5px;border:1px solid rgba(0,0,0,0.16)">${s.type}</span><span style="background:${typeColor2};color:${textOnColor(typeColor2)};padding:2px 8px;border-radius:5px;border:1px solid rgba(0,0,0,0.16)">${s.type2}</span></span>`
     : `<span style="background:${typeColor};color:${textOnColor(typeColor)};padding:2px 9px;border-radius:5px;border:1px solid rgba(0,0,0,0.16)">${s.type || 'Session'}</span>`;
-  const dualChips = isDualType
-    ? `<div style="display:flex;flex-wrap:wrap;justify-content:center;gap:4px;margin:-3px 0 7px">
-         <span style="font-family:'Anton',sans-serif;font-size:9.5px;letter-spacing:.3px;background:${typeColor}22;color:var(--text);padding:1px 7px;border-radius:4px;border:1px solid ${typeColor}66">${s.type}</span>
-         <span style="font-family:'Anton',sans-serif;font-size:9.5px;letter-spacing:.3px;background:${typeColor2}22;color:var(--text);padding:1px 7px;border-radius:4px;border:1px solid ${typeColor2}66">${s.type2}</span>
-       </div>`
-    : '';
+  const dualChips = '';
   const gdHtml = (s.gdMinus || s.gdPlus)
     ? `<div style="display:flex;align-items:center;gap:6px;margin-top:5px;font-family:'JetBrains Mono',monospace;font-size:11px;">
          <span style="color:var(--text3)">GD</span>
