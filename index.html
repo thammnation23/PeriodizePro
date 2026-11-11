@@ -4686,7 +4686,9 @@ function renderMonth() {
         ${game ? buildMonthGameChip(game) : ''}
         ${sessions.map(s =>
             monthTrack === 'reserves' ? buildMonthSessionChip(effectiveReserve(s))
-          : monthTrack === 'both'     ? (buildMonthSessionChip(s, 'S') + buildMonthSessionChip(s, 'R'))
+          : monthTrack === 'both'     ? (hasReserveOverride(s)
+                                          ? (buildMonthSessionChip(s, 'S') + buildMonthSessionChip(s, 'R'))
+                                          : buildMonthSessionChip(s))
           :                             buildMonthSessionChip(s)
         ).join('')}
         ${scLiftRow}
