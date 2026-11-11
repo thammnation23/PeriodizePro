@@ -224,7 +224,11 @@
   .track-btn[data-mtrack="both"].active,
   .track-btn[data-mtrack="starters"].active { background:var(--accent); }
   .track-btn[data-wtrack="reserves"].active { background:#8b5cf6; }
-  .track-btn[data-wtrack="starters"].active { background:var(--accent); }
+  .track-btn[data-wtrack="starters"].active,
+  .track-btn[data-wtrack="both"].active { background:var(--accent); }
+  /* Reserve difference strip under a week session card (Both mode). */
+  .reserve-strip { display:flex;align-items:center;gap:6px;margin-top:6px;padding:5px 8px;border-radius:6px;cursor:pointer;background:rgba(139,92,246,0.1);border:1px solid rgba(139,92,246,0.35);border-left:3px solid #8b5cf6;flex-wrap:wrap; }
+  .reserve-strip-tag { font-family:'Anton',sans-serif;font-size:8.5px;letter-spacing:.5px;color:#fff;background:#8b5cf6;padding:1px 6px;border-radius:3px;flex:0 0 auto; }
   .month-chip-track { font-family:'Anton',sans-serif; font-size:8.5px; letter-spacing:.5px; padding:0 4px; border-radius:3px; line-height:1.55; flex:0 0 auto; }
   .month-chip-track.s { background:var(--accent); color:#fff; }
   .month-chip-track.r { background:#8b5cf6; color:#fff; }
@@ -2087,9 +2091,10 @@
       <div style="flex:1"></div>
       <button class="btn btn-primary btn-sm" onclick="openAddSession()">＋ Session</button>
       <button class="btn btn-ghost btn-sm" onclick="openWeekSettings()">⚙ Week Settings</button>
-      <div id="weekTrackToggle" class="track-toggle" style="margin-bottom:0" title="Show the starters plan or the reserves / non-starters plan">
-        <button type="button" class="track-btn mini active" data-wtrack="starters" onclick="setWeekTrack('starters')">Starters</button>
+      <div id="weekTrackToggle" class="track-toggle" style="margin-bottom:0" title="Show starters, reserves, or both plans">
+        <button type="button" class="track-btn mini" data-wtrack="starters" onclick="setWeekTrack('starters')">Starters</button>
         <button type="button" class="track-btn mini" data-wtrack="reserves" onclick="setWeekTrack('reserves')">Reserves</button>
+        <button type="button" class="track-btn mini active" data-wtrack="both" onclick="setWeekTrack('both')">Both</button>
       </div>
       <button class="btn btn-ghost btn-sm" onclick="exportWeekPDF('starters')" title="Export this week's starters loading as a printable PDF">↧ Export · Starters</button>
       <button class="btn btn-ghost btn-sm" onclick="exportWeekPDF('reserves')" title="Export the reserves / non-starters loading plan">↧ Export · Reserves</button>
@@ -4737,7 +4742,23 @@ function renderWeekTotals(weekStart) {
     </div>`;
 }
 
-let weekTrack = 'starters'; // Week view: 'starters' | 'reserves'
+let weekTrack = 'both'; // Week view: 'starters' | 'reserves' | 'both'
+// Compact "RESERVES" strip shown under a starter card (Both mode) only when
+// the reserve plan differs — shows the differing design (type, duration, +qual).
+function reserveStripHTML(s) {
+  if (!hasReserveOverride(s)) return '';
+  const r = effectiveReserve(s);
+  const pill = (t, c) => `<span style="background:${c};color:${textOnColor(c)};font-size:9.5px;padding:1px 7px;border-radius:4px;white-space:nowrap">${escapeAttr(t)}</span>`;
+  const pills = r.type2 ? pill(r.type, getTypeColor(r.type)) + pill(r.type2, getTypeColor(r.type2)) : pill(r.type, getTypeColor(r.type));
+  const dur = r.duration ? `<span style="font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--text2)">${escapeAttr(r.duration)}m</span>` : '';
+  const QL = [['complexity','Cx'],['density','Dn'],['loadDay','Load'],['physicalExpression','PE'],['recommendedSpaces','Sp']];
+  const diffs = QL.filter(([f]) => (r[f] || '') && r[f] !== s[f]).map(([f, lbl]) => `${lbl}: ${escapeAttr(r[f])}`);
+  const diffsHtml = diffs.length ? `<div style="font-size:9px;color:var(--text3);width:100%;margin-top:1px">${diffs.join(' · ')}</div>` : '';
+  return `<div class="reserve-strip" onclick="event.stopPropagation();editSession('${s.id}')" title="Reserves / non-starters plan — click to edit">
+    <span class="reserve-strip-tag">RES</span>
+    <div style="display:flex;gap:4px;flex-wrap:wrap;align-items:center;flex:1;min-width:0">${pills}${dur}${diffsHtml}</div>
+  </div>`;
+}
 function setWeekTrack(mode) {
   weekTrack = mode;
   const t = document.getElementById('weekTrackToggle');
@@ -4814,7 +4835,11 @@ function renderWeek() {
     const card = document.createElement('div');
     card.className = 'week-day-card' + (isGame ? ' game' : '') + (today ? ' active' : '');
 
-    let sessionsHTML = sessions.map(s => buildSessionCardHTML(weekTrack === 'reserves' ? effectiveReserve(s) : s)).join('');
+    let sessionsHTML = sessions.map(s =>
+        weekTrack === 'reserves' ? buildSessionCardHTML(effectiveReserve(s))
+      : weekTrack === 'both'     ? (buildSessionCardHTML(s) + reserveStripHTML(s))
+      :                            buildSessionCardHTML(s)
+    ).join('');
     if (isGame) {
       const g = state.games.find(gg => gg.date === dateStr);
       sessionsHTML = buildGameCardHTML(g) + sessionsHTML;
