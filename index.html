@@ -4453,18 +4453,6 @@ function buildSessionCardHTML(s) {
       </div>
       ${dualChips}
       ${s.principle ? `<div style="font-size:11px;color:var(--text2);margin-bottom:6px;">${s.principle}</div>` : ''}
-      ${(() => {
-        const a = getAmsActualForDate(s.date);
-        return `
-      <div class="metrics-grid">
-        ${editableMetricChip('TD',  s.td,  `updateSessionMetric('${s.id}','td',this.value)`,  a?.td)}
-        ${editableMetricChip('HID', s.hsr, `updateSessionMetric('${s.id}','hsr',this.value)`, a?.hsr)}
-        ${editableMetricChip('VHID', s.sd, `updateSessionMetric('${s.id}','sd',this.value)`,  a?.sd)}
-        ${editableMetricChip('A/D', (parseInt(s.acc)||0) + (parseInt(s.dec)||0) || '', `updateSessionMetric('${s.id}','accDec',this.value)`, a?.accDec)}
-        ${s.maxVelocity ? `<div class="metric-chip"><div class="metric-label">Max V</div><div class="metric-value">${escapeAttr(s.maxVelocity)}%</div></div>` : ''}
-        ${actualOnlyMetricChip('MV%', a?.mv, '%')}
-      </div>`;
-      })()}
       ${gdHtml}
       ${(s.exercises && s.exercises.length) ? `
       <div class="ex-summary" onclick="event.stopPropagation()">
