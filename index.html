@@ -220,12 +220,8 @@
   .track-btn.active { background:var(--accent); color:#fff; }
   .track-btn[data-track="reserves"].active { background:#8b5cf6; }
   .track-btn.mini { font-size:10px; padding:4px 10px; letter-spacing:.5px; }
-  .track-btn[data-mtrack="reserves"].active { background:#8b5cf6; }
-  .track-btn[data-mtrack="both"].active,
-  .track-btn[data-mtrack="starters"].active { background:var(--accent); }
-  .track-btn[data-wtrack="reserves"].active { background:#8b5cf6; }
-  .track-btn[data-wtrack="starters"].active,
-  .track-btn[data-wtrack="both"].active { background:var(--accent); }
+  .track-btn[data-ptrack="reserves"].active { background:#8b5cf6; }
+  .track-btn[data-ptrack="starters"].active { background:var(--accent); }
   /* Reserve difference strip under a week session card (Both mode). */
   .reserve-strip { display:flex;align-items:center;gap:6px;margin-top:6px;padding:5px 8px;border-radius:6px;cursor:pointer;background:rgba(139,92,246,0.1);border:1px solid rgba(139,92,246,0.35);border-left:3px solid #8b5cf6;flex-wrap:wrap; }
   .reserve-strip-tag { font-family:'Anton',sans-serif;font-size:8.5px;letter-spacing:.5px;color:#fff;background:#8b5cf6;padding:1px 6px;border-radius:3px;flex:0 0 auto; }
@@ -548,7 +544,7 @@
   .session-type {
     text-align: center;
     font-family: 'Anton', sans-serif;
-    font-size: 13px;
+    font-size: 16px;
     font-weight: 700;
     letter-spacing: 1px;
     text-transform: uppercase;
@@ -2017,7 +2013,13 @@
   <div id="view-year" class="view active">
     <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
       <p class="section-title" style="margin:0">Annual Plan · 52 Weeks</p>
-      <button class="btn btn-ghost btn-sm" onclick="openSeasonPhases()" title="Set Preseason, Regular Season, breaks, Playoffs…">＋ Season Phases</button>
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        <div class="track-toggle" style="margin-bottom:0" title="Show the starters or reserves plan">
+          <button type="button" class="track-btn mini" data-ptrack="starters" onclick="setPlanTrack('starters')">Starters</button>
+          <button type="button" class="track-btn mini" data-ptrack="reserves" onclick="setPlanTrack('reserves')">Reserves</button>
+        </div>
+        <button class="btn btn-ghost btn-sm" onclick="openSeasonPhases()" title="Set Preseason, Regular Season, breaks, Playoffs…">＋ Season Phases</button>
+      </div>
     </div>
     <div id="yearGrid"></div>
     <div class="year-legend" style="margin-top:16px" id="yearLegendField"></div>
@@ -2042,10 +2044,9 @@
           <div class="month-title" id="monthTitle">—</div>
           <button class="month-nav-btn" onclick="nextMonth()">›</button>
           <div style="flex:1"></div>
-          <div id="monthTrackToggle" class="track-toggle" style="margin-bottom:0" title="Show the starters plan, reserves plan, or both">
-            <button type="button" class="track-btn mini active" data-mtrack="both" onclick="setMonthTrack('both')">Both</button>
-            <button type="button" class="track-btn mini" data-mtrack="starters" onclick="setMonthTrack('starters')">Starters</button>
-            <button type="button" class="track-btn mini" data-mtrack="reserves" onclick="setMonthTrack('reserves')">Reserves</button>
+          <div class="track-toggle" style="margin-bottom:0" title="Show the starters or reserves plan">
+            <button type="button" class="track-btn mini" data-ptrack="starters" onclick="setPlanTrack('starters')">Starters</button>
+            <button type="button" class="track-btn mini" data-ptrack="reserves" onclick="setPlanTrack('reserves')">Reserves</button>
           </div>
           <button class="btn btn-ghost btn-sm" onclick="exportMonthPDF()" title="Export this month as a simple printable PDF">↧ Export PDF</button>
           <button class="btn btn-ghost btn-sm" onclick="switchTab('week')">⚡ Week View</button>
@@ -2091,10 +2092,9 @@
       <div style="flex:1"></div>
       <button class="btn btn-primary btn-sm" onclick="openAddSession()">＋ Session</button>
       <button class="btn btn-ghost btn-sm" onclick="openWeekSettings()">⚙ Week Settings</button>
-      <div id="weekTrackToggle" class="track-toggle" style="margin-bottom:0" title="Show starters, reserves, or both plans">
-        <button type="button" class="track-btn mini" data-wtrack="starters" onclick="setWeekTrack('starters')">Starters</button>
-        <button type="button" class="track-btn mini" data-wtrack="reserves" onclick="setWeekTrack('reserves')">Reserves</button>
-        <button type="button" class="track-btn mini active" data-wtrack="both" onclick="setWeekTrack('both')">Both</button>
+      <div class="track-toggle" style="margin-bottom:0" title="Show the starters or reserves plan">
+        <button type="button" class="track-btn mini" data-ptrack="starters" onclick="setPlanTrack('starters')">Starters</button>
+        <button type="button" class="track-btn mini" data-ptrack="reserves" onclick="setPlanTrack('reserves')">Reserves</button>
       </div>
       <button class="btn btn-ghost btn-sm" onclick="exportWeekPDF('starters')" title="Export this week's starters loading as a printable PDF">↧ Export · Starters</button>
       <button class="btn btn-ghost btn-sm" onclick="exportWeekPDF('reserves')" title="Export the reserves / non-starters loading plan">↧ Export · Reserves</button>
@@ -3352,13 +3352,6 @@ function emptyState() {
 let state = emptyState();
 let currentWeek = getCurrentWeekNum();
 let currentMonth = new Date().getMonth();
-let monthTrack = 'both'; // Month view: 'both' | 'starters' | 'reserves'
-function setMonthTrack(mode) {
-  monthTrack = mode;
-  const t = document.getElementById('monthTrackToggle');
-  if (t) t.querySelectorAll('.track-btn').forEach(b => b.classList.toggle('active', b.dataset.mtrack === mode));
-  renderMonth();
-}
 let currentMonthYear = new Date().getFullYear();
 let editingSessionId = null;
 let editingDayDate = null;
@@ -3884,6 +3877,7 @@ function switchTab(tab) {
 function renderYear() {
   const container = document.getElementById('yearGrid');
   container.innerHTML = '';
+  syncTrackToggles();
 
   // ── DIAGNOSTIC: log game date range vs season window range
   // (helps debug "imported matches don't show on annual plan")
@@ -4020,7 +4014,7 @@ function renderYear() {
           cell.textContent = '⚽';
         }
       } else if (sessions.length > 0) {
-        const s = sessions[0];
+        const s = planTrack === 'reserves' ? effectiveReserve(sessions[0]) : sessions[0];
         const bg1 = getTypeBackground(s.type);
 
         cell.style.cssText = 'position:relative;overflow:hidden;height:28px;border-radius:3px;cursor:pointer;';
@@ -4417,7 +4411,7 @@ function buildSquadBadgeHTML(dateStr) {
 }
 
 // Rich session-card HTML — shared by Week view and Month view so both stay in sync.
-function buildSessionCardHTML(s) {
+function buildSessionCardHTML(s, belowHeader) {
   const typeColor = getTypeColor(s.type);
   const typeColor2 = s.type2 ? getTypeColor(s.type2) : null;
   const typeClass = getTypeClass(s.type);
@@ -4456,6 +4450,7 @@ function buildSessionCardHTML(s) {
         <span class="session-type">${headerPill}</span>
         <span class="session-duration">${s.duration ? s.duration + 'm' : '—'}</span>
       </div>
+      ${belowHeader || ''}
       ${dualChips}
       ${s.principle ? `<div style="font-size:11px;color:var(--text2);margin-bottom:6px;">${s.principle}</div>` : ''}
       ${gdHtml}
@@ -4607,6 +4602,7 @@ function buildMonthGameChip(g) {
 function renderMonth() {
   const title = document.getElementById('monthTitle');
   title.textContent = MONTHS[currentMonth] + ' ' + currentMonthYear;
+  syncTrackToggles();
 
   const grid = document.getElementById('monthGrid');
   grid.innerHTML = '';
@@ -4669,13 +4665,7 @@ function renderMonth() {
       </div>
       <div class="month-day-body">
         ${game ? buildMonthGameChip(game) : ''}
-        ${sessions.map(s =>
-            monthTrack === 'reserves' ? buildMonthSessionChip(effectiveReserve(s))
-          : monthTrack === 'both'     ? (hasReserveOverride(s)
-                                          ? (buildMonthSessionChip(s, 'S') + buildMonthSessionChip(s, 'R'))
-                                          : buildMonthSessionChip(s))
-          :                             buildMonthSessionChip(s)
-        ).join('')}
+        ${sessions.map(s => buildMonthSessionChip(planTrack === 'reserves' ? effectiveReserve(s) : s)).join('')}
         ${scLiftRow}
         ${travelChip}
         ${(!game && sessions.length === 0 && !travelChip && isCurrentMonth) ? '<div class="month-day-empty">＋</div>' : ''}
@@ -4742,28 +4732,19 @@ function renderWeekTotals(weekStart) {
     </div>`;
 }
 
-let weekTrack = 'both'; // Week view: 'starters' | 'reserves' | 'both'
-// Compact "RESERVES" strip shown under a starter card (Both mode) only when
-// the reserve plan differs — shows the differing design (type, duration, +qual).
-function reserveStripHTML(s) {
-  if (!hasReserveOverride(s)) return '';
-  const r = effectiveReserve(s);
-  const pill = (t, c) => `<span style="background:${c};color:${textOnColor(c)};font-size:9.5px;padding:1px 7px;border-radius:4px;white-space:nowrap">${escapeAttr(t)}</span>`;
-  const pills = r.type2 ? pill(r.type, getTypeColor(r.type)) + pill(r.type2, getTypeColor(r.type2)) : pill(r.type, getTypeColor(r.type));
-  const dur = r.duration ? `<span style="font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--text2)">${escapeAttr(r.duration)}m</span>` : '';
-  const QL = [['complexity','Cx'],['density','Dn'],['loadDay','Load'],['physicalExpression','PE'],['recommendedSpaces','Sp']];
-  const diffs = QL.filter(([f]) => (r[f] || '') && r[f] !== s[f]).map(([f, lbl]) => `${lbl}: ${escapeAttr(r[f])}`);
-  const diffsHtml = diffs.length ? `<div style="font-size:9px;color:var(--text3);width:100%;margin-top:1px">${diffs.join(' · ')}</div>` : '';
-  return `<div class="reserve-strip" onclick="event.stopPropagation();editSession('${s.id}')" title="Reserves / non-starters plan — click to edit">
-    <span class="reserve-strip-tag">RES</span>
-    <div style="display:flex;gap:4px;flex-wrap:wrap;align-items:center;flex:1;min-width:0">${pills}${dur}${diffsHtml}</div>
-  </div>`;
+// Shared Starters/Reserves lens across the Annual, Month and Week views.
+let planTrack = 'starters'; // 'starters' | 'reserves'
+function syncTrackToggles() {
+  document.querySelectorAll('.track-btn[data-ptrack]').forEach(b => b.classList.toggle('active', b.dataset.ptrack === planTrack));
 }
-function setWeekTrack(mode) {
-  weekTrack = mode;
-  const t = document.getElementById('weekTrackToggle');
-  if (t) t.querySelectorAll('.track-btn').forEach(b => b.classList.toggle('active', b.dataset.wtrack === mode));
-  renderWeek();
+function setPlanTrack(mode) {
+  planTrack = mode;
+  syncTrackToggles();
+  const active = document.querySelector('.view.active');
+  const id = active ? active.id : '';
+  if (id === 'view-week') renderWeek();
+  else if (id === 'view-month') renderMonth();
+  else if (id === 'view-year') renderYear();
 }
 
 function renderWeek() {
@@ -4816,10 +4797,9 @@ function renderWeek() {
   const _wt = document.getElementById('weekTotals'); if (_wt) _wt.innerHTML = '';
 
   // Reflect the active starters/reserves track in the toggle + hint.
-  const wtToggle = document.getElementById('weekTrackToggle');
-  if (wtToggle) wtToggle.querySelectorAll('.track-btn').forEach(b => b.classList.toggle('active', b.dataset.wtrack === weekTrack));
+  syncTrackToggles();
   const wtHint = document.getElementById('weekReserveHint');
-  if (wtHint) wtHint.style.display = weekTrack === 'reserves' ? 'block' : 'none';
+  if (wtHint) wtHint.style.display = planTrack === 'reserves' ? 'block' : 'none';
 
   const container = document.getElementById('weekDays');
   container.innerHTML = '';
@@ -4835,25 +4815,24 @@ function renderWeek() {
     const card = document.createElement('div');
     card.className = 'week-day-card' + (isGame ? ' game' : '') + (today ? ' active' : '');
 
-    let sessionsHTML = sessions.map(s =>
-        weekTrack === 'reserves' ? buildSessionCardHTML(effectiveReserve(s))
-      : weekTrack === 'both'     ? (buildSessionCardHTML(s) + reserveStripHTML(s))
-      :                            buildSessionCardHTML(s)
-    ).join('');
+    // S&C planned lifts for this day (pre-training Activation + post-training Gym)
+    const scEntries = dayEntries(state.scWeeks[currentWeek]?.days?.[DAYS[di]]);
+    const scChip = scEntries.length
+      ? `<div style="margin-bottom:6px;display:flex;flex-wrap:wrap;gap:4px;justify-content:center">${scEntries.map(e => {
+          const lf = liftByKey(e.lift);
+          return `<span onclick="event.stopPropagation();openScWeek(${currentWeek})" title="${escapeAttr(phaseLabel(e.phase) + ': ' + lf.label + (e.load ? ' · ' + e.load : ''))} — click week for details" style="cursor:pointer;display:inline-flex;align-items:center;gap:4px;font-family:'Anton',sans-serif;font-size:9px;letter-spacing:.5px;padding:2px 7px;border-radius:3px;background:${lf.color}80;color:var(--text);border:1px solid ${lf.color}">${escapeAttr(phaseLabel(e.phase))}: ${escapeAttr(lf.label)}${e.load ? ` · ${escapeAttr(e.load)}` : ''}</span>`;
+        }).join('')}</div>`
+      : '';
+
+    // Session cards — Gym/Activation sits directly under the first session's type.
+    const effSessions = sessions.map(s => planTrack === 'reserves' ? effectiveReserve(s) : s);
+    let sessionsHTML = effSessions.length
+      ? effSessions.map((s, idx) => buildSessionCardHTML(s, idx === 0 ? scChip : '')).join('')
+      : scChip;
     if (isGame) {
       const g = state.games.find(gg => gg.date === dateStr);
       sessionsHTML = buildGameCardHTML(g) + sessionsHTML;
     }
-
-
-    // S&C planned lifts for this day (pre-training Activation + post-training Gym)
-    const scEntries = dayEntries(state.scWeeks[currentWeek]?.days?.[DAYS[di]]);
-    const scChip = scEntries.length
-      ? `<div style="margin-bottom:6px;display:flex;flex-wrap:wrap;gap:4px">${scEntries.map(e => {
-          const lf = liftByKey(e.lift);
-          return `<span onclick="openScWeek(${currentWeek})" title="${escapeAttr(phaseLabel(e.phase) + ': ' + lf.label + (e.load ? ' · ' + e.load : ''))} — click week for details" style="cursor:pointer;display:inline-flex;align-items:center;gap:4px;font-family:'Anton',sans-serif;font-size:9px;letter-spacing:.5px;padding:2px 7px;border-radius:3px;background:${lf.color}80;color:var(--text);border:1px solid ${lf.color}">${escapeAttr(phaseLabel(e.phase))}: ${escapeAttr(lf.label)}${e.load ? ` · ${escapeAttr(e.load)}` : ''}</span>`;
-        }).join('')}</div>`
-      : '';
 
     const mdI = mdInner(dateStr);
     const mdTag = mdI ? `<span title="${escapeAttr(mdTitle(dateStr))}" style="font-family:'Anton',sans-serif;font-size:9px;letter-spacing:.3px;padding:1px 6px;border-radius:3px;background:var(--surface2);border:1px solid var(--border)">${mdI}</span>` : '';
@@ -4866,7 +4845,6 @@ function renderWeek() {
       </div>
       <div class="week-day-body">
         ${buildTravelChipHTML(currentWeek, di)}
-        ${scChip}
         ${sessionsHTML}
         <button class="add-session-btn" onclick="openAddSessionOnDate('${dateStr}')">＋ Add</button>
       </div>
