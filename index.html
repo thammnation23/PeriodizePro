@@ -223,6 +223,8 @@
   .track-btn[data-mtrack="reserves"].active { background:#8b5cf6; }
   .track-btn[data-mtrack="both"].active,
   .track-btn[data-mtrack="starters"].active { background:var(--accent); }
+  .track-btn[data-wtrack="reserves"].active { background:#8b5cf6; }
+  .track-btn[data-wtrack="starters"].active { background:var(--accent); }
   .month-chip-track { font-family:'Anton',sans-serif; font-size:8.5px; letter-spacing:.5px; padding:0 4px; border-radius:3px; line-height:1.55; flex:0 0 auto; }
   .month-chip-track.s { background:var(--accent); color:#fff; }
   .month-chip-track.r { background:#8b5cf6; color:#fff; }
@@ -2085,10 +2087,15 @@
       <div style="flex:1"></div>
       <button class="btn btn-primary btn-sm" onclick="openAddSession()">＋ Session</button>
       <button class="btn btn-ghost btn-sm" onclick="openWeekSettings()">⚙ Week Settings</button>
+      <div id="weekTrackToggle" class="track-toggle" style="margin-bottom:0" title="Show the starters plan or the reserves / non-starters plan">
+        <button type="button" class="track-btn mini active" data-wtrack="starters" onclick="setWeekTrack('starters')">Starters</button>
+        <button type="button" class="track-btn mini" data-wtrack="reserves" onclick="setWeekTrack('reserves')">Reserves</button>
+      </div>
       <button class="btn btn-ghost btn-sm" onclick="exportWeekPDF('starters')" title="Export this week's starters loading as a printable PDF">↧ Export · Starters</button>
       <button class="btn btn-ghost btn-sm" onclick="exportWeekPDF('reserves')" title="Export the reserves / non-starters loading plan">↧ Export · Reserves</button>
     </div>
     <div id="weekTotals"></div>
+    <div id="weekReserveHint" style="display:none;margin:0 0 10px;padding:7px 12px;border-radius:var(--radius);background:rgba(139,92,246,0.12);border:1px solid rgba(139,92,246,0.4);border-left:3px solid #8b5cf6;font-size:11.5px;color:var(--text2)">Showing the <b>reserves / non-starters</b> plan. Days with no reserve override mirror the starters; metrics &amp; drills are shared.</div>
     <div class="week-days" id="weekDays"></div>
   </div>
 
@@ -4757,6 +4764,14 @@ function renderWeekTotals(weekStart) {
     </div>`;
 }
 
+let weekTrack = 'starters'; // Week view: 'starters' | 'reserves'
+function setWeekTrack(mode) {
+  weekTrack = mode;
+  const t = document.getElementById('weekTrackToggle');
+  if (t) t.querySelectorAll('.track-btn').forEach(b => b.classList.toggle('active', b.dataset.wtrack === mode));
+  renderWeek();
+}
+
 function renderWeek() {
   const weekStart = getWeekStart(currentWeek);
   const weekEnd = new Date(weekStart); weekEnd.setDate(weekEnd.getDate() + 6);
@@ -4805,6 +4820,12 @@ function renderWeek() {
 
   renderWeekTotals(weekStart);
 
+  // Reflect the active starters/reserves track in the toggle + hint.
+  const wtToggle = document.getElementById('weekTrackToggle');
+  if (wtToggle) wtToggle.querySelectorAll('.track-btn').forEach(b => b.classList.toggle('active', b.dataset.wtrack === weekTrack));
+  const wtHint = document.getElementById('weekReserveHint');
+  if (wtHint) wtHint.style.display = weekTrack === 'reserves' ? 'block' : 'none';
+
   const container = document.getElementById('weekDays');
   container.innerHTML = '';
 
@@ -4819,7 +4840,7 @@ function renderWeek() {
     const card = document.createElement('div');
     card.className = 'week-day-card' + (isGame ? ' game' : '') + (today ? ' active' : '');
 
-    let sessionsHTML = sessions.map(s => buildSessionCardHTML(s)).join('');
+    let sessionsHTML = sessions.map(s => buildSessionCardHTML(weekTrack === 'reserves' ? effectiveReserve(s) : s)).join('');
     if (isGame) {
       const g = state.games.find(gg => gg.date === dateStr);
       sessionsHTML = buildGameCardHTML(g) + sessionsHTML;
