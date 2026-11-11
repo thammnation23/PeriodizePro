@@ -4530,17 +4530,6 @@ function buildGameCardHTML(g) {
           ${g.available != null && g.squadSize ? `<span style="font-size:10px;color:var(--text3);margin-left:auto">${g.available}/${g.squadSize}</span>` : ''}
         </div>
       ` : ''}
-      ${(() => {
-        const a = getAmsActualForDate(g.date);
-        return `
-      <div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:6px;padding-top:6px;border-top:1px solid var(--border)">
-        ${editableMetricChip('TD',  g.td,     `updateGameMetric('${g.id}','td',this.value)`,     a?.td)}
-        ${editableMetricChip('HID', g.hsr,    `updateGameMetric('${g.id}','hsr',this.value)`,    a?.hsr)}
-        ${editableMetricChip('VHID', g.sprint, `updateGameMetric('${g.id}','sprint',this.value)`, a?.sd)}
-        ${editableMetricChip('A/D', (parseInt(g.acc)||0) + (parseInt(g.dec)||0) || '', `updateGameMetric('${g.id}','accDec',this.value)`, a?.accDec)}
-        ${actualOnlyMetricChip('MV%', a?.mv, '%')}
-      </div>`;
-      })()}
     </div>
   `;
 }
@@ -4802,7 +4791,8 @@ function renderWeek() {
     scBadge.style.display = 'none';
   }
 
-  renderWeekTotals(weekStart);
+  // Projected GPS totals removed from the week view (kept in the entry form).
+  const _wt = document.getElementById('weekTotals'); if (_wt) _wt.innerHTML = '';
 
   // Reflect the active starters/reserves track in the toggle + hint.
   const wtToggle = document.getElementById('weekTrackToggle');
