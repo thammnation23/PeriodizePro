@@ -213,6 +213,20 @@
     .dd-amp { grid-template-columns: 1fr; gap:6px; }
   }
 
+  /* ── Starters / Reserves track toggle (session modal) ── */
+  .track-toggle { display:inline-flex; margin-bottom:14px; border:1px solid var(--border); border-radius:8px; overflow:hidden; }
+  .track-btn { background:transparent; border:none; color:var(--text3); font-family:'Anton',sans-serif; letter-spacing:1px; font-size:12px; padding:7px 20px; cursor:pointer; transition:background .12s,color .12s; }
+  .track-btn:hover { color:var(--text2); }
+  .track-btn.active { background:var(--accent); color:#fff; }
+  .track-btn[data-track="reserves"].active { background:#8b5cf6; }
+  .track-btn.mini { font-size:10px; padding:4px 10px; letter-spacing:.5px; }
+  .track-btn[data-mtrack="reserves"].active { background:#8b5cf6; }
+  .track-btn[data-mtrack="both"].active,
+  .track-btn[data-mtrack="starters"].active { background:var(--accent); }
+  .month-chip-track { font-family:'Anton',sans-serif; font-size:8.5px; letter-spacing:.5px; padding:0 4px; border-radius:3px; line-height:1.55; flex:0 0 auto; }
+  .month-chip-track.s { background:var(--accent); color:#fff; }
+  .month-chip-track.r { background:#8b5cf6; color:#fff; }
+
   /* ─── MAIN LAYOUT ─── */
   .main { padding: 24px; }
   .view { display: none; }
@@ -2022,6 +2036,11 @@
           <div class="month-title" id="monthTitle">—</div>
           <button class="month-nav-btn" onclick="nextMonth()">›</button>
           <div style="flex:1"></div>
+          <div id="monthTrackToggle" class="track-toggle" style="margin-bottom:0" title="Show the starters plan, reserves plan, or both">
+            <button type="button" class="track-btn mini active" data-mtrack="both" onclick="setMonthTrack('both')">Both</button>
+            <button type="button" class="track-btn mini" data-mtrack="starters" onclick="setMonthTrack('starters')">Starters</button>
+            <button type="button" class="track-btn mini" data-mtrack="reserves" onclick="setMonthTrack('reserves')">Reserves</button>
+          </div>
           <button class="btn btn-ghost btn-sm" onclick="exportMonthPDF()" title="Export this month as a simple printable PDF">↧ Export PDF</button>
           <button class="btn btn-ghost btn-sm" onclick="switchTab('week')">⚡ Week View</button>
         </div>
@@ -2066,7 +2085,8 @@
       <div style="flex:1"></div>
       <button class="btn btn-primary btn-sm" onclick="openAddSession()">＋ Session</button>
       <button class="btn btn-ghost btn-sm" onclick="openWeekSettings()">⚙ Week Settings</button>
-      <button class="btn btn-ghost btn-sm" onclick="exportWeekPDF()" title="Export this week's projected loading as a printable PDF">↧ Export PDF</button>
+      <button class="btn btn-ghost btn-sm" onclick="exportWeekPDF('starters')" title="Export this week's starters loading as a printable PDF">↧ Export · Starters</button>
+      <button class="btn btn-ghost btn-sm" onclick="exportWeekPDF('reserves')" title="Export the reserves / non-starters loading plan">↧ Export · Reserves</button>
     </div>
     <div id="weekTotals"></div>
     <div class="week-days" id="weekDays"></div>
@@ -2305,6 +2325,12 @@
       <button class="modal-close" onclick="closeModal('sessionModal')">✕</button>
     </div>
     <div class="modal-body">
+      <!-- Starters / Reserves loading track -->
+      <div id="sessionTrackToggle" class="track-toggle">
+        <button type="button" class="track-btn active" data-track="starters" onclick="setSessionTrack('starters')">Starters</button>
+        <button type="button" class="track-btn" data-track="reserves" onclick="setSessionTrack('reserves')">Reserves</button>
+      </div>
+      <div id="sessionReserveHint" style="display:none;margin-bottom:12px;padding:8px 12px;border-radius:var(--radius);background:rgba(139,92,246,0.12);border:1px solid rgba(139,92,246,0.4);border-left:3px solid #8b5cf6;font-size:11.5px;line-height:1.5;color:var(--text2)">Editing the <b>reserves / non-starters</b> loading plan. Any field left the same as starters is inherited — only what you change here is stored. (Metrics, drills &amp; notes stay shared with starters.)</div>
       <!-- Session Type -->
       <div class="subsection-label">Primary Type</div>
       <div class="chip-row" id="sessionTypeChips">
@@ -3314,6 +3340,13 @@ function emptyState() {
 let state = emptyState();
 let currentWeek = getCurrentWeekNum();
 let currentMonth = new Date().getMonth();
+let monthTrack = 'both'; // Month view: 'both' | 'starters' | 'reserves'
+function setMonthTrack(mode) {
+  monthTrack = mode;
+  const t = document.getElementById('monthTrackToggle');
+  if (t) t.querySelectorAll('.track-btn').forEach(b => b.classList.toggle('active', b.dataset.mtrack === mode));
+  renderMonth();
+}
 let currentMonthYear = new Date().getFullYear();
 let editingSessionId = null;
 let editingDayDate = null;
@@ -3425,6 +3458,7 @@ function dbToSession(r) {
     principle: r.principle, complexity: r.complexity,
     density: r.density || '', loadDay: r.load_day || '', physicalExpression: r.physical_expression || '', maxVelocity: r.max_velocity || '',
     recommendedSpaces: r.recommended_spaces || '',
+    reserves: (r.reserves && typeof r.reserves === 'object' && !Array.isArray(r.reserves)) ? r.reserves : {},
     td: r.td, hsr: r.hsr, sd: r.sd, acc: r.acc, dec: r.dec_count,
     warmupMedia:  r.warmup_drills  || [],
     sessionMedia: r.session_drills || [],
@@ -3446,6 +3480,7 @@ function sessionToDB(s) {
     principle: s.principle, complexity: s.complexity,
     density: s.density || null, load_day: s.loadDay || null, physical_expression: s.physicalExpression || null, max_velocity: s.maxVelocity || null,
     recommended_spaces: s.recommendedSpaces || null,
+    reserves: (s.reserves && Object.keys(s.reserves).length) ? s.reserves : null,
     td: s.td ? parseInt(s.td) : null,
     hsr: s.hsr ? parseInt(s.hsr) : null,
     sd: s.sd ? parseInt(s.sd) : null,
@@ -3462,6 +3497,23 @@ function sessionToDB(s) {
     notes: s.notes,
   };
 }
+
+// ── RESERVES (non-starters) — a parallel loading plan per session ──
+// Only the design fields can differ; each falls back to the starters' value.
+const RESERVE_FIELDS = ['type','type2','duration','complexity','density','loadDay','physicalExpression','recommendedSpaces'];
+// Session copy with the design fields resolved to the reserve plan (override → else starter).
+function effectiveReserve(s) {
+  const r = (s && s.reserves) || {};
+  const out = { ...s };
+  RESERVE_FIELDS.forEach(f => { const v = r[f]; out[f] = (v !== undefined && v !== null && v !== '') ? v : s[f]; });
+  return out;
+}
+// True when the reserve plan differs from the starter plan on any design field.
+function hasReserveOverride(s) {
+  const r = (s && s.reserves) || {};
+  return RESERVE_FIELDS.some(f => { const v = r[f]; return v !== undefined && v !== null && v !== '' && v !== s[f]; });
+}
+
 function dbToGame(r) {
   return {
     id: r.id, date: r.date, opponent: r.opponent, competition: r.competition, venue: r.venue, notes: r.notes,
@@ -4506,26 +4558,30 @@ function buildGameCardHTML(g) {
 // The month view shows one tidy line per session/match to stay uncluttered.
 // Full detail (metrics, exercises, media, pre/post, testing) opens on click
 // in the day panel / edit modal, so nothing is lost — just decluttered.
-function buildMonthSessionChip(s) {
+function buildMonthSessionChip(s, track) {
   // Filled, auto-contrast type pill(s) — like the Week view. A two-type day
-  // shows both types, each in its own colour.
-  const typeColor = getTypeColor(s.type);
-  const typeColor2 = s.type2 ? getTypeColor(s.type2) : null;
-  const label = s.type2 ? `${s.type || 'Session'} + ${s.type2}` : (s.type || 'Session');
+  // shows both types, each in its own colour. `track` ('S'|'R') tags the chip
+  // when both starters and reserves are shown; 'R' uses the reserve plan.
+  const d = track === 'R' ? effectiveReserve(s) : s;
+  const typeColor = getTypeColor(d.type);
+  const typeColor2 = d.type2 ? getTypeColor(d.type2) : null;
+  const label = d.type2 ? `${d.type || 'Session'} + ${d.type2}` : (d.type || 'Session');
   const pill = (txt, col) => `<span class="month-chip-label" style="flex:0 1 auto;background:${col};color:${textOnColor(col)};padding:1px 7px;border-radius:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeAttr(txt)}</span>`;
-  const pills = s.type2
-    ? pill(s.type || 'Session', typeColor) + pill(s.type2, typeColor2)
-    : pill(s.type || 'Session', typeColor);
+  const pills = d.type2
+    ? pill(d.type || 'Session', typeColor) + pill(d.type2, typeColor2)
+    : pill(d.type || 'Session', typeColor);
   let meta = '';
-  if (s.gdMinus)      meta = `GD−${s.gdMinus}`;
-  else if (s.gdPlus)  meta = `GD+${s.gdPlus}`;
-  else if (s.duration) meta = `${s.duration}m`;
+  if (d.gdMinus)      meta = `GD−${d.gdMinus}`;
+  else if (d.gdPlus)  meta = `GD+${d.gdPlus}`;
+  else if (d.duration) meta = `${d.duration}m`;
   const marks = [];
   if (s.prePost && s.prePost.length) marks.push('±');
+  const trackTag = track ? `<span class="month-chip-track ${track === 'R' ? 'r' : 's'}">${track}</span>` : '';
+  const prefix = track === 'R' ? 'Reserves · ' : track === 'S' ? 'Starters · ' : '';
   return `
-    <div class="month-chip" style="border-left-color:${typeColor}" onclick="event.stopPropagation();editSession('${s.id}')" title="${escapeAttr(label)}">
+    <div class="month-chip" style="border-left-color:${typeColor}" onclick="event.stopPropagation();editSession('${s.id}')" title="${escapeAttr(prefix + label)}">
       <div class="month-chip-top" style="justify-content:space-between;gap:4px">
-        <div style="display:flex;gap:3px;flex:1 1 auto;min-width:0;flex-wrap:wrap">${pills}</div>
+        <div style="display:flex;gap:3px;flex:1 1 auto;min-width:0;flex-wrap:wrap;align-items:center">${trackTag}${pills}</div>
         ${meta ? `<span class="month-chip-meta">${meta}</span>` : ''}
       </div>
       ${marks.length ? `<div class="month-chip-marks">${marks.map(m => `<span>${m}</span>`).join('')}</div>` : ''}
@@ -4628,7 +4684,11 @@ function renderMonth() {
       </div>
       <div class="month-day-body">
         ${game ? buildMonthGameChip(game) : ''}
-        ${sessions.map(s => buildMonthSessionChip(s)).join('')}
+        ${sessions.map(s =>
+            monthTrack === 'reserves' ? buildMonthSessionChip(effectiveReserve(s))
+          : monthTrack === 'both'     ? (buildMonthSessionChip(s, 'S') + buildMonthSessionChip(s, 'R'))
+          :                             buildMonthSessionChip(s)
+        ).join('')}
         ${scLiftRow}
         ${travelChip}
         ${(!game && sessions.length === 0 && !travelChip && isCurrentMonth) ? '<div class="month-day-empty">＋</div>' : ''}
@@ -4913,7 +4973,8 @@ function nextWeek() { currentWeek = Math.min(52, currentWeek + 1); renderWeek();
 // Builds a self-contained, print-ready landscape page styled after the club's
 // reference sheet, then opens it in a new window and triggers the browser's
 // print dialog (Save as PDF). Projected/planned load only.
-function exportWeekPDF() {
+function exportWeekPDF(track) {
+  const isReserves = track === 'reserves';
   const w = currentWeek;
   const weekStart = getWeekStart(w);
   const weekEnd = new Date(weekStart); weekEnd.setDate(weekEnd.getDate() + 6);
@@ -4956,13 +5017,15 @@ function exportWeekPDF() {
     totals.td += m.td; totals.hsr += m.hsr; totals.sd += m.sd; totals.ad += m.ad;
 
     const primary = sessions[0] || null;
-    const dur = sessions.map(s => fmtDur(s.duration)).filter(Boolean).join(' + ');
-    const durMin = primary ? parseDurMin(primary.duration) : (game ? 90 : 0);
-    const typeColor = primary ? getTypeColor(primary.type) : (game ? '#1f9d55' : '#ffffff');
-    const typeColor2 = primary?.type2 ? getTypeColor(primary.type2) : null;
-    const sessType = primary ? [primary.type, primary.type2].filter(Boolean).join(' / ') : (game ? 'Match Day' : '');
+    // Reserves export swaps the primary session's design fields for the reserve plan.
+    const pd = (isReserves && primary) ? effectiveReserve(primary) : primary;
+    const dur = isReserves ? (pd ? fmtDur(pd.duration) : '') : sessions.map(s => fmtDur(s.duration)).filter(Boolean).join(' + ');
+    const durMin = pd ? parseDurMin(pd.duration) : (game ? 90 : 0);
+    const typeColor = pd ? getTypeColor(pd.type) : (game ? '#1f9d55' : '#ffffff');
+    const typeColor2 = pd?.type2 ? getTypeColor(pd.type2) : null;
+    const sessType = pd ? [pd.type, pd.type2].filter(Boolean).join(' / ') : (game ? 'Match Day' : '');
     const scEntries = dayEntries(state.scWeeks?.[w]?.days?.[DAYS[i]]);
-    const isOff = !!(primary && (primary.type === 'Off Day' || primary.type2 === 'Off Day'));
+    const isOff = !!(pd && (pd.type === 'Off Day' || pd.type2 === 'Off Day'));
     let oppCrest = '';
     if (game) {
       const opp = game.opponent_id ? state.opponents.find(o => o.id === game.opponent_id)
@@ -4972,9 +5035,10 @@ function exportWeekPDF() {
     const notes = [...sessions.map(s => s.notes), game ? game.notes : ''].filter(n => n && n.trim()).join(' · ');
 
     cols.push({ i, d, sessions, game, m, dur, durMin, typeColor, typeColor2, sessType, scEntries, notes, isOff, oppCrest,
-      complexity: primary?.complexity || '', density: primary?.density || '',
-      loadDay: primary?.loadDay || '', physicalExpression: primary?.physicalExpression || '',
-      recommendedSpaces: primary ? (primary.recommendedSpaces || SPACE_BY_TYPE[primary.type] || '') : '',
+      designType: pd?.type || '', designType2: pd?.type2 || '',
+      complexity: pd?.complexity || '', density: pd?.density || '',
+      loadDay: pd?.loadDay || '', physicalExpression: pd?.physicalExpression || '',
+      recommendedSpaces: pd ? (pd.recommendedSpaces || SPACE_BY_TYPE[pd.type] || '') : '',
       has: !!(sessions.length || game) });
   }
 
@@ -5059,17 +5123,17 @@ function exportWeekPDF() {
   // the loading table as a concise coaching reminder.
   const usedTypes = [];
   cols.forEach(c => {
-    const s0 = c.sessions[0];
-    if (!s0) return;
+    const t1 = c.designType, t2 = c.designType2;
+    if (!t1) return;
     let label, rem, color, color2 = null;
-    if (s0.type2) {
-      const ck = hybridKey(s0.type, s0.type2);
+    if (t2) {
+      const ck = hybridKey(t1, t2);
       if (MORPHO_HYBRID_REMINDERS[ck]) { label = ck; rem = MORPHO_HYBRID_REMINDERS[ck]; }
       else { label = 'Hybrid'; rem = MORPHO_REMINDERS['Hybrid']; }
       // Match the striped column bar: both session-type colours.
-      color = getTypeColor(s0.type); color2 = getTypeColor(s0.type2);
+      color = getTypeColor(t1); color2 = getTypeColor(t2);
     } else {
-      label = s0.type; rem = MORPHO_REMINDERS[s0.type]; color = morphoTypeColor(s0.type);
+      label = t1; rem = MORPHO_REMINDERS[t1]; color = morphoTypeColor(t1);
     }
     if (rem && label !== 'Recovery' && !usedTypes.find(u => u.label === label)) usedTypes.push({ label, rem, color, color2 });
   });
@@ -5090,7 +5154,7 @@ function exportWeekPDF() {
 
   const html =
 `<!doctype html><html><head><meta charset="utf-8">
-<title>Week ${w} Loading</title>
+<title>Week ${w} Loading${isReserves ? ' · Reserves' : ''}</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Anton&family=JetBrains+Mono:wght@700&display=swap" rel="stylesheet">
 <style>
@@ -5107,7 +5171,7 @@ function exportWeekPDF() {
   <colgroup><col class="lbl">${cols.map(() => '<col>').join('')}</colgroup>
   <tr>
     <td style="background:${RSL.claret};color:#fff;font-family:'Anton',sans-serif;font-size:14px;text-align:center;padding:6px;${BORD}">${teamCrest ? `<img src="${esc(teamCrest)}" style="height:44px;width:auto;object-fit:contain;display:block;margin:0 auto">` : ''}</td>
-    <td colspan="7" style="background:${RSL.gold};color:${RSL.claret};font-family:'Anton',sans-serif;font-size:18px;letter-spacing:1px;text-align:center;padding:6px;${BORD}">RECOMMENDED MORPHOCYCLE · WEEK ${w}</td>
+    <td colspan="7" style="background:${RSL.gold};color:${RSL.claret};font-family:'Anton',sans-serif;font-size:18px;letter-spacing:1px;text-align:center;padding:6px;${BORD}">RECOMMENDED MORPHOCYCLE · WEEK ${w}${isReserves ? ' · RESERVES' : ''}</td>
   </tr>
   ${scBanner}
   <tr><td style="background:${RSL.cobalt};${BORD}"></td>${dayHeader}</tr>
@@ -5392,6 +5456,7 @@ function editSession(id) {
   chipSelections['type'] = s.type || 'Intensive';
   chipSelections['type2'] = s.type2 || '';
   rebuildSessionTypeChips();
+  initSessionTrack(s);
   openModal('sessionModal');
 }
 
@@ -5411,6 +5476,7 @@ function clearSessionForm() {
   document.getElementById('maxVelValue').value = '';
   chipSelections['type2'] = '';
   rebuildSessionTypeChips();
+  initSessionTrack(null);
   sessionAttachments.warmup = [];
   sessionAttachments.session = [];
   renderAttachedMedia('warmup');
@@ -5529,7 +5595,77 @@ async function backfillExerciseLinks() {
   alert(`Done — ${drillsAdded} new drill${drillsAdded === 1 ? '' : 's'} added, ${sessionsUpdated} session${sessionsUpdated === 1 ? '' : 's'} linked.`);
 }
 
+// ── Starters / Reserves entry track ──
+// The modal edits one shared set of design inputs; the toggle swaps their
+// values between the starters' plan and the reserves' plan. Reserve values
+// that match the starters are inherited (not stored).
+let sessionTrack = 'starters';
+let sessionReserveOverrides = {};   // design-field overrides vs starters (stored on the session)
+let sessionStarterLive = null;      // starters' design snapshot, held while editing reserves
+
+function readDesignFields() {
+  return {
+    type: chipSelections['type'] || '',
+    type2: chipSelections['type2'] || '',
+    duration: document.getElementById('sessionDuration').value,
+    complexity: document.getElementById('sessionComplexity').value,
+    density: document.getElementById('sessionDensity').value,
+    loadDay: document.getElementById('sessionLoadDay').value,
+    physicalExpression: document.getElementById('sessionPhysicalExpression').value,
+    recommendedSpaces: document.getElementById('sessionRecommendedSpaces').value,
+  };
+}
+function writeDesignFields(o) {
+  o = o || {};
+  chipSelections['type'] = o.type || 'Intensive';
+  chipSelections['type2'] = o.type2 || '';
+  rebuildSessionTypeChips();
+  document.getElementById('sessionDuration').value = o.duration || '';
+  document.getElementById('sessionComplexity').value = o.complexity || '';
+  document.getElementById('sessionDensity').value = o.density || '';
+  document.getElementById('sessionLoadDay').value = o.loadDay || '';
+  document.getElementById('sessionPhysicalExpression').value = o.physicalExpression || '';
+  document.getElementById('sessionRecommendedSpaces').value = o.recommendedSpaces || '';
+}
+function initSessionTrack(session) {
+  sessionTrack = 'starters';
+  sessionStarterLive = null;
+  const r = (session && session.reserves && typeof session.reserves === 'object') ? session.reserves : {};
+  sessionReserveOverrides = {};
+  RESERVE_FIELDS.forEach(f => { if (r[f] !== undefined && r[f] !== null && r[f] !== '') sessionReserveOverrides[f] = r[f]; });
+  const toggle = document.getElementById('sessionTrackToggle');
+  if (toggle) toggle.querySelectorAll('.track-btn').forEach(b => b.classList.toggle('active', b.dataset.track === 'starters'));
+  const hint = document.getElementById('sessionReserveHint'); if (hint) hint.style.display = 'none';
+}
+function setSessionTrack(mode) {
+  if (mode === sessionTrack) return;
+  if (mode === 'reserves') {
+    sessionStarterLive = readDesignFields();
+    const eff = {};
+    RESERVE_FIELDS.forEach(f => {
+      const ov = sessionReserveOverrides[f];
+      eff[f] = (ov !== undefined && ov !== null && ov !== '') ? ov : (sessionStarterLive[f] || '');
+    });
+    writeDesignFields(eff);
+  } else {
+    const eff = readDesignFields();
+    sessionReserveOverrides = {};
+    RESERVE_FIELDS.forEach(f => {
+      const rv = eff[f] || '';
+      if (rv !== '' && rv !== ((sessionStarterLive && sessionStarterLive[f]) || '')) sessionReserveOverrides[f] = rv;
+    });
+    writeDesignFields(sessionStarterLive || eff);
+  }
+  sessionTrack = mode;
+  const toggle = document.getElementById('sessionTrackToggle');
+  if (toggle) toggle.querySelectorAll('.track-btn').forEach(b => b.classList.toggle('active', b.dataset.track === mode));
+  const hint = document.getElementById('sessionReserveHint'); if (hint) hint.style.display = mode === 'reserves' ? 'block' : 'none';
+}
+
 async function saveSession() {
+  // Reserves are edited on the shared inputs — snap back to starters so the
+  // saved session captures the starters' values; the overrides are kept.
+  if (sessionTrack === 'reserves') setSessionTrack('starters');
   const dateStr = document.getElementById('sessionDate').value;
   if (!dateStr) { alert('Please select a date.'); return; }
 
@@ -5573,6 +5709,12 @@ async function saveSession() {
     activation: currentActivation, // field removed from form; preserved from existing value
     notes: document.getElementById('sessionNotes').value,
   };
+
+  // Reserves (non-starters) override — only design fields that differ from starters.
+  const _starterNow = readDesignFields();
+  const _reserves = {};
+  RESERVE_FIELDS.forEach(f => { const rv = sessionReserveOverrides[f]; if (rv !== undefined && rv !== null && rv !== '' && rv !== (_starterNow[f] || '')) _reserves[f] = rv; });
+  session.reserves = _reserves;
 
   // Off Day — zero the team load regardless of the (locked) inputs; notes kept.
   if (session.type === 'Off Day' || session.type2 === 'Off Day') {
@@ -7703,7 +7845,7 @@ async function saveDayPopover() {
         intensity:  5,
         principle:  '',
         complexity: '',
-        density:'', loadDay:'', physicalExpression:'', maxVelocity:'', recommendedSpaces:'',
+        density:'', loadDay:'', physicalExpression:'', maxVelocity:'', recommendedSpaces:'', reserves:{},
         td:'', hsr:'', sd:'', acc:'', dec:'',
         warmupMedia: [], sessionMedia: [],
         gdMinus:'', gdPlus:'', activation:'', notes:'',
