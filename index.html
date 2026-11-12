@@ -222,6 +222,8 @@
   .track-btn.mini { font-size:10px; padding:4px 10px; letter-spacing:.5px; }
   .track-btn[data-ptrack="reserves"].active { background:#8b5cf6; }
   .track-btn[data-ptrack="starters"].active { background:var(--accent); }
+  .track-btn[data-sctrack="reserves"].active { background:#8b5cf6; }
+  .track-btn[data-sctrack="starters"].active { background:var(--accent); }
   /* Reserve difference strip under a week session card (Both mode). */
   .reserve-strip { display:flex;align-items:center;gap:6px;margin-top:6px;padding:5px 8px;border-radius:6px;cursor:pointer;background:rgba(139,92,246,0.1);border:1px solid rgba(139,92,246,0.35);border-left:3px solid #8b5cf6;flex-wrap:wrap; }
   .reserve-strip-tag { font-family:'Anton',sans-serif;font-size:8.5px;letter-spacing:.5px;color:#fff;background:#8b5cf6;padding:1px 6px;border-radius:3px;flex:0 0 auto; }
@@ -3176,6 +3178,13 @@
         <div id="scWeekStatusBtns" style="display:flex;gap:6px"></div>
         <div id="scWeekRx" style="display:none"></div>
       </div>
+      <div class="form-group" style="margin-bottom:10px">
+        <div class="track-toggle" style="display:inline-flex;margin-bottom:0">
+          <button type="button" class="track-btn mini" data-sctrack="starters" onclick="setScTrack('starters')">Starters</button>
+          <button type="button" class="track-btn mini" data-sctrack="reserves" onclick="setScTrack('reserves')">Reserves</button>
+        </div>
+        <div id="scTrackHint" style="font-size:10.5px;color:var(--text3);margin-top:5px"></div>
+      </div>
       <div class="form-group">
         <label>Lift type &amp; testing per day</label>
         <div id="scWeekDays"></div>
@@ -4157,7 +4166,7 @@ function renderYear() {
     // Tooltip carries the week's planned lifts over from the Strength page
     let liftSummary = '';
     if (wk?.days) {
-      const parts = DAYS.map(dn => { const es = dayEntries(wk.days[dn]); return es.length ? `${dn} ${es.map(e => liftByKey(e.lift).short).join('/')}` : null; }).filter(Boolean);
+      const parts = DAYS.map(dn => { const es = dayEntriesFor(wk.days[dn], planTrack); return es.length ? `${dn} ${es.map(e => liftByKey(e.lift).short).join('/')}` : null; }).filter(Boolean);
       if (parts.length) liftSummary = '\n' + parts.join(' · ');
     }
     cell.title = `W${w}${st ? ' · ' + st.label : ' · No S&C status'}${liftSummary}`;
@@ -4640,7 +4649,7 @@ function renderMonth() {
     // S&C plan for this day — a week-status dot + a chip per planned lift
     const scDn = DAYS[(d.getDay() + 6) % 7];
     const scStatus = statusCfg(state.scWeeks[weekNum]?.status);
-    const scEntries = dayEntries(state.scWeeks[weekNum]?.days?.[scDn]);
+    const scEntries = dayEntriesFor(state.scWeeks[weekNum]?.days?.[scDn], planTrack);
     const scLiftRow = scEntries.length
       ? `<div style="display:flex;flex-direction:column;align-items:flex-start;gap:2px;margin-top:3px">${scEntries.map(e => { const lf = liftByKey(e.lift); const ph = e.phase === 'pre' ? 'ACT' : 'GYM';
           return `<span title="${escapeAttr(phaseLabel(e.phase) + ': ' + lf.label + (e.load ? ' · ' + e.load : ''))}" style="display:inline-flex;align-items:center;gap:4px;max-width:100%;font-family:'Anton',sans-serif;font-size:10.5px;font-weight:700;letter-spacing:.3px;padding:2px 7px;border-radius:3px;background:${lf.color}80;color:var(--text);border:1px solid ${lf.color}"><span style="font-size:9px;opacity:.75">${ph}</span><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeAttr(lf.label)}</span></span>`; }).join('')}</div>`
@@ -4816,7 +4825,7 @@ function renderWeek() {
     card.className = 'week-day-card' + (isGame ? ' game' : '') + (today ? ' active' : '');
 
     // S&C planned lifts for this day (pre-training Activation + post-training Gym)
-    const scEntries = dayEntries(state.scWeeks[currentWeek]?.days?.[DAYS[di]]);
+    const scEntries = dayEntriesFor(state.scWeeks[currentWeek]?.days?.[DAYS[di]], planTrack);
     const scChip = scEntries.length
       ? `<div style="margin-bottom:6px;display:flex;flex-wrap:wrap;gap:4px;justify-content:center">${scEntries.map(e => {
           const lf = liftByKey(e.lift);
@@ -5024,7 +5033,7 @@ function exportWeekPDF(track) {
     const typeColor = pd ? getTypeColor(pd.type) : (game ? '#1f9d55' : '#ffffff');
     const typeColor2 = pd?.type2 ? getTypeColor(pd.type2) : null;
     const sessType = pd ? [pd.type, pd.type2].filter(Boolean).join(' / ') : (game ? 'Match Day' : '');
-    const scEntries = dayEntries(state.scWeeks?.[w]?.days?.[DAYS[i]]);
+    const scEntries = dayEntriesFor(state.scWeeks?.[w]?.days?.[DAYS[i]], track);
     const isOff = !!(pd && (pd.type === 'Off Day' || pd.type2 === 'Off Day'));
     let oppCrest = '';
     if (game) {
@@ -10583,13 +10592,24 @@ function phaseLabel(k) { return (SC_PHASES.find(p => p.key === k) || {}).label |
 // (for editing).
 function dayEntriesRaw(v) {
   if (!v) return [];
+  // Reserve overrides: rLift/rLoad hold a separate lift+load for non-starters.
+  // Absent rLift = reserves inherit the starter lift+load for that slot.
+  const norm = e => { const o = { phase: e.phase || 'post', lift: e.lift || '', load: e.load || '' };
+    if (e.rLift !== undefined) o.rLift = e.rLift; if (e.rLoad !== undefined) o.rLoad = e.rLoad; return o; };
   if (typeof v === 'string') return v ? [{ phase:'post', lift:v, load:'' }] : [];
-  if (Array.isArray(v)) return v.map(e => ({ phase: e.phase || 'post', lift: e.lift || '', load: e.load || '' }));
-  if (v.lift || v.load) return [{ phase: v.phase || 'post', lift: v.lift || '', load: v.load || '' }];
+  if (Array.isArray(v)) return v.map(norm);
+  if (v.lift || v.load || v.rLift !== undefined) return [norm(v)];
   return [];
 }
+// Resolve one entry for a track: 'reserves' uses the reserve override (rLift/
+// rLoad) when set, otherwise inherits the starter lift+load. 'starters' = base.
+function liftEntryFor(e, track) {
+  if (track === 'reserves' && e.rLift !== undefined) return { phase: e.phase, lift: e.rLift, load: e.rLoad || '' };
+  return { phase: e.phase, lift: e.lift, load: e.load };
+}
 // Always ordered Activation (pre) → Gym (post), regardless of save order.
-function dayEntries(v) { const ord = { pre: 0, post: 1 }; return dayEntriesRaw(v).filter(e => e.lift).sort((a, b) => (ord[a.phase] ?? 9) - (ord[b.phase] ?? 9)); }
+function dayEntriesFor(v, track) { const ord = { pre: 0, post: 1 }; return dayEntriesRaw(v).map(e => liftEntryFor(e, track)).filter(e => e.lift).sort((a, b) => (ord[a.phase] ?? 9) - (ord[b.phase] ?? 9)); }
+function dayEntries(v) { return dayEntriesFor(v, 'starters'); }
 function dayPhase(v, phase) { return dayEntries(v).find(e => e.phase === phase) || null; }
 
 function currentSeasonSC() { return document.getElementById('seasonSelect')?.value || '2025-26'; }
@@ -10737,9 +10757,12 @@ function renderScLiftLegend() {
 // ── Weekly S&C editor ──
 let editingScWeekNum = null;
 let scWeekDraft = { status: '', days: {}, playerStatus: {}, dbId: undefined };
+let scTrack = 'starters'; // which lift track the editor is editing
+function setScTrack(mode) { scTrack = mode; renderScWeekEditor(); }
 
 function openScWeek(weekNum) {
   editingScWeekNum = weekNum;
+  scTrack = 'starters';
   const existing = state.scWeeks[weekNum] || { status: '', days: {}, testing: {} };
   const exTesting = (existing.testing && !Array.isArray(existing.testing)) ? existing.testing : {};
   scWeekDraft = { status: existing.status || '', days: JSON.parse(JSON.stringify(existing.days || {})), testing: JSON.parse(JSON.stringify(exTesting)), playerStatus: JSON.parse(JSON.stringify(existing.playerStatus || {})), dbId: existing.dbId };
@@ -10768,9 +10791,34 @@ function renderScWeekEditor() {
       rxBox.style.display = 'none';
     }
   }
+  // Starters / Reserves toggle + hint.
+  document.querySelectorAll('#scWeekModal .track-btn[data-sctrack]').forEach(b => b.classList.toggle('active', b.dataset.sctrack === scTrack));
+  const scHint = document.getElementById('scTrackHint');
+  if (scHint) scHint.textContent = scTrack === 'reserves'
+    ? 'Reserve lifts — leave a slot on “Same as starters” to inherit; pick a lift to give non-starters a different session.'
+    : 'Starters’ base plan — reserves inherit these lifts unless you override them on the Reserves track.';
   const start = getWeekStart(editingScWeekNum);
   const slotRow = (dn, phase) => {
     const e = scGetPhase(dn, phase);
+    if (scTrack === 'reserves') {
+      const inherit = e.rLift === undefined;
+      const opts = `<option value="__inherit" ${inherit ? 'selected' : ''}>⟳ Same as starters</option>` +
+        allScLifts().map(l => `<option value="${l.key}" ${(!inherit && e.rLift === l.key) ? 'selected' : ''}>${l.label}</option>`).join('');
+      const eff = liftByKey(inherit ? e.lift : e.rLift);
+      const starter = liftByKey(e.lift);
+      const starterHint = inherit
+        ? `<div style="padding:0 0 3px 102px;margin-top:-3px;font-size:10px;color:var(--text3)">↳ starters: ${escapeAttr(starter.label)}${e.load ? ' · ' + escapeAttr(e.load) : ''}</div>`
+        : '';
+      const loadInput = inherit
+        ? `<input type="text" value="" disabled placeholder="${escapeAttr(e.load ? e.load + ' (inherited)' : 'inherited')}" style="font-size:11px;opacity:.45">`
+        : `<input type="text" value="${escapeAttr(e.rLoad || '')}" placeholder="load e.g. 3×8" oninput="setScWeekPhaseRLoad('${dn}','${phase}',this.value)" style="font-size:11px">`;
+      return `<div style="display:grid;grid-template-columns:80px 12px 1.2fr 1fr;gap:8px;align-items:center;padding:2px 0 2px 10px">
+        <div style="font-size:10px;color:var(--text3);font-family:'Anton',sans-serif;letter-spacing:.5px">${phaseLabel(phase).toUpperCase()}</div>
+        <span style="width:11px;height:11px;border-radius:2px;background:${eff.key ? eff.color : 'transparent'};border:1px solid ${eff.key ? eff.color : 'var(--border)'}"></span>
+        <select onchange="setScWeekPhaseRLift('${dn}','${phase}',this.value)">${opts}</select>
+        ${loadInput}
+      </div>${starterHint}`;
+    }
     const opts = allScLifts().map(l => `<option value="${l.key}" ${e.lift === l.key ? 'selected' : ''}>${l.label}</option>`).join('');
     const lift = liftByKey(e.lift);
     return `<div style="display:grid;grid-template-columns:80px 12px 1.2fr 1fr;gap:8px;align-items:center;padding:2px 0 2px 10px">
@@ -10792,7 +10840,7 @@ function renderScWeekEditor() {
     return `<div style="border-top:1px solid var(--border);padding:6px 0">
       <div style="font-size:12px;margin-bottom:3px"><span style="font-family:'Anton',sans-serif;letter-spacing:.5px">${dn}</span> <span style="font-size:10px;color:var(--text3)">${d.getDate()}</span>${matchTag}</div>
       ${SC_PHASES.map(p => slotRow(dn, p.key)).join('')}
-      ${testRow(dn)}
+      ${scTrack === 'starters' ? testRow(dn) : ''}
     </div>`;
   }).join('');
 }
@@ -10814,10 +10862,29 @@ function scGetPhase(dn, phase) { const arr = Array.isArray(scWeekDraft.days[dn])
 function scSetPhase(dn, phase, field, val) { const arr = scEnsureDayArray(dn); let e = arr.find(x => x.phase === phase); if (!e) { e = { phase, lift: '', load: '' }; arr.push(e); } e[field] = val; }
 function setScWeekPhaseLift(dn, phase, v) { scSetPhase(dn, phase, 'lift', v); renderScWeekEditor(); }
 function setScWeekPhaseLoad(dn, phase, v) { scSetPhase(dn, phase, 'load', v); }
+// Reserve-track overrides. '__inherit' clears the override (reserves follow starters).
+function setScWeekPhaseRLift(dn, phase, v) {
+  const arr = scEnsureDayArray(dn);
+  let e = arr.find(x => x.phase === phase);
+  if (!e) { e = { phase, lift: '', load: '' }; arr.push(e); }
+  if (v === '__inherit') { delete e.rLift; delete e.rLoad; }
+  else { e.rLift = v; if (e.rLoad === undefined) e.rLoad = ''; }
+  renderScWeekEditor();
+}
+function setScWeekPhaseRLoad(dn, phase, v) { scSetPhase(dn, phase, 'rLoad', v); }
 
 async function saveScWeek() {
   const cleanDays = {};
-  Object.keys(scWeekDraft.days || {}).forEach(dn => { const arr = dayEntries(scWeekDraft.days[dn]); if (arr.length) cleanDays[dn] = arr; });
+  const ord = { pre: 0, post: 1 };
+  Object.keys(scWeekDraft.days || {}).forEach(dn => {
+    // Keep a slot if it has a starter lift OR a reserve override; drop a dangling
+    // empty reserve load with no reserve lift.
+    const arr = dayEntriesRaw(scWeekDraft.days[dn])
+      .map(e => { if (e.rLift === undefined) delete e.rLoad; return e; })
+      .filter(e => e.lift || e.rLift !== undefined)
+      .sort((a, b) => (ord[a.phase] ?? 9) - (ord[b.phase] ?? 9));
+    if (arr.length) cleanDays[dn] = arr;
+  });
   const testing = {};
   Object.keys(scWeekDraft.testing || {}).forEach(dn => { const a = (scWeekDraft.testing[dn] || []).filter(t => t.test); if (a.length) testing[dn] = a; });
   state.scWeeks[editingScWeekNum] = { status: scWeekDraft.status, days: cleanDays, testing, playerStatus: scWeekDraft.playerStatus || {}, dbId: scWeekDraft.dbId };
