@@ -4666,7 +4666,6 @@ function renderMonth() {
     cell.innerHTML = `
       <div class="month-day-header-row">
         <div style="display:flex;align-items:center;gap:5px"><div class="month-day-num">${d.getDate()}</div>${monthMdTag}</div>
-        ${buildSquadBadgeHTML(dateStr)}
         <div style="display:flex;align-items:center;gap:4px">
           ${scStatus ? `<span title="S&C week: ${scStatus.label}" style="width:8px;height:8px;border-radius:50%;background:${scStatus.color};display:inline-block"></span>` : ''}
           <div class="week-badge">W${weekNum}</div>
